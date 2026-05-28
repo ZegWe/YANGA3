@@ -4,17 +4,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.URL
-import java.nio.charset.Charset
 
 class NgaReadOnlyApiLiveTest {
   private val cookie = System.getenv("NGA_COOKIE").orEmpty()
   private val uid = System.getenv("NGA_UID").orEmpty()
   private val fid = System.getenv("NGA_TEST_FID")?.toIntOrNull() ?: 7
   private val tid = System.getenv("NGA_TEST_TID")?.toIntOrNull()
+  private val transport: NgaHttpTransport = HttpUrlConnectionNgaTransport()
 
   private val api = NgaApi(
     NgaSession(
@@ -85,26 +81,8 @@ class NgaReadOnlyApiLiveTest {
   private fun NgaRequest.executeReadOnly(): LiveResponse {
     assertEquals("Live read-only tests must not execute mutating POST requests", NgaHttpMethod.GET, method)
 
-    val connection = (URL(fullUrl()).openConnection() as HttpURLConnection).apply {
-      requestMethod = "GET"
-      connectTimeout = 15_000
-      readTimeout = 15_000
-      headers.forEach { (key, value) -> setRequestProperty(key, value) }
-    }
-
-    val code = connection.responseCode
-    val stream = if (code in 200..399) connection.inputStream else connection.errorStream
-    val text = stream?.use {
-      BufferedReader(InputStreamReader(it, Charset.forName("GBK"))).readText()
-    }.orEmpty()
-    return LiveResponse(code = code, text = text)
-  }
-
-  private fun NgaRequest.fullUrl(): String {
-    if (query.isEmpty()) return url
-    return url + "?" + query.entries.joinToString("&") { (key, value) ->
-      if (value.isEmpty()) key else "$key=$value"
-    }
+    val response = transport.execute(this).getOrThrow()
+    return LiveResponse(code = response.code, text = response.text)
   }
 
   private data class LiveResponse(

@@ -15,6 +15,17 @@ class NgaApiTest {
   private val api = NgaApi(session)
 
   @Test
+  fun requestFullUrlIncludesEmptyQueryKeysWithoutEquals() {
+    val request = NgaRequest(
+      method = NgaHttpMethod.GET,
+      url = "https://bbs.nga.cn/thread.php",
+      query = linkedMapOf("page" to "1", "noprefix" to ""),
+    )
+
+    assertEquals("https://bbs.nga.cn/thread.php?page=1&noprefix", request.fullUrl())
+  }
+
+  @Test
   fun topicListBuildsForumQuery() {
     val request = api.topicList(fid = 7, page = 2, key = "测试")
 

@@ -34,6 +34,21 @@ data class NgaRequest(
     get() = body.asMap()
 }
 
+data class NgaHttpResponse(
+  val code: Int,
+  val text: String,
+  val isSuccessful: Boolean = code in 200..399,
+)
+
+class NgaApiException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+
+fun NgaRequest.fullUrl(): String {
+  if (query.isEmpty()) return url
+  return url + "?" + query.entries.joinToString("&") { (key, value) ->
+    if (value.isEmpty()) key else "$key=$value"
+  }
+}
+
 data class NgaFormBody(
   val fields: List<String> = emptyList(),
 ) {
