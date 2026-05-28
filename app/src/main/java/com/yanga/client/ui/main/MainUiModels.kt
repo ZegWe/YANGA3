@@ -1,5 +1,7 @@
 package com.yanga.client.ui.main
 
+import com.yanga.client.data.LoginSessionData
+
 enum class MainTab(val label: String) {
   Home("Home"),
   Boards("Boards"),
@@ -36,51 +38,107 @@ data class SettingsPreview(
   val badge: String? = null,
 )
 
-internal val favoriteBoards =
-  listOf(
-    BoardPreview("艾泽拉斯议事厅", "最近活跃 · 12 分钟前", "战", "128"),
-    BoardPreview("游戏综合讨论", "今日 42 个主题", "游", "42"),
-    BoardPreview("二次元国家地理", "收藏板块", "星"),
-    BoardPreview("程序员专版", "今日 16 个主题", "码"),
-  )
+sealed interface LoadableUiState<out T> {
+  object Loading : LoadableUiState<Nothing>
 
-internal val activeTopics =
-  listOf(
-    TopicPreview("关于新版客户端首页信息密度的讨论", "水区", "178 回复", "3 分钟前", "N"),
-    TopicPreview("MD3 动态色在论坛阅读场景下是否适合", "开发", "46 回复", "12 分钟前", "Y"),
-    TopicPreview("长帖阅读页分页与楼层跳转方案", "客户端", "91 回复", "28 分钟前", "C"),
-  )
+  data class Error(
+    val message: String,
+    val cause: Throwable? = null,
+  ) : LoadableUiState<Nothing>
 
-internal val subscribedBoards =
-  listOf(
-    BoardPreview("艾泽拉斯议事厅", "fid 7 · 128 条新回复", "战", "128"),
-    BoardPreview("游戏综合讨论", "今日 42 主题 · 已订阅", "游", "42"),
-    BoardPreview("程序员专版", "技术讨论 · 已订阅", "码"),
-  )
+  data class Empty(
+    val message: String,
+  ) : LoadableUiState<Nothing>
 
-internal val forumCategories =
-  listOf(
-    BoardPreview("游戏专区", "32 个板块 · 魔兽 / 手游 / 主机", "游"),
-    BoardPreview("网事杂谈", "18 个板块 · 生活 / 情感 / 科技", "茶"),
-    BoardPreview("创作与技术", "9 个板块 · 开发 / 设计 / 硬件", "创"),
-  )
+  object LoginRequired : LoadableUiState<Nothing>
 
-internal val privateMessages =
-  listOf(
-    MessagePreview("夜航船", "你之前说的 Compose 阅读页分页方案，我觉得可以按楼层锚点做...", "刚刚", "2"),
-    MessagePreview("Moderator", "关于你收藏板块的同步问题，可能和 Cookie 过期有关。", "12:40"),
-    MessagePreview("小透明", "收到，我晚点整理一下测试账号能复现的步骤。", "昨天"),
-  )
+  data class Content<T>(
+    val value: T,
+  ) : LoadableUiState<T>
+}
 
-internal val notificationRows =
-  listOf(
-    SettingsPreview("回", "Reply alerts", "8 条未读", "8"),
-    SettingsPreview("星", "Favorite topic updates", "4 个主题有新回复", "4"),
-  )
+data class HomeUiState(
+  val boards: LoadableUiState<List<BoardPreview>> = LoadableUiState.Loading,
+  val activeTopics: LoadableUiState<List<TopicPreview>> = LoadableUiState.Loading,
+)
 
-internal val settingsRows =
-  listOf(
-    SettingsPreview("阅", "Reading and appearance", "字体、主题、图片加载"),
-    SettingsPreview("缓", "Cache and history", "最近阅读、离线缓存"),
-    SettingsPreview("屏", "Block words", "过滤内容和用户"),
-  )
+data class BoardsUiState(
+  val subscribedBoards: LoadableUiState<List<BoardPreview>> = LoadableUiState.Loading,
+  val categories: LoadableUiState<List<BoardPreview>> = LoadableUiState.Loading,
+)
+
+data class MessagesUiState(
+  val messages: LoadableUiState<List<MessagePreview>> = LoadableUiState.LoginRequired,
+)
+
+data class ProfileUiState(
+  val session: LoadableUiState<LoginSessionData> = LoadableUiState.LoginRequired,
+  val counters: LoadableUiState<List<SettingsPreview>> = LoadableUiState.LoginRequired,
+  val notifications: LoadableUiState<List<SettingsPreview>> = LoadableUiState.LoginRequired,
+  val settingsRows: List<SettingsPreview> = defaultSettingsRows,
+) {
+  companion object {
+    val defaultSettingsRows =
+      listOf(
+        SettingsPreview("阅", "Reading and appearance", "字体、主题、图片加载"),
+        SettingsPreview("缓", "Cache and history", "最近阅读、离线缓存"),
+        SettingsPreview("屏", "Block words", "过滤内容和用户"),
+      )
+  }
+}
+
+internal val favoriteBoards: List<BoardPreview> = emptyList()
+
+internal val activeTopics: List<TopicPreview> = emptyList()
+
+internal val subscribedBoards: List<BoardPreview> = emptyList()
+
+internal val forumCategories: List<BoardPreview> = emptyList()
+
+internal val privateMessages: List<MessagePreview> = emptyList()
+
+internal val settingsRows: List<SettingsPreview> = ProfileUiState.defaultSettingsRows
+
+data class MainContentUiState(
+  val home: HomeUiState = HomeUiState(),
+  val boards: BoardsUiState = BoardsUiState(),
+  val messages: MessagesUiState = MessagesUiState(),
+  val profile: ProfileUiState = ProfileUiState(),
+) {
+  val isLoggedIn: Boolean
+    get() = profile.session is LoadableUiState.Content
+
+  companion object {
+    fun initialLoggedOut(): MainContentUiState =
+      MainContentUiState(
+        home = HomeUiState(),
+        boards = BoardsUiState(),
+        messages =
+          MessagesUiState(
+            messages = LoadableUiState.LoginRequired,
+          ),
+        profile =
+          ProfileUiState(
+            session = LoadableUiState.LoginRequired,
+            counters = LoadableUiState.LoginRequired,
+            notifications = LoadableUiState.LoginRequired,
+          ),
+      )
+
+    fun initialLoggedIn(session: LoginSessionData): MainContentUiState =
+      MainContentUiState(
+        home = HomeUiState(),
+        boards = BoardsUiState(),
+        messages =
+          MessagesUiState(
+            messages = LoadableUiState.Loading,
+          ),
+        profile =
+          ProfileUiState(
+            session = LoadableUiState.Content(session),
+            counters = LoadableUiState.Loading,
+            notifications = LoadableUiState.Loading,
+          ),
+      )
+  }
+}
