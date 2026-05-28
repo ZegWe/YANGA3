@@ -1,6 +1,7 @@
 package com.yanga.client.ui.main
 
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,8 +16,11 @@ import androidx.compose.foundation.Image
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -56,6 +59,7 @@ fun MainScreen(
   modifier: Modifier = Modifier,
 ) {
   var showLogin by remember { mutableStateOf(false) }
+  var selectedTab by remember { mutableStateOf(MainTab.Home) }
 
   if (showLogin) {
     PasswordLoginScreen(
@@ -69,67 +73,61 @@ fun MainScreen(
     return
   }
 
-  Box(
-    modifier = modifier
+  Scaffold(
+    modifier = modifier.fillMaxSize(),
+    bottomBar = {
+      YangaBottomNavigation(selectedTab = selectedTab, onTabSelected = { selectedTab = it })
+    },
+  ) { paddingValues ->
+    MainTabContent(
+      selectedTab = selectedTab,
+      loginSession = loginSession,
+      onLoginClick = { showLogin = true },
+      onLogout = onLogout,
+      paddingValues = paddingValues,
+    )
+  }
+}
+
+@Composable
+private fun MainTabContent(
+  selectedTab: MainTab,
+  loginSession: LoginSessionUiState?,
+  onLoginClick: () -> Unit,
+  onLogout: () -> Unit,
+  paddingValues: PaddingValues,
+) {
+  val contentModifier =
+    Modifier
       .fillMaxSize()
       .safeDrawingPadding()
-      .padding(24.dp),
-  ) {
-    Column(
-      modifier = Modifier.fillMaxWidth(),
-      verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-          text = "Yanga",
-          style = MaterialTheme.typography.headlineMedium,
-          fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-          text = "NGA 账号登录",
-          style = MaterialTheme.typography.bodyLarge,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-      }
+      .padding(paddingValues)
+      .padding(horizontal = 20.dp, vertical = 16.dp)
 
-      Surface(
-        modifier = Modifier.fillMaxWidth(),
-        tonalElevation = 1.dp,
-        shape = MaterialTheme.shapes.medium,
-      ) {
-        Column(
-          modifier = Modifier.padding(16.dp),
-          verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-          if (loginSession == null) {
-            Text(text = "当前未登录")
-            Text(
-              text = "点击下方按钮后会打开 NGA 登录页。应用只读取登录后的会话 Cookie，不保存账号或密码。",
-              style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Button(onClick = { showLogin = true }) {
-              Text(text = "登录 NGA")
-            }
-          } else {
-            Text(text = "已登录", style = MaterialTheme.typography.titleMedium)
-            Text(text = loginSession.username)
-            Text(
-              text = "UID ${loginSession.uid}",
-              style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-              Button(onClick = { showLogin = true }) {
-                Text(text = "重新登录")
-              }
-              OutlinedButton(onClick = onLogout) {
-                Text(text = "退出登录")
-              }
-            }
-          }
-        }
-      }
+  when (selectedTab) {
+    MainTab.Home -> HomeScreen(loginSession = loginSession, onLoginClick = onLoginClick, modifier = contentModifier)
+    MainTab.Boards -> BoardsScreen(modifier = contentModifier)
+    MainTab.Messages -> MessagesScreen(modifier = contentModifier)
+    MainTab.Profile ->
+      ProfileScreen(
+        loginSession = loginSession,
+        onLoginClick = onLoginClick,
+        onLogout = onLogout,
+        modifier = contentModifier,
+      )
+  }
+}
+
+@Composable
+private fun YangaBottomNavigation(selectedTab: MainTab, onTabSelected: (MainTab) -> Unit) {
+  NavigationBar {
+    MainTab.entries.forEach { tab ->
+      NavigationBarItem(
+        selected = selectedTab == tab,
+        onClick = { onTabSelected(tab) },
+        icon = { Text(tab.label.take(1)) },
+        label = { Text(tab.label) },
+      )
     }
   }
 }
