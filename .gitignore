@@ -17,3 +17,4 @@ local.properties
 .jdks/
 android-template/
 source-upstream/
+.superpowers/

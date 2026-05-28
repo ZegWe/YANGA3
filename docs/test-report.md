@@ -8,7 +8,7 @@ Automated test contracts were added for the API request layer:
 app/src/test/java/com/yanga/client/api/NgaApiTest.kt
 ```
 
-The tests are designed to verify request construction and response cleanup without calling live NGA servers.
+The tests are designed to verify request construction and response cleanup without calling live NGA servers. The latest expansion covers the logged-in/session-cookie case for every public `NgaApi` request builder, including account-mutating endpoints by inspecting request objects only.
 
 ## Test Coverage Added
 
@@ -24,6 +24,53 @@ The tests are designed to verify request construction and response cleanup witho
 | Private message GBK fields | `messagePostUsesGbkEncodedRecipientsSubjectAndContent` |
 | Block-word payload format | `blockWordUpdateBuildsExpectedPayload` |
 | Static image URL templates | `staticImageUrlsMatchReferenceTemplates` |
+| Topic-list search/favorite/recommend variants | `topicListBuildsSearchFavoriteAndRecommendVariants` |
+| Thread-detail PID lookup | `articleReadBuildsPidQuery` |
+| Board search and remote categories | `boardAndRemoteCategoryRequestsMatchReferenceEndpoints` |
+| Post preflight and submit requests | `topicPostInfoBuildsPreflightQuery`, `topicPostBuildsSubmitBodyWithOptionalFields` |
+| Attachment metadata | `topicPostBodyIncludesAttachmentsAndStidWhenPresent`, `attachmentUploadMetadataBuildsFixedUploadEndpointAndFields` |
+| Comment / favorite / like / report / notification / check-in requests | `commentPostBuildsReplyCommentBody`, `favoriteLikeReportNotificationAndCheckInRequestsMatchReference` |
+| Profile / signature / block words | `profileSignatureAndBlockWordRequestsMatchReference` |
+| Message list/read/send | `messageListAndReadBuildExpectedQueries`, `messagePostUsesGbkEncodedRecipientsSubjectAndContent` |
+| Sub-board options | `subBoardOptionMapsSubscribeActionsByType` |
+| Vote / settle | `voteBuildsVoteAndSettleQueries` |
+| Avatar upload/change metadata | `avatarUploadAndChangeRequestsMatchLegacyEndpoints` |
+| Thread read response parsing | `threadParserParsesReadResponsePostsAndUserMapping` |
+| Live read-only API smoke tests | `NgaReadOnlyApiLiveTest` |
+
+## Live Read-Only API Tests
+
+`NgaReadOnlyApiLiveTest` can run real network smoke tests after a login cookie is available. It only executes `GET` requests and asserts this before opening the connection, so mutating endpoints such as post, check-in, favorite, like, signature, block-word update, vote, and avatar change are excluded.
+
+Required environment variable:
+
+```powershell
+$env:NGA_COOKIE='ngaPassportUid=...; ngaPassportCid=...; ngaPassportUrlencodedUname=...'
+```
+
+Optional environment variables:
+
+```powershell
+$env:NGA_UID='<current user uid>'
+$env:NGA_TEST_FID='7'
+$env:NGA_TEST_TID='<known readable thread id>'
+$env:NGA_BASE_URL='https://bbs.nga.cn'
+$env:NGA_USER_AGENT='Yanga Android LiveTest'
+```
+
+Covered live read-only calls:
+
+| API | State change |
+| --- | --- |
+| `topicList` | No |
+| `boardSearch` | No |
+| `remoteBoardCategories` | No |
+| `articleRead` when `NGA_TEST_TID` is set | No |
+| `notifications` | No |
+| `messageList` | No |
+| `profile` when `NGA_UID` is set | No |
+
+The thread-detail live test now parses the `read.php` response through `NgaThreadParser` and asserts that a topic id, at least one post, and non-empty post content are present.
 
 ## Commands Run
 
@@ -159,3 +206,38 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 ```
 
 No app UI organization work should start until the requested UI direction is provided.
+
+## Latest Run Attempt
+
+After expanding the authenticated request-construction tests and adding live read-only smoke tests, this command was attempted again:
+
+```powershell
+.\gradlew.bat testDebugUnitTest
+```
+
+Current result:
+
+```text
+ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+```
+
+Status: blocked by missing local JDK on `PATH`/`JAVA_HOME`; no live NGA requests were made.
+
+Later, with Android Studio's bundled JBR and the cookie read from the logged-in emulator app, the full test suite was run successfully:
+
+```powershell
+.\gradlew.bat testDebugUnitTest
+```
+
+Result:
+
+```text
+BUILD SUCCESSFUL in 2s
+```
+
+JUnit summary:
+
+| Suite | Tests | Skipped | Failures | Errors |
+| --- | ---: | ---: | ---: | ---: |
+| `NgaApiTest` | 26 | 0 | 0 | 0 |
+| `NgaReadOnlyApiLiveTest` | 4 | 0 | 0 | 0 |

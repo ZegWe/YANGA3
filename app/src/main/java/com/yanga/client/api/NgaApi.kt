@@ -74,9 +74,9 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
 
   fun loginPage(): NgaRequest = NgaRequest(
     method = NgaHttpMethod.GET,
-    url = "https://ngabbs.com/nuke.php",
+    url = "https://bbs.nga.cn/nuke.php",
     query = linkedMapOf("__lib" to "login", "__act" to "account", "login" to ""),
-    headers = commonHeaders(includeCookie = false),
+    headers = emptyMap(),
   )
 
   fun topicPostInfo(fid: Int, action: String? = null, pid: String? = null, tid: String? = null, stid: String? = null): NgaRequest =
