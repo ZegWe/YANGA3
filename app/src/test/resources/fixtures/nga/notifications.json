@@ -1,0 +1,20 @@
+{
+  "data": {
+    "notifications": [
+      {
+        "id": 701,
+        "title": "有人回复了你",
+        "content": "公开主题 有新回复",
+        "time": "1770005555",
+        "unread": "1"
+      },
+      {
+        "nid": "702",
+        "subject": "系统通知",
+        "preview": "维护完成",
+        "created_at": 1770006666,
+        "unread_count": 0
+      }
+    ]
+  }
+}

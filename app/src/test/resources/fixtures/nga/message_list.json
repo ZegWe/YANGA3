@@ -1,0 +1,24 @@
+{
+  "data": {
+    "__M": {
+      "501": {
+        "mid": 501,
+        "uid": "42",
+        "from_username": "张三",
+        "subject": "问候",
+        "content": "你好，最近如何",
+        "time": "1770003333",
+        "unread": "2"
+      },
+      "502": {
+        "message_id": "502",
+        "contact_id": 43,
+        "contact_name": "李四",
+        "title": "回复",
+        "preview": "收到",
+        "last_updated_at": 1770004444,
+        "unread_count": 0
+      }
+    }
+  }
+}

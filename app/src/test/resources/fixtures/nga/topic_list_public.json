@@ -1,0 +1,30 @@
+window.script_muti_get_var_store={
+  "data": {
+    "__PAGE": "2",
+    "__T": {
+      "1001": {
+        "tid": 1001,
+        "fid": "7",
+        "fname": "议事厅",
+        "subject": "公开主题",
+        "authorid": "42",
+        "author": "作者A",
+        "replies": "12",
+        "lastpost": 1770001111,
+        "favor": "1"
+      },
+      "1002": {
+        "tid": "1002",
+        "fid": 8,
+        "forumname": "酒馆",
+        "title": "数组兼容",
+        "author_id": 43,
+        "username": "作者B",
+        "reply_count": 0,
+        "postdatetimestamp": "1770002222",
+        "is_favorited": 0
+      }
+    },
+    "__ROWS": "40"
+  }
+}/*$js$*/
