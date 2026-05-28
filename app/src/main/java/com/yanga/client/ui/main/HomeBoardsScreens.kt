@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 internal fun HomeScreen(
   loginSession: LoginSessionUiState?,
+  state: HomeUiState = HomeUiState(),
   onLoginClick: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -49,19 +50,18 @@ internal fun HomeScreen(
     }
 
     SectionHeader(title = "Favorite boards", trailing = "Manage")
-    FavoriteBoardGrid()
+    BoardGridState(state = state.boards)
 
     SectionHeader(title = "Active discussions", trailing = "Latest")
-    TonalCard {
-      activeTopics.forEach { topic ->
-        TopicRow(topic = topic)
-      }
-    }
+    TopicListState(state = state.activeTopics)
   }
 }
 
 @Composable
-internal fun BoardsScreen(modifier: Modifier = Modifier) {
+internal fun BoardsScreen(
+  state: BoardsUiState = BoardsUiState(),
+  modifier: Modifier = Modifier,
+) {
   Column(
     modifier = modifier
       .fillMaxSize()
@@ -78,18 +78,10 @@ internal fun BoardsScreen(modifier: Modifier = Modifier) {
     FilterChipRow(labels = listOf("All", "Subscribed", "Game", "Life", "More"))
 
     SectionHeader(title = "Subscribed boards", trailing = "Reorder")
-    TonalCard {
-      subscribedBoards.forEach { board ->
-        BoardListRow(board = board)
-      }
-    }
+    BoardListState(state = state.subscribedBoards, loginRequiredText = "Sign in to load subscribed boards")
 
     SectionHeader(title = "Full forum directory")
-    TonalCard {
-      forumCategories.forEach { category ->
-        BoardListRow(board = category)
-      }
-    }
+    BoardListState(state = state.categories, loginRequiredText = "Sign in to load forum directory")
 
     ManageBoardsCard()
   }
@@ -125,12 +117,29 @@ private fun LoginPrompt(onLoginClick: () -> Unit, modifier: Modifier = Modifier)
 }
 
 @Composable
-private fun FavoriteBoardGrid(modifier: Modifier = Modifier) {
+private fun BoardGridState(state: LoadableUiState<List<BoardPreview>>, modifier: Modifier = Modifier) {
+  when (state) {
+    is LoadableUiState.Content -> {
+      if (state.value.isEmpty()) {
+        StateMessage(text = "No favorite boards")
+      } else {
+        FavoriteBoardGrid(boards = state.value, modifier = modifier)
+      }
+    }
+    is LoadableUiState.Empty -> StateMessage(text = state.message)
+    is LoadableUiState.Error -> StateMessage(text = state.message)
+    LoadableUiState.Loading -> StateMessage(text = "Loading favorite boards")
+    LoadableUiState.LoginRequired -> StateMessage(text = "Sign in to load favorite boards")
+  }
+}
+
+@Composable
+private fun FavoriteBoardGrid(boards: List<BoardPreview>, modifier: Modifier = Modifier) {
   Column(
     modifier = modifier.fillMaxWidth(),
     verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
-    favoriteBoards.chunked(2).forEach { rowBoards ->
+    boards.chunked(2).forEach { rowBoards ->
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -143,6 +152,61 @@ private fun FavoriteBoardGrid(modifier: Modifier = Modifier) {
         }
       }
     }
+  }
+}
+
+@Composable
+private fun TopicListState(state: LoadableUiState<List<TopicPreview>>, modifier: Modifier = Modifier) {
+  TonalCard(modifier = modifier) {
+    when (state) {
+      is LoadableUiState.Content -> {
+        if (state.value.isEmpty()) {
+          Text(text = "No active discussions", style = MaterialTheme.typography.bodyMedium)
+        } else {
+          state.value.forEach { topic ->
+            TopicRow(topic = topic)
+          }
+        }
+      }
+      is LoadableUiState.Empty -> Text(text = state.message, style = MaterialTheme.typography.bodyMedium)
+      is LoadableUiState.Error ->
+        Text(text = state.message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+      LoadableUiState.Loading -> Text(text = "Loading active discussions", style = MaterialTheme.typography.bodyMedium)
+      LoadableUiState.LoginRequired -> Text(text = "Sign in to load active discussions", style = MaterialTheme.typography.bodyMedium)
+    }
+  }
+}
+
+@Composable
+private fun BoardListState(
+  state: LoadableUiState<List<BoardPreview>>,
+  loginRequiredText: String,
+  modifier: Modifier = Modifier,
+) {
+  TonalCard(modifier = modifier) {
+    when (state) {
+      is LoadableUiState.Content -> {
+        if (state.value.isEmpty()) {
+          Text(text = "No boards available", style = MaterialTheme.typography.bodyMedium)
+        } else {
+          state.value.forEach { board ->
+            BoardListRow(board = board)
+          }
+        }
+      }
+      is LoadableUiState.Empty -> Text(text = state.message, style = MaterialTheme.typography.bodyMedium)
+      is LoadableUiState.Error ->
+        Text(text = state.message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+      LoadableUiState.Loading -> Text(text = "Loading boards", style = MaterialTheme.typography.bodyMedium)
+      LoadableUiState.LoginRequired -> Text(text = loginRequiredText, style = MaterialTheme.typography.bodyMedium)
+    }
+  }
+}
+
+@Composable
+private fun StateMessage(text: String, modifier: Modifier = Modifier) {
+  TonalCard(modifier = modifier) {
+    Text(text = text, style = MaterialTheme.typography.bodyMedium)
   }
 }
 

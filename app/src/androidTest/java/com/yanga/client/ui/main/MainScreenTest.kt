@@ -7,7 +7,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.yanga.client.data.LoginSessionData
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
@@ -16,13 +15,10 @@ class MainScreenTest {
 
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
-  @Before
-  fun setup() {
-    composeTestRule.setContent { MainScreen() }
-  }
-
   @Test
   fun mainScreenShowsFourPrimaryTabsOnly() {
+    composeTestRule.setContent { MainScreen() }
+
     composeTestRule.onNodeWithText("Home").assertExists()
     composeTestRule.onNodeWithText("Boards").assertExists()
     composeTestRule.onNodeWithText("Messages").assertExists()
@@ -34,6 +30,8 @@ class MainScreenTest {
 
   @Test
   fun homeTabShowsBoardFirstContentWithoutAccountActions() {
+    composeTestRule.setContent { MainScreen() }
+
     composeTestRule.onNodeWithText("Home").performClick()
 
     composeTestRule.onNodeWithText("Yanga").assertExists()
@@ -48,7 +46,48 @@ class MainScreenTest {
   }
 
   @Test
+  fun homeScreenRendersContentStateWithoutOldFakeTopic() {
+    composeTestRule.setContent {
+      HomeScreen(
+        loginSession = null,
+        state = HomeUiState(
+          boards = LoadableUiState.Content(
+            listOf(BoardPreview("Remote strategy board", "Remote metadata", "R")),
+          ),
+          activeTopics = LoadableUiState.Content(
+            listOf(TopicPreview("Remote launch topic", "Remote topic board", "12 replies", "now", "L")),
+          ),
+        ),
+        onLoginClick = {},
+      )
+    }
+
+    composeTestRule.onNodeWithText("Remote strategy board").assertExists()
+    composeTestRule.onNodeWithText("Remote launch topic").assertExists()
+    composeTestRule.onAllNodesWithText("关于新版客户端首页信息密度的讨论").assertCountEquals(0)
+  }
+
+  @Test
+  fun homeScreenRendersErrorState() {
+    composeTestRule.setContent {
+      HomeScreen(
+        loginSession = null,
+        state = HomeUiState(
+          boards = LoadableUiState.Error("Home boards failed"),
+          activeTopics = LoadableUiState.Error("Home topics failed"),
+        ),
+        onLoginClick = {},
+      )
+    }
+
+    composeTestRule.onNodeWithText("Home boards failed").assertExists()
+    composeTestRule.onNodeWithText("Home topics failed").assertExists()
+  }
+
+  @Test
   fun boardsTabShowsForumDiscoveryContent() {
+    composeTestRule.setContent { MainScreen() }
+
     composeTestRule.onNodeWithText("Boards").performClick()
 
     composeTestRule.onNodeWithText("Board search").assertExists()
@@ -58,7 +97,26 @@ class MainScreenTest {
   }
 
   @Test
+  fun boardsScreenRendersLoginRequiredSubscribedAndRemoteCategories() {
+    composeTestRule.setContent {
+      BoardsScreen(
+        state = BoardsUiState(
+          subscribedBoards = LoadableUiState.LoginRequired,
+          categories = LoadableUiState.Content(
+            listOf(BoardPreview("Remote category", "Remote directory metadata", "C")),
+          ),
+        ),
+      )
+    }
+
+    composeTestRule.onNodeWithText("Sign in to load subscribed boards").assertExists()
+    composeTestRule.onNodeWithText("Remote category").assertExists()
+  }
+
+  @Test
   fun messagesTabShowsPrivateMessageContextOnly() {
+    composeTestRule.setContent { MainScreen() }
+
     composeTestRule.onNodeWithText("Messages").performClick()
 
     composeTestRule.onNodeWithText("Private messages").assertExists()
@@ -74,6 +132,8 @@ class MainScreenTest {
 
   @Test
   fun loggedOutProfileTabShowsLoginNotificationAndSettingsContent() {
+    composeTestRule.setContent { MainScreen() }
+
     composeTestRule.onNodeWithText("Profile").performClick()
 
     composeTestRule.onNodeWithText("当前未登录").assertExists()
