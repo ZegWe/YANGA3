@@ -27,9 +27,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yanga.client.data.LoginSessionData
 
 @Composable
-internal fun MessagesScreen(modifier: Modifier = Modifier) {
+internal fun MessagesScreen(
+  loginSession: LoginSessionUiState? = null,
+  state: MessagesUiState = MessagesUiState(),
+  onLoginClick: () -> Unit = {},
+  modifier: Modifier = Modifier,
+) {
   LazyColumn(
     modifier = modifier.fillMaxSize(),
     verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -51,15 +57,38 @@ internal fun MessagesScreen(modifier: Modifier = Modifier) {
       ActionChipRow(labels = listOf("Write private message", "Block list"))
     }
     item { SectionHeader(title = "Conversations", trailing = "New") }
-    items(privateMessages) { message ->
-      MessageThreadRow(message = message)
+    when (val messages = state.messages) {
+      LoadableUiState.Loading -> item { LoadableStateText(text = "Loading private messages") }
+      is LoadableUiState.Content ->
+        if (messages.value.isEmpty()) {
+          item { LoadableStateText(text = "No private messages") }
+        } else {
+          items(messages.value) { message ->
+            MessageThreadRow(message = message)
+          }
+        }
+      is LoadableUiState.Empty -> item { LoadableStateText(text = messages.message) }
+      is LoadableUiState.Error -> item { LoadableStateText(text = messages.message, isError = true) }
+      LoadableUiState.LoginRequired ->
+        item {
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LoadableStateText(text = "Sign in to load private messages")
+            if (loginSession == null) {
+              Button(onClick = onLoginClick) {
+                Text(text = "登录 NGA")
+              }
+            }
+          }
+        }
     }
   }
 }
 
 @Composable
+@Suppress("UNUSED_PARAMETER")
 internal fun ProfileScreen(
   loginSession: LoginSessionUiState?,
+  state: ProfileUiState = ProfileUiState(),
   onLoginClick: () -> Unit,
   onLogout: () -> Unit,
   modifier: Modifier = Modifier,
@@ -75,23 +104,35 @@ internal fun ProfileScreen(
       subtitle = "Account, notifications, and settings",
     )
     ProfileAccountCard(
-      loginSession = loginSession,
+      session = state.session,
       onLoginClick = onLoginClick,
       onLogout = onLogout,
     )
-    ProfileCounterGrid()
+    ProfileCounterGrid(counters = state.counters)
     SectionHeader(title = "Notification center")
-    SettingsRow(
-      row = SettingsPreview("通", "Notifications", "Reply alerts and favorite topic updates", "12"),
-    )
+    SettingsRowsContent(state = state.notifications)
     SectionHeader(title = "Settings")
-    settingsRows.forEach { row ->
+    state.settingsRows.forEach { row ->
       SettingsRow(row = row)
     }
     SettingsRow(
       row = SettingsPreview("黑", "Block list", "Private message blocked users"),
     )
   }
+}
+
+@Composable
+private fun LoadableStateText(
+  text: String,
+  modifier: Modifier = Modifier,
+  isError: Boolean = false,
+) {
+  Text(
+    text = text,
+    modifier = modifier.fillMaxWidth(),
+    style = MaterialTheme.typography.bodyMedium,
+    color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+  )
 }
 
 @Composable
@@ -145,7 +186,7 @@ private fun MessageThreadRow(message: MessagePreview, modifier: Modifier = Modif
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
 private fun ProfileAccountCard(
-  loginSession: LoginSessionUiState?,
+  session: LoadableUiState<LoginSessionData>,
   onLoginClick: () -> Unit,
   onLogout: () -> Unit,
   modifier: Modifier = Modifier,
@@ -156,27 +197,60 @@ private fun ProfileAccountCard(
       horizontalArrangement = Arrangement.spacedBy(12.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      RoundMarker(text = loginSession?.username ?: "未")
+      val markerText = if (session is LoadableUiState.Content) session.value.username else "未"
+      RoundMarker(text = markerText)
       Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (loginSession == null) {
-          Text(text = "当前未登录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-          Text(
-            text = "登录后同步私信、收藏和通知。",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
-        } else {
-          Text(text = "已登录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-          Text(text = loginSession.username, style = MaterialTheme.typography.bodyLarge)
-          Text(
-            text = "UID ${loginSession.uid}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
+        when (session) {
+          LoadableUiState.Loading -> {
+            Text(text = "Loading profile", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+              text = "Loading account, notifications, and settings.",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          is LoadableUiState.Content -> {
+            Text(text = "已登录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(text = session.value.username, style = MaterialTheme.typography.bodyLarge)
+            Text(
+              text = "UID ${session.value.uid}",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          is LoadableUiState.Empty -> {
+            Text(text = session.message, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+              text = "No account profile is available.",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          is LoadableUiState.Error -> {
+            Text(
+              text = session.message,
+              style = MaterialTheme.typography.titleMedium,
+              color = MaterialTheme.colorScheme.error,
+              fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+              text = "Profile data could not be loaded.",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          LoadableUiState.LoginRequired -> {
+            Text(text = "当前未登录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+              text = "Sign in to load profile",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
         }
       }
     }
-    if (loginSession == null) {
+    if (session !is LoadableUiState.Content) {
       Button(onClick = onLoginClick) {
         Text(text = "登录 NGA")
       }
@@ -201,26 +275,32 @@ private fun ProfileAccountCard(
 }
 
 @Composable
-private fun ProfileCounterGrid(modifier: Modifier = Modifier) {
-  Row(
-    modifier = modifier.fillMaxWidth(),
-    horizontalArrangement = Arrangement.spacedBy(10.dp),
-  ) {
-    ProfileCounter(
-      label = "Favorite topics",
-      value = "36",
-      modifier = Modifier.weight(1f),
-    )
-    ProfileCounter(
-      label = "Subscribed boards",
-      value = "12",
-      modifier = Modifier.weight(1f),
-    )
-    ProfileCounter(
-      label = "New notifications",
-      value = "12",
-      modifier = Modifier.weight(1f),
-    )
+private fun ProfileCounterGrid(
+  counters: LoadableUiState<List<SettingsPreview>>,
+  modifier: Modifier = Modifier,
+) {
+  when (counters) {
+    LoadableUiState.Loading -> LoadableStateText(text = "Loading profile counters", modifier = modifier)
+    is LoadableUiState.Content ->
+      if (counters.value.isEmpty()) {
+        LoadableStateText(text = "No profile counters", modifier = modifier)
+      } else {
+        Row(
+          modifier = modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+          counters.value.forEach { counter ->
+            ProfileCounter(
+              label = counter.title,
+              value = counter.badge ?: counter.subtitle,
+              modifier = Modifier.weight(1f),
+            )
+          }
+        }
+      }
+    is LoadableUiState.Empty -> LoadableStateText(text = counters.message, modifier = modifier)
+    is LoadableUiState.Error -> LoadableStateText(text = counters.message, modifier = modifier, isError = true)
+    LoadableUiState.LoginRequired -> LoadableStateText(text = "Sign in to load profile counters", modifier = modifier)
   }
 }
 
@@ -269,5 +349,28 @@ private fun SettingsRow(row: SettingsPreview, modifier: Modifier = Modifier) {
       )
     }
     row.badge?.let { Badge { Text(it) } }
+  }
+}
+
+@Composable
+private fun SettingsRowsContent(
+  state: LoadableUiState<List<SettingsPreview>>,
+  modifier: Modifier = Modifier,
+) {
+  when (state) {
+    LoadableUiState.Loading -> LoadableStateText(text = "Loading notifications", modifier = modifier)
+    is LoadableUiState.Content ->
+      if (state.value.isEmpty()) {
+        LoadableStateText(text = "No notifications", modifier = modifier)
+      } else {
+        Column(modifier = modifier.fillMaxWidth()) {
+          state.value.forEach { row ->
+            SettingsRow(row = row)
+          }
+        }
+      }
+    is LoadableUiState.Empty -> LoadableStateText(text = state.message, modifier = modifier)
+    is LoadableUiState.Error -> LoadableStateText(text = state.message, modifier = modifier, isError = true)
+    LoadableUiState.LoginRequired -> LoadableStateText(text = "Sign in to load notifications", modifier = modifier)
   }
 }
