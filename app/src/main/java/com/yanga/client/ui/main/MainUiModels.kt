@@ -5,7 +5,6 @@ import com.yanga.client.data.LoginSessionData
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -16,9 +15,6 @@ import kotlinx.serialization.Serializable
 sealed interface MainDestinationKey : NavKey {
   @Serializable
   data object Home : MainDestinationKey
-
-  @Serializable
-  data object Boards : MainDestinationKey
 
   @Serializable
   data object Messages : MainDestinationKey
@@ -41,15 +37,13 @@ sealed interface MainDestinationKey : NavKey {
 }
 
 enum class MainTab(val label: String, val icon: ImageVector) {
-  Home("Home", Icons.Filled.Home),
-  Boards("Boards", Icons.Filled.Dashboard),
+  Home("主页", Icons.Filled.Home),
   Messages("Messages", Icons.Filled.Email),
   Profile("Profile", Icons.Filled.Person),
 }
 
 enum class MainTopLevelDestination {
   Home,
-  Boards,
   Messages,
   Profile,
 }
@@ -58,7 +52,6 @@ val MainTab.destination: MainTopLevelDestination
   get() =
     when (this) {
       MainTab.Home -> MainTopLevelDestination.Home
-      MainTab.Boards -> MainTopLevelDestination.Boards
       MainTab.Messages -> MainTopLevelDestination.Messages
       MainTab.Profile -> MainTopLevelDestination.Profile
     }
@@ -67,7 +60,6 @@ val MainTopLevelDestination.tab: MainTab
   get() =
     when (this) {
       MainTopLevelDestination.Home -> MainTab.Home
-      MainTopLevelDestination.Boards -> MainTab.Boards
       MainTopLevelDestination.Messages -> MainTab.Messages
       MainTopLevelDestination.Profile -> MainTab.Profile
     }

@@ -32,12 +32,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import coil.imageLoader
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import com.yanga.client.api.NgaPasswordLoginClient
 import com.yanga.client.data.DefaultNgaReadOnlyRepository
 import com.yanga.client.data.NgaReadOnlyRepository
@@ -71,9 +75,17 @@ fun MainScreen(
   val viewModel = remember(repository) { MainContentViewModel(repository) }
   val contentState by viewModel.uiState.collectAsState()
   val backStack = rememberNavBackStack(MainDestinationKey.Home)
+  val context = LocalContext.current
 
   LaunchedEffect(loginSession, viewModel) {
     viewModel.refresh(loginSession)
+  }
+
+  LaunchedEffect(contentState.boards) {
+    preloadBoardIcons(
+      context = context,
+      boardsState = contentState.boards,
+    )
   }
 
   LaunchedEffect(contentState.activeBoard) {
@@ -118,21 +130,6 @@ fun MainScreen(
         entry<MainDestinationKey.Home> {
           MainRootScaffold(
             selectedTab = MainTab.Home,
-            loginSession = loginSession,
-            contentState = contentState,
-            onTabSelected = { selectTopLevelDestination(backStack, it) },
-            onLoginClick = { backStack.add(MainDestinationKey.Login) },
-            onLogout = onLogout,
-            onEndpointChange = { viewModel.refresh(loginSession, it) },
-            onBoardClick = { viewModel.openBoard(it) },
-            onTopicClick = { viewModel.openThread(it) },
-            modifier = modifier,
-          )
-        }
-
-        entry<MainDestinationKey.Boards> {
-          MainRootScaffold(
-            selectedTab = MainTab.Boards,
             loginSession = loginSession,
             contentState = contentState,
             onTabSelected = { selectTopLevelDestination(backStack, it) },
@@ -238,7 +235,6 @@ private fun selectTopLevelDestination(
   val destination =
     when (tab) {
       MainTab.Home -> MainDestinationKey.Home
-      MainTab.Boards -> MainDestinationKey.Boards
       MainTab.Messages -> MainDestinationKey.Messages
       MainTab.Profile -> MainDestinationKey.Profile
     }
@@ -296,36 +292,30 @@ private fun MainTabContent(
   onTopicClick: (TopicPreview) -> Unit,
   paddingValues: PaddingValues,
 ) {
-  val contentModifier =
+  val defaultContentModifier =
     Modifier
       .fillMaxSize()
       .safeDrawingPadding()
       .padding(paddingValues)
       .padding(horizontal = 20.dp, vertical = 16.dp)
+  val homeContentModifier =
+    Modifier
+      .fillMaxSize()
+      .padding(paddingValues)
 
   when (selectedTab) {
     MainTab.Home ->
-      HomeScreen(
-        loginSession = loginSession,
-        state = contentState.home,
-        onLoginClick = onLoginClick,
-        onBoardClick = onBoardClick,
-        onTopicClick = onTopicClick,
-        modifier = contentModifier,
-      )
-
-    MainTab.Boards ->
       BoardsScreen(
         state = contentState.boards,
         onBoardClick = onBoardClick,
-        modifier = contentModifier,
+        modifier = homeContentModifier,
       )
     MainTab.Messages ->
       MessagesScreen(
         loginSession = loginSession,
         state = contentState.messages,
         onLoginClick = onLoginClick,
-        modifier = contentModifier,
+        modifier = defaultContentModifier,
       )
 
     MainTab.Profile ->
@@ -335,7 +325,7 @@ private fun MainTabContent(
         onLoginClick = onLoginClick,
         onLogout = onLogout,
         onEndpointChange = onEndpointChange,
-        modifier = contentModifier,
+        modifier = defaultContentModifier,
       )
   }
 }
@@ -519,6 +509,35 @@ private fun CaptchaImage(captchaId: String, modifier: Modifier = Modifier) {
 
 private fun newCaptchaId(): String =
   "login${Random.nextLong(100_000_000_000_000, 999_999_999_999_999)}"
+
+private fun preloadBoardIcons(context: android.content.Context, boardsState: BoardsUiState) {
+  val iconUrls =
+    buildList {
+      ((boardsState.subscribedBoards as? LoadableUiState.Content)?.value ?: emptyList())
+        .mapNotNullTo(this) { it.iconUrl?.takeIf(String::isNotBlank) }
+
+      ((boardsState.sections as? LoadableUiState.Content)?.value ?: emptyList())
+        .flatMap { it.groups }
+        .flatMap { it.boards }
+        .mapNotNullTo(this) { it.iconUrl?.takeIf(String::isNotBlank) }
+    }
+      .distinct()
+      .take(120)
+
+  if (iconUrls.isEmpty()) return
+
+  val imageLoader = context.imageLoader
+  iconUrls.forEach { url ->
+    imageLoader.enqueue(
+      ImageRequest.Builder(context)
+        .data(url)
+        .memoryCachePolicy(CachePolicy.ENABLED)
+        .diskCachePolicy(CachePolicy.ENABLED)
+        .networkCachePolicy(CachePolicy.ENABLED)
+        .build(),
+    )
+  }
+}
 
 @Preview(showBackground = true)
 @Composable

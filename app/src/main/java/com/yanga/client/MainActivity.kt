@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import com.yanga.client.theme.YangaTheme
 import com.yanga.client.ui.main.LoginSessionUiState
 import com.yanga.client.ui.main.MainScreen
+import com.yanga.client.data.SharedPreferencesBoardsCacheStore
 import com.yanga.client.data.DefaultNgaReadOnlyRepository
 import com.yanga.client.data.SharedPreferencesFavoriteBoardsStore
 
@@ -28,8 +29,10 @@ class MainActivity : ComponentActivity() {
     enableEdgeToEdge()
     setContent {
       val repository = remember {
+        val preferences = getPreferences(Context.MODE_PRIVATE)
         DefaultNgaReadOnlyRepository(
-          favoriteBoardsStore = SharedPreferencesFavoriteBoardsStore(getPreferences(Context.MODE_PRIVATE)),
+          favoriteBoardsStore = SharedPreferencesFavoriteBoardsStore(preferences),
+          boardsCacheStore = SharedPreferencesBoardsCacheStore(preferences),
         )
       }
       YangaTheme {

@@ -29,6 +29,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import coil.compose.AsyncImage
 import com.yanga.client.R
 
@@ -112,9 +114,13 @@ internal fun Marker(text: String, iconUrl: String? = null, modifier: Modifier = 
   ) {
     if (!iconUrl.isNullOrBlank()) {
       AsyncImage(
-        model = iconUrl,
+        model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+          .data(iconUrl)
+          .memoryCachePolicy(CachePolicy.ENABLED)
+          .diskCachePolicy(CachePolicy.ENABLED)
+          .networkCachePolicy(CachePolicy.ENABLED)
+          .build(),
         contentDescription = null,
-        placeholder = painterResource(id = R.drawable.default_board_icon),
         error = painterResource(id = R.drawable.default_board_icon),
         fallback = painterResource(id = R.drawable.default_board_icon),
         contentScale = ContentScale.Fit,

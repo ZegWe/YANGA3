@@ -44,6 +44,7 @@ class DefaultNgaReadOnlyRepository(
   private val userAgent: String = "Yanga Android",
   private var baseUrl: String = com.yanga.client.api.NgaDomains.BBS_NGA_CN,
   private val favoriteBoardsStore: FavoriteBoardsStore? = null,
+  private val boardsCacheStore: BoardsCacheStore? = null,
 ) : NgaReadOnlyRepository {
   fun setBaseUrl(url: String) {
     baseUrl = url
@@ -71,6 +72,11 @@ class DefaultNgaReadOnlyRepository(
   }
 
   override suspend fun loadBoards(session: LoginSessionData?): Result<BoardsReadData> = withContext(Dispatchers.IO) {
+    val cacheKey = boardCacheKey(session)
+    boardsCacheStore?.load(cacheKey)?.let { cached ->
+      return@withContext Result.success(cached)
+    }
+
     val api = api(session)
     val subscribedBoards = if (session.requireLogin() != null) {
       execute(api.subscribedBoards(), NgaBoardCategoryParser::parseBoards).getOrDefault(emptyList())
@@ -95,12 +101,13 @@ class DefaultNgaReadOnlyRepository(
     val localFavorites = favoriteBoardsStore?.list().orEmpty().map { it.toBoardSummary() }
     val resolvedSubscribedBoards = (localFavorites + remoteSubscribedBoards).distinctBy { it.boardId }
 
-    Result.success(
+    val data =
       BoardsReadData(
         subscribedBoards = resolvedSubscribedBoards,
         remoteSections = remoteSections,
-      ),
-    )
+      )
+    boardsCacheStore?.save(cacheKey, data)
+    Result.success(data)
   }
 
   override suspend fun loadMessages(session: LoginSessionData?): Result<MessagesReadData> = withContext(Dispatchers.IO) {
@@ -161,6 +168,11 @@ class DefaultNgaReadOnlyRepository(
 
   private fun LoginSessionData?.requireLogin(): LoginSessionData? =
     this?.takeIf { it.cookie.isNotBlank() }
+
+  private fun boardCacheKey(session: LoginSessionData?): String {
+    val uid = session?.uid.orEmpty().ifBlank { "guest" }
+    return "${baseUrl.trimEnd('/')}_$uid"
+  }
 
   private fun <T> execute(request: NgaRequest, parser: (String) -> T): Result<T> =
     runCatching {
