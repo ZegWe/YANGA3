@@ -13,8 +13,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.yanga.client.theme.YangaTheme
-import com.yanga.client.ui.main.LoginSessionUiState
-import com.yanga.client.ui.main.MainScreen
+import com.yanga.client.ui.LoginSessionUiState
+import com.yanga.client.ui.MainScreen
 import com.yanga.client.data.SharedPreferencesBoardsCacheStore
 import com.yanga.client.data.DefaultNgaReadOnlyRepository
 import com.yanga.client.data.SharedPreferencesFavoriteBoardsStore
@@ -87,3 +87,4 @@ class MainActivity : ComponentActivity() {
     const val KEY_COOKIE = "cookie"
   }
 }
+

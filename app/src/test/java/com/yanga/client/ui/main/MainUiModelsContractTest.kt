@@ -1,4 +1,4 @@
-package com.yanga.client.ui.main
+package com.yanga.client.ui
 
 import com.yanga.client.data.LoginSessionData
 import org.junit.Assert.assertEquals
@@ -125,3 +125,5 @@ class MainUiModelsContractTest {
     assertEquals(notifications, (state.profile.notifications as LoadableUiState.Content).value)
   }
 }
+
+

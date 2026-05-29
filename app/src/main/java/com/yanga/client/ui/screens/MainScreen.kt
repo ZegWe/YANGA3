@@ -1,48 +1,27 @@
-package com.yanga.client.ui.main
+package com.yanga.client.ui
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.Image
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.imageLoader
 import coil.request.CachePolicy
 import coil.request.ImageRequest
-import com.yanga.client.api.NgaPasswordLoginClient
 import com.yanga.client.data.DefaultNgaReadOnlyRepository
 import com.yanga.client.data.NgaReadOnlyRepository
 import com.yanga.client.theme.YangaTheme
@@ -51,18 +30,6 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
-import kotlin.random.Random
-
-data class LoginSessionUiState(
-  val username: String,
-  val uid: String,
-  val cookie: String,
-)
 
 @Composable
 fun MainScreen(
@@ -72,32 +39,46 @@ fun MainScreen(
   onLogout: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
-  val viewModel = remember(repository) { MainContentViewModel(repository) }
-  val contentState by viewModel.uiState.collectAsState()
+  val boardsViewModel = remember(repository) { BoardsListViewModel(repository) }
+  val boardContentViewModel = remember(repository) { BoardContentViewModel(repository) }
+  val threadContentViewModel = remember(repository) { ThreadContentViewModel(repository) }
+  val messagesViewModel = remember(repository) { MessagesViewModel(repository) }
+  val profileViewModel = remember(repository) { ProfileViewModel(repository) }
+  val boardsState by boardsViewModel.state.collectAsState()
+  val boardContentState by boardContentViewModel.state.collectAsState()
+  val threadContentState by threadContentViewModel.state.collectAsState()
+  val messagesState by messagesViewModel.state.collectAsState()
+  val profileState by profileViewModel.state.collectAsState()
   val backStack = rememberNavBackStack(MainDestinationKey.Home)
   val context = LocalContext.current
+  val sessionData = loginSession?.toData()
 
-  LaunchedEffect(loginSession, viewModel) {
-    viewModel.refresh(loginSession)
+  LaunchedEffect(loginSession, profileState.forumEndpoint, repository) {
+    if (repository is DefaultNgaReadOnlyRepository) {
+      repository.setBaseUrl(profileState.forumEndpoint)
+    }
+    boardsViewModel.refresh(sessionData)
+    messagesViewModel.refresh(sessionData)
+    profileViewModel.refresh(sessionData)
   }
 
-  LaunchedEffect(contentState.boards) {
+  LaunchedEffect(boardsState) {
     preloadBoardIcons(
       context = context,
-      boardsState = contentState.boards,
+      boardsState = boardsState,
     )
   }
 
-  LaunchedEffect(contentState.activeBoard) {
-    val board = contentState.activeBoard ?: return@LaunchedEffect
+  LaunchedEffect(boardContentState) {
+    val board = boardContentState ?: return@LaunchedEffect
     val boardKey = MainDestinationKey.Board(board.fid)
     if (backStack.lastOrNull() != boardKey) {
       backStack.add(boardKey)
     }
   }
 
-  LaunchedEffect(contentState.activeThread) {
-    val thread = contentState.activeThread ?: return@LaunchedEffect
+  LaunchedEffect(threadContentState) {
+    val thread = threadContentState ?: return@LaunchedEffect
     val threadId = thread.title.ifBlank { "thread" }
     val threadKey = MainDestinationKey.Thread(threadId)
     if (backStack.lastOrNull() != threadKey) {
@@ -110,11 +91,11 @@ fun MainScreen(
     onBack = {
       when (backStack.lastOrNull()) {
         is MainDestinationKey.Thread -> {
-          viewModel.backFromThread()
+          threadContentViewModel.backFromThread()
           popBackStack(backStack)
         }
         is MainDestinationKey.Board -> {
-          viewModel.backFromBoard()
+          boardContentViewModel.backFromBoard()
           popBackStack(backStack)
         }
         is MainDestinationKey.Login -> popBackStack(backStack)
@@ -131,13 +112,15 @@ fun MainScreen(
           MainRootScaffold(
             selectedTab = MainTab.Home,
             loginSession = loginSession,
-            contentState = contentState,
+            boardsState = boardsState,
+            messagesState = messagesState,
+            profileState = profileState,
             onTabSelected = { selectTopLevelDestination(backStack, it) },
             onLoginClick = { backStack.add(MainDestinationKey.Login) },
             onLogout = onLogout,
-            onEndpointChange = { viewModel.refresh(loginSession, it) },
-            onBoardClick = { viewModel.openBoard(it) },
-            onTopicClick = { viewModel.openThread(it) },
+            onEndpointChange = { profileViewModel.setEndpoint(it) },
+            onBoardClick = { boardContentViewModel.openBoard(sessionData, it) },
+            onTopicClick = { threadContentViewModel.openThread(sessionData, it) },
             modifier = modifier,
           )
         }
@@ -146,13 +129,15 @@ fun MainScreen(
           MainRootScaffold(
             selectedTab = MainTab.Messages,
             loginSession = loginSession,
-            contentState = contentState,
+            boardsState = boardsState,
+            messagesState = messagesState,
+            profileState = profileState,
             onTabSelected = { selectTopLevelDestination(backStack, it) },
             onLoginClick = { backStack.add(MainDestinationKey.Login) },
             onLogout = onLogout,
-            onEndpointChange = { viewModel.refresh(loginSession, it) },
-            onBoardClick = { viewModel.openBoard(it) },
-            onTopicClick = { viewModel.openThread(it) },
+            onEndpointChange = { profileViewModel.setEndpoint(it) },
+            onBoardClick = { boardContentViewModel.openBoard(sessionData, it) },
+            onTopicClick = { threadContentViewModel.openThread(sessionData, it) },
             modifier = modifier,
           )
         }
@@ -161,13 +146,15 @@ fun MainScreen(
           MainRootScaffold(
             selectedTab = MainTab.Profile,
             loginSession = loginSession,
-            contentState = contentState,
+            boardsState = boardsState,
+            messagesState = messagesState,
+            profileState = profileState,
             onTabSelected = { selectTopLevelDestination(backStack, it) },
             onLoginClick = { backStack.add(MainDestinationKey.Login) },
             onLogout = onLogout,
-            onEndpointChange = { viewModel.refresh(loginSession, it) },
-            onBoardClick = { viewModel.openBoard(it) },
-            onTopicClick = { viewModel.openThread(it) },
+            onEndpointChange = { profileViewModel.setEndpoint(it) },
+            onBoardClick = { boardContentViewModel.openBoard(sessionData, it) },
+            onTopicClick = { threadContentViewModel.openThread(sessionData, it) },
             modifier = modifier,
           )
         }
@@ -186,16 +173,29 @@ fun MainScreen(
         }
 
         entry<MainDestinationKey.Board> {
-          val boardState = contentState.activeBoard
+          val boardState = boardContentState
           if (boardState != null) {
             BoardTopicListScreen(
               state = boardState,
               onBack = {
-                viewModel.backFromBoard()
+                boardContentViewModel.backFromBoard()
                 popBackStack(backStack)
               },
-              onTopicClick = { viewModel.openThread(it) },
-              onToggleFavorite = { viewModel.toggleActiveBoardFavorite() },
+              onTopicClick = { threadContentViewModel.openThread(sessionData, it) },
+              onToggleFavorite = {
+                val active = boardContentState ?: return@BoardTopicListScreen
+                val board = BoardPreview(
+                  id = active.fid,
+                  name = active.boardName,
+                  metadata = "fid: ${active.fid}",
+                  marker = active.boardName.take(1),
+                  iconUrl = active.iconUrl,
+                  category = active.category,
+                  isFavorite = active.isFavorite,
+                )
+                boardsViewModel.toggleBoardFavorite(board)
+                boardContentViewModel.setFavorite(!active.isFavorite)
+              },
               modifier = modifier,
             )
           } else {
@@ -204,12 +204,12 @@ fun MainScreen(
         }
 
         entry<MainDestinationKey.Thread> {
-          val threadState = contentState.activeThread
+          val threadState = threadContentState
           if (threadState != null) {
             ThreadReadingScreen(
               state = threadState,
               onBack = {
-                viewModel.backFromThread()
+                threadContentViewModel.backFromThread()
                 popBackStack(backStack)
               },
               modifier = modifier,
@@ -251,7 +251,9 @@ private fun selectTopLevelDestination(
 private fun MainRootScaffold(
   selectedTab: MainTab,
   loginSession: LoginSessionUiState?,
-  contentState: MainContentUiState,
+  boardsState: BoardsUiState,
+  messagesState: MessagesUiState,
+  profileState: ProfileUiState,
   onTabSelected: (MainTab) -> Unit,
   onLoginClick: () -> Unit,
   onLogout: () -> Unit,
@@ -269,7 +271,9 @@ private fun MainRootScaffold(
     MainTabContent(
       selectedTab = selectedTab,
       loginSession = loginSession,
-      contentState = contentState,
+      boardsState = boardsState,
+      messagesState = messagesState,
+      profileState = profileState,
       onLoginClick = onLoginClick,
       onLogout = onLogout,
       onEndpointChange = onEndpointChange,
@@ -284,7 +288,9 @@ private fun MainRootScaffold(
 private fun MainTabContent(
   selectedTab: MainTab,
   loginSession: LoginSessionUiState?,
-  contentState: MainContentUiState,
+  boardsState: BoardsUiState,
+  messagesState: MessagesUiState,
+  profileState: ProfileUiState,
   onLoginClick: () -> Unit,
   onLogout: () -> Unit,
   onEndpointChange: (String) -> Unit,
@@ -306,14 +312,14 @@ private fun MainTabContent(
   when (selectedTab) {
     MainTab.Home ->
       BoardsScreen(
-        state = contentState.boards,
+        state = boardsState,
         onBoardClick = onBoardClick,
         modifier = homeContentModifier,
       )
     MainTab.Messages ->
       MessagesScreen(
         loginSession = loginSession,
-        state = contentState.messages,
+        state = messagesState,
         onLoginClick = onLoginClick,
         modifier = defaultContentModifier,
       )
@@ -321,7 +327,7 @@ private fun MainTabContent(
     MainTab.Profile ->
       ProfileScreen(
         loginSession = loginSession,
-        state = contentState.profile,
+        state = profileState,
         onLoginClick = onLoginClick,
         onLogout = onLogout,
         onEndpointChange = onEndpointChange,
@@ -329,186 +335,6 @@ private fun MainTabContent(
       )
   }
 }
-
-@Composable
-private fun YangaBottomNavigation(selectedTab: MainTab, onTabSelected: (MainTab) -> Unit) {
-  NavigationBar {
-    MainTab.entries.forEach { tab ->
-      NavigationBarItem(
-        selected = selectedTab == tab,
-        onClick = { onTabSelected(tab) },
-        icon = { Icon(tab.icon, contentDescription = tab.label) },
-      )
-    }
-  }
-}
-
-@Composable
-private fun PasswordLoginScreen(
-  onLoginComplete: (LoginSessionUiState) -> Unit,
-  onClose: () -> Unit,
-  modifier: Modifier = Modifier,
-) {
-  val scope = rememberCoroutineScope()
-  val client = remember { NgaPasswordLoginClient() }
-  var name by remember { mutableStateOf("") }
-  var password by remember { mutableStateOf("") }
-  var captcha by remember { mutableStateOf("") }
-  var captchaId by remember { mutableStateOf(newCaptchaId()) }
-  val pageId = remember { "P${Random.nextLong(100_000_000_000_000, 999_999_999_999_999)}" }
-  var loading by remember { mutableStateOf(false) }
-  var error by remember { mutableStateOf<String?>(null) }
-
-  Column(
-    modifier = modifier
-      .fillMaxSize()
-      .safeDrawingPadding()
-      .padding(24.dp),
-    verticalArrangement = Arrangement.spacedBy(16.dp),
-  ) {
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.spacedBy(12.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      OutlinedButton(onClick = onClose) {
-        Text(text = "关闭")
-      }
-      Text(
-        text = "NGA 登录",
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.weight(1f),
-      )
-      if (loading) {
-        CircularProgressIndicator(modifier = Modifier.size(24.dp))
-      }
-    }
-
-    OutlinedTextField(
-      value = name,
-      onValueChange = {
-        name = it
-        error = null
-      },
-      enabled = !loading,
-      label = { Text(text = "用户名 / 邮箱 / UID") },
-      singleLine = true,
-      modifier = Modifier.fillMaxWidth(),
-    )
-    OutlinedTextField(
-      value = password,
-      onValueChange = {
-        password = it
-        error = null
-      },
-      enabled = !loading,
-      label = { Text(text = "密码") },
-      visualTransformation = PasswordVisualTransformation(),
-      singleLine = true,
-      modifier = Modifier.fillMaxWidth(),
-    )
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.spacedBy(12.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      CaptchaImage(
-        captchaId = captchaId,
-        modifier = Modifier.width(180.dp),
-      )
-      OutlinedButton(
-        onClick = {
-          captcha = ""
-          captchaId = newCaptchaId()
-        },
-        enabled = !loading,
-      ) {
-        Text(text = "换一张")
-      }
-    }
-    OutlinedTextField(
-      value = captcha,
-      onValueChange = {
-        captcha = it
-        error = null
-      },
-      enabled = !loading,
-      label = { Text(text = "图形验证码") },
-      singleLine = true,
-      modifier = Modifier.fillMaxWidth(),
-    )
-    error?.let {
-      Text(
-        text = it,
-        color = MaterialTheme.colorScheme.error,
-        style = MaterialTheme.typography.bodyMedium,
-      )
-    }
-    Button(
-      enabled = !loading && name.isNotBlank() && password.isNotBlank() && captcha.isNotBlank(),
-      onClick = {
-        loading = true
-        error = null
-        scope.launch {
-          val result = withContext(Dispatchers.IO) {
-            runCatching { client.login(name, password, captchaId, captcha, pageId) }
-          }
-          loading = false
-          result
-            .onSuccess {
-              onLoginComplete(
-                LoginSessionUiState(
-                  username = it.session.username,
-                  uid = it.session.uid,
-                  cookie = it.cookie,
-                ),
-              )
-            }
-            .onFailure {
-              error = it.message ?: "登录失败"
-              captcha = ""
-              captchaId = newCaptchaId()
-            }
-        }
-      },
-    ) {
-      Text(text = if (loading) "登录中" else "登录")
-    }
-  }
-}
-
-@Composable
-private fun CaptchaImage(captchaId: String, modifier: Modifier = Modifier) {
-  var image by remember(captchaId) { mutableStateOf<android.graphics.Bitmap?>(null) }
-  LaunchedEffect(captchaId) {
-    image = withContext(Dispatchers.IO) {
-      runCatching {
-        val connection = (URL("https://bbs.nga.cn/login_check_code.php?id=$captchaId&from=login").openConnection() as HttpURLConnection).apply {
-          connectTimeout = 15_000
-          readTimeout = 15_000
-          setRequestProperty("Referer", "https://bbs.nga.cn/nuke.php?__lib=login&__act=login_ui")
-          setRequestProperty("User-Agent", "Yanga Android")
-        }
-        connection.inputStream.use(BitmapFactory::decodeStream)
-      }.getOrNull()
-    }
-  }
-
-  if (image == null) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-      Text(text = "验证码加载中", style = MaterialTheme.typography.bodyMedium)
-    }
-  } else {
-    Image(
-      bitmap = image!!.asImageBitmap(),
-      contentDescription = "图形验证码",
-      modifier = modifier,
-    )
-  }
-}
-
-private fun newCaptchaId(): String =
-  "login${Random.nextLong(100_000_000_000_000, 999_999_999_999_999)}"
 
 private fun preloadBoardIcons(context: android.content.Context, boardsState: BoardsUiState) {
   val iconUrls =
@@ -558,3 +384,11 @@ fun MainScreenPortraitPreview() {
     )
   }
 }
+
+
+
+
+
+
+
+

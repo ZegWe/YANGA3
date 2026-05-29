@@ -1,4 +1,4 @@
-package com.yanga.client.ui.main
+package com.yanga.client.ui
 
 import com.yanga.client.api.NgaBoardCategory
 import com.yanga.client.api.NgaBoardGroup
@@ -395,3 +395,5 @@ private fun counterPreviews(): List<SettingsPreview> =
     SettingsPreview("通", "Unread notifications", "4", "4"),
     SettingsPreview("信", "Unread messages", "2", "2"),
   )
+
+

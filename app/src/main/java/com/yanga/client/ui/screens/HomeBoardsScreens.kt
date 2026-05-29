@@ -1,4 +1,4 @@
-package com.yanga.client.ui.main
+package com.yanga.client.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -395,3 +395,11 @@ private fun FavoriteBoardCard(
     }
   }
 }
+
+
+
+
+
+
+
+

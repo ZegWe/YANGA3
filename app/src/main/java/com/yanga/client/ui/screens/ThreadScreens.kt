@@ -1,4 +1,4 @@
-package com.yanga.client.ui.main
+package com.yanga.client.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -361,3 +361,11 @@ private fun ThreadBottomBar() {
     }
   }
 }
+
+
+
+
+
+
+
+
