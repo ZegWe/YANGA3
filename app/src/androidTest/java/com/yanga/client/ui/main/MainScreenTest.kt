@@ -5,8 +5,25 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.performClick
+import com.yanga.client.api.NgaBoardGroup
+import com.yanga.client.api.NgaBoardSection
+import com.yanga.client.api.NgaBoardSummary
+import com.yanga.client.api.NgaMessageSummary
+import com.yanga.client.api.NgaNotificationSummary
+import com.yanga.client.api.NgaProfileCounters
+import com.yanga.client.api.NgaThreadRead
+import com.yanga.client.api.NgaTopicList
+import com.yanga.client.api.NgaTopicSummary
+import com.yanga.client.data.BoardsReadData
+import com.yanga.client.data.HomeReadData
+import com.yanga.client.data.LocalFavoriteBoard
 import com.yanga.client.data.LoginSessionData
+import com.yanga.client.data.MessagesReadData
+import com.yanga.client.data.NgaReadOnlyRepository
+import com.yanga.client.data.ProfileReadData
 import org.junit.Rule
 import org.junit.Test
 
@@ -17,7 +34,8 @@ class MainScreenTest {
 
   @Test
   fun mainScreenShowsFourPrimaryTabsOnly() {
-    composeTestRule.setContent { MainScreen() }
+    val repository = fakeRepository()
+    composeTestRule.setContent { MainScreen(repository = repository) }
 
     composeTestRule.onNodeWithText("Home").assertExists()
     composeTestRule.onNodeWithText("Boards").assertExists()
@@ -30,7 +48,8 @@ class MainScreenTest {
 
   @Test
   fun homeTabShowsBoardFirstContentWithoutAccountActions() {
-    composeTestRule.setContent { MainScreen() }
+    val repository = fakeRepository()
+    composeTestRule.setContent { MainScreen(repository = repository) }
 
     composeTestRule.onNodeWithText("Home").performClick()
 
@@ -52,10 +71,19 @@ class MainScreenTest {
         loginSession = null,
         state = HomeUiState(
           boards = LoadableUiState.Content(
-            listOf(BoardPreview("Remote strategy board", "Remote metadata", "R")),
+            listOf(BoardPreview(id = "remote", name = "Remote strategy board", metadata = "Remote metadata", marker = "R")),
           ),
           activeTopics = LoadableUiState.Content(
-            listOf(TopicPreview("Remote launch topic", "Remote topic board", "12 replies", "now", "L")),
+            listOf(
+              TopicPreview(
+                id = "remote-topic",
+                title = "Remote launch topic",
+                board = "Remote topic board",
+                replies = "12 replies",
+                lastActive = "now",
+                authorInitial = "L",
+              ),
+            ),
           ),
         ),
         onLoginClick = {},
@@ -86,14 +114,16 @@ class MainScreenTest {
 
   @Test
   fun boardsTabShowsForumDiscoveryContent() {
-    composeTestRule.setContent { MainScreen() }
+    val repository = fakeRepository()
+    composeTestRule.setContent { MainScreen(repository = repository) }
 
     composeTestRule.onNodeWithText("Boards").performClick()
 
     composeTestRule.onNodeWithText("Board search").assertExists()
-    composeTestRule.onNodeWithText("Subscribed boards").assertExists()
-    composeTestRule.onNodeWithText("Full forum directory").assertExists()
-    composeTestRule.onNodeWithText("Manage boards").assertExists()
+    composeTestRule.onNodeWithText("收藏").assertExists()
+    composeTestRule.onAllNodesWithText("Subscribed boards").assertCountEquals(0)
+    composeTestRule.onAllNodesWithText("Full forum directory").assertCountEquals(0)
+    composeTestRule.onAllNodesWithText("Manage boards").assertCountEquals(0)
   }
 
   @Test
@@ -102,20 +132,99 @@ class MainScreenTest {
       BoardsScreen(
         state = BoardsUiState(
           subscribedBoards = LoadableUiState.LoginRequired,
-          categories = LoadableUiState.Content(
-            listOf(BoardPreview("Remote category", "Remote directory metadata", "C")),
+          sections = LoadableUiState.Content(
+            listOf(
+              BoardSectionPreview(
+                id = "remote",
+                name = "Remote category",
+                groups =
+                  listOf(
+                    BoardGroupPreview(
+                      id = "remote-group",
+                      name = "Remote group",
+                      boards = listOf(BoardPreview("remote", "Remote board", "Remote directory metadata", "R")),
+                    ),
+                  ),
+              ),
+            ),
           ),
         ),
       )
     }
 
-    composeTestRule.onNodeWithText("Sign in to load subscribed boards").assertExists()
+    composeTestRule.onNodeWithText("Sign in to load favorite boards").assertExists()
     composeTestRule.onNodeWithText("Remote category").assertExists()
+    composeTestRule.onAllNodesWithText("Remote board").assertCountEquals(0)
+
+    composeTestRule.onNodeWithText("Remote category").performClick()
+
+    composeTestRule.onNodeWithText("Remote board").assertExists()
+  }
+
+  @Test
+  fun boardsScreenSwitchesBetweenFavoriteAndCategoryBoards() {
+    composeTestRule.setContent {
+      BoardsScreen(
+        state = BoardsUiState(
+          subscribedBoards = LoadableUiState.Content(
+            listOf(BoardPreview("favorite", "Favorite board", "fid: 7", "F")),
+          ),
+          sections = LoadableUiState.Content(
+            listOf(
+              BoardSectionPreview(
+                id = "games",
+                name = "Games",
+                groups =
+                  listOf(
+                    BoardGroupPreview(
+                      id = "games-group-a",
+                      name = "Action",
+                      boards = listOf(BoardPreview("game", "Game board", "Game metadata", "G")),
+                    ),
+                    BoardGroupPreview(
+                      id = "games-group-b",
+                      name = "RPG",
+                      boards = listOf(BoardPreview("rpg", "RPG board", "RPG metadata", "R")),
+                    ),
+                  ),
+              ),
+              BoardSectionPreview(
+                id = "life",
+                name = "Life",
+                groups =
+                  listOf(
+                    BoardGroupPreview(
+                      id = "life-group",
+                      name = "Life Group",
+                      boards = listOf(BoardPreview("life", "Life board", "Life metadata", "L")),
+                    ),
+                  ),
+              ),
+            ),
+          ),
+        ),
+      )
+    }
+
+    composeTestRule.onNodeWithText("收藏").assertExists()
+    composeTestRule.onNodeWithText("Favorite board").assertExists()
+    composeTestRule.onAllNodesWithText("fid: 7").assertCountEquals(0)
+    composeTestRule.onAllNodesWithText("Game board").assertCountEquals(0)
+
+    composeTestRule.onNodeWithText("Games").performClick()
+
+    composeTestRule.onNodeWithText("Action").assertExists()
+    composeTestRule.onNodeWithText("RPG").assertExists()
+    composeTestRule.onNodeWithText("Game board").assertExists()
+    composeTestRule.onNodeWithText("RPG board").assertExists()
+    composeTestRule.onAllNodesWithText("Favorite board").assertCountEquals(0)
+    composeTestRule.onAllNodesWithText("Life board").assertCountEquals(0)
   }
 
   @Test
   fun messagesTabShowsPrivateMessageContextOnly() {
-    composeTestRule.setContent { MainScreen() }
+    val repository = fakeRepository()
+    composeTestRule.setContent { MainScreen(repository = repository) }
 
     composeTestRule.onNodeWithText("Messages").performClick()
 
@@ -132,7 +241,8 @@ class MainScreenTest {
 
   @Test
   fun loggedOutProfileTabShowsLoginNotificationAndSettingsContent() {
-    composeTestRule.setContent { MainScreen() }
+    val repository = fakeRepository()
+    composeTestRule.setContent { MainScreen(repository = repository) }
 
     composeTestRule.onNodeWithText("Profile").performClick()
 
@@ -291,4 +401,162 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("Could not load profile counters").assertExists()
     composeTestRule.onNodeWithText("Could not load notifications").assertExists()
   }
+
+  @Test
+  fun mainScreenRendersInjectedRepositoryDataAcrossTabs() {
+    val repository = fakeRepository()
+    composeTestRule.setContent {
+      MainScreen(
+        loginSession = LoginSessionUiState(
+          username = "远端测试用户",
+          uid = "4242",
+          cookie = "ngaPassportUid=4242; ngaPassportCid=fake",
+        ),
+        repository = repository,
+      )
+    }
+
+    waitUntilTextExists("Injected home board")
+    composeTestRule.onNodeWithText("Injected remote topic").assertExists()
+    composeTestRule.onAllNodesWithText("关于新版客户端首页信息密度的讨论").assertCountEquals(0)
+
+    composeTestRule.onNodeWithText("Boards").performClick()
+    waitUntilTextExists("Injected subscribed board")
+    composeTestRule.onNodeWithText("Injected remote category").assertExists()
+
+    composeTestRule.onNodeWithText("Messages").performClick()
+    waitUntilTextExists("Injected Contact")
+    waitUntilTextExists("Injected private message preview")
+
+    composeTestRule.onNodeWithText("Profile").performClick()
+    waitUntilTextExists("远端测试用户")
+    composeTestRule.onNodeWithText("UID 4242").assertExists()
+    composeTestRule.onNodeWithText("Favorite topics").assertExists()
+    composeTestRule.onNodeWithText("17").assertExists()
+    composeTestRule.onNodeWithText("Injected notification").assertExists()
+  }
+
+  private fun waitUntilTextExists(text: String) {
+    val found = runCatching {
+      composeTestRule.waitUntil(timeoutMillis = 5_000) {
+        runCatching {
+          composeTestRule.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty()
+        }.getOrDefault(false)
+      }
+    }.isSuccess
+    if (!found) {
+      throw AssertionError("Could not find '$text'. Semantics tree:\n${composeTestRule.onRoot().printToString()}")
+    }
+  }
+
+  private fun fakeRepository(): NgaReadOnlyRepository =
+    object : NgaReadOnlyRepository {
+      override suspend fun loadHome(): Result<HomeReadData> =
+        Result.success(
+          HomeReadData(
+            boards = listOf(injectedHomeBoard),
+            activeTopics = listOf(injectedTopic),
+          ),
+        )
+
+      override suspend fun loadBoards(session: LoginSessionData?): Result<BoardsReadData> =
+        Result.success(
+          BoardsReadData(
+            subscribedBoards = listOf(injectedSubscribedBoard),
+            remoteSections = listOf(injectedRemoteSection),
+          ),
+        )
+
+      override suspend fun loadMessages(session: LoginSessionData?): Result<MessagesReadData> =
+        Result.success(
+          MessagesReadData(
+            messages = listOf(injectedMessage),
+          ),
+        )
+
+      override suspend fun loadProfile(session: LoginSessionData?): Result<ProfileReadData> =
+        Result.success(
+          ProfileReadData(
+            counters = injectedCounters,
+            notifications = listOf(injectedNotification),
+          ),
+        )
+
+      override suspend fun loadBoardTopics(session: LoginSessionData?, fid: String, page: Int): Result<NgaTopicList> =
+        Result.success(NgaTopicList(topics = emptyList(), page = page, hasNextPage = false))
+
+      override suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int): Result<NgaThreadRead> =
+        Result.success(NgaThreadRead(tid = tid, subject = "", fid = "", page = page, posts = emptyList()))
+
+      override suspend fun listLocalFavoriteBoards(): Result<List<LocalFavoriteBoard>> =
+        Result.success(emptyList())
+
+      override suspend fun addLocalFavoriteBoard(board: LocalFavoriteBoard): Result<Unit> =
+        Result.success(Unit)
+
+      override suspend fun removeLocalFavoriteBoard(boardId: String): Result<Unit> =
+        Result.success(Unit)
+    }
+
+  private val injectedHomeBoard =
+    NgaBoardSummary(
+      boardId = "home-board",
+      name = "Injected home board",
+    )
+
+  private val injectedRemoteSection =
+    NgaBoardSection(
+      id = "remote-category",
+      name = "Injected remote category",
+      groups =
+        listOf(
+          NgaBoardGroup(
+            id = "remote-group",
+            name = "Injected group",
+            boards = listOf(NgaBoardSummary(boardId = "remote-board", name = "Injected remote board")),
+          ),
+        ),
+    )
+
+  private val injectedSubscribedBoard =
+    NgaBoardSummary(
+      boardId = "subscribed-board",
+      name = "Injected subscribed board",
+    )
+
+  private val injectedTopic =
+    NgaTopicSummary(
+      topicId = "topic-1",
+      boardId = "home-board",
+      boardName = "Injected home board",
+      title = "Injected remote topic",
+      authorName = "Remote Author",
+      replyCount = 31,
+      lastPostAt = 1_771_000_000,
+    )
+
+  private val injectedMessage =
+    NgaMessageSummary(
+      messageId = "message-1",
+      contactName = "Injected Contact",
+      subject = "Injected subject",
+      preview = "Injected private message preview",
+      unreadCount = 4,
+    )
+
+  private val injectedCounters =
+    NgaProfileCounters(
+      favoriteTopics = 17,
+      subscribedBoards = 9,
+      unreadNotifications = 5,
+      unreadMessages = 4,
+    )
+
+  private val injectedNotification =
+    NgaNotificationSummary(
+      id = "notification-1",
+      title = "Injected notification",
+      preview = "Injected reply alert",
+      unreadCount = 5,
+    )
 }

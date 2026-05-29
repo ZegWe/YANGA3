@@ -25,12 +25,25 @@ data class NgaBoardSummary(
   val todayTopicCount: Int? = null,
   val unreadCount: Int? = null,
   val isSubscribed: Boolean = false,
+  val iconUrl: String? = null,
 )
 
 data class NgaBoardCategory(
   val id: String,
   val name: String,
   val boards: List<NgaBoardSummary>,
+)
+
+data class NgaBoardGroup(
+  val id: String,
+  val name: String,
+  val boards: List<NgaBoardSummary>,
+)
+
+data class NgaBoardSection(
+  val id: String,
+  val name: String,
+  val groups: List<NgaBoardGroup>,
 )
 
 data class NgaMessageSummary(

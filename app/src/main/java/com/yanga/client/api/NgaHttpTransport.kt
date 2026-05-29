@@ -33,9 +33,19 @@ class HttpUrlConnectionNgaTransport(
     }
 
     val code = connection.responseCode
+    val contentType = connection.contentType
+    val charset = if (contentType?.contains("charset=utf-8", ignoreCase = true) == true) {
+      Charsets.UTF_8
+    } else if (contentType?.contains("charset=gbk", ignoreCase = true) == true) {
+      Charset.forName("GBK")
+    } else {
+      // Default to GBK for NGA if not specified, but check URL
+      if (request.url.contains("app_api.php")) Charsets.UTF_8 else Charset.forName("GBK")
+    }
+
     val stream = if (code in 200..399) connection.inputStream else connection.errorStream
     val text = stream?.use {
-      BufferedReader(InputStreamReader(it, Charset.forName("GBK"))).readText()
+      BufferedReader(InputStreamReader(it, charset)).readText()
     }.orEmpty()
     NgaHttpResponse(code = code, text = text)
   }

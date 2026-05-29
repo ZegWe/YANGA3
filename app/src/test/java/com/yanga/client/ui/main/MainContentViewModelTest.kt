@@ -1,15 +1,20 @@
 package com.yanga.client.ui.main
 
 import com.yanga.client.api.NgaBoardCategory
+import com.yanga.client.api.NgaBoardGroup
+import com.yanga.client.api.NgaBoardSection
 import com.yanga.client.api.NgaBoardSummary
 import com.yanga.client.api.NgaMessageSummary
 import com.yanga.client.api.NgaNotificationSummary
 import com.yanga.client.api.NgaProfileCounters
+import com.yanga.client.api.NgaThreadRead
+import com.yanga.client.api.NgaTopicList
 import com.yanga.client.api.NgaTopicSummary
 import com.yanga.client.data.BoardsReadData
 import com.yanga.client.data.HomeReadData
 import com.yanga.client.data.LoginRequiredException
 import com.yanga.client.data.LoginSessionData
+import com.yanga.client.data.LocalFavoriteBoard
 import com.yanga.client.data.MessagesReadData
 import com.yanga.client.data.NgaReadOnlyRepository
 import com.yanga.client.data.ProfileReadData
@@ -51,10 +56,10 @@ class MainContentViewModelTest {
     advanceUntilIdle()
 
     val state = viewModel.uiState.value
-    assertEquals(listOf(boardPreview()), (state.home.boards as LoadableUiState.Content<*>).value)
+    assertEquals(listOf(homeBoardPreview()), (state.home.boards as LoadableUiState.Content<*>).value)
     assertEquals(listOf(topicPreview()), (state.home.activeTopics as LoadableUiState.Content<*>).value)
     assertEquals(emptyList<BoardPreview>(), (state.boards.subscribedBoards as LoadableUiState.Content<*>).value)
-    assertEquals(listOf(boardPreview()), (state.boards.categories as LoadableUiState.Content<*>).value)
+    assertEquals(listOf(boardSectionPreview()), (state.boards.sections as LoadableUiState.Content<*>).value)
     assertSame(LoadableUiState.LoginRequired, state.messages.messages)
     assertSame(LoadableUiState.LoginRequired, state.profile.session)
     assertSame(LoadableUiState.LoginRequired, state.profile.counters)
@@ -82,6 +87,27 @@ class MainContentViewModelTest {
     assertEquals(listOf(notificationPreview()), (state.profile.notifications as LoadableUiState.Content<*>).value)
     assertEquals(listOf(sessionData), repository.loadMessagesSessions)
     assertEquals(listOf(sessionData), repository.loadProfileSessions)
+  }
+
+  @Test
+  fun loggedInRefreshUsesSubscribedBoardsOnHome() = runTest(dispatcher) {
+    val repository = FakeRepository(
+      homeResult = Result.success(
+        HomeReadData(boards = listOf(publicBoardSummary()), activeTopics = listOf(topicSummary())),
+      ),
+      boardsResult = Result.success(
+        BoardsReadData(subscribedBoards = listOf(boardSummary()), remoteSections = listOf(boardSection())),
+      ),
+    )
+    val viewModel = MainContentViewModel(repository)
+
+    viewModel.refresh(LoginSessionUiState(username = "reader", uid = "42", cookie = "ngaPassportUid=42"))
+    advanceUntilIdle()
+
+    val state = viewModel.uiState.value
+    assertEquals(listOf(homeBoardPreview().copy(isFavorite = true)), (state.home.boards as LoadableUiState.Content<*>).value)
+    assertEquals(listOf(topicPreview()), (state.home.activeTopics as LoadableUiState.Content<*>).value)
+    assertEquals(listOf(homeBoardPreview().copy(isFavorite = true)), (state.boards.subscribedBoards as LoadableUiState.Content<*>).value)
   }
 
   @Test
@@ -125,8 +151,9 @@ class MainContentViewModelTest {
         title = "Read model wiring",
         board = "开发测试",
         replies = "12 replies",
-        lastActive = "1700000000",
+        lastActive = "11-15 06:13",
         authorInitial = "测",
+        id = "1001",
       ),
       topicSummary().toPreview(),
     )
@@ -136,6 +163,21 @@ class MainContentViewModelTest {
     assertEquals(counterPreviews(), profileCounters().toPreviews())
   }
 
+  @Test
+  fun toggleBoardFavoriteUpdatesFavoriteStateInBoards() = runTest(dispatcher) {
+    val repository = FakeRepository()
+    val viewModel = MainContentViewModel(repository)
+    viewModel.refresh(loginSession = null)
+    advanceUntilIdle()
+
+    val board = ((viewModel.uiState.value.boards.sections as LoadableUiState.Content).value.first().groups.first().boards.first())
+    viewModel.toggleBoardFavorite(board)
+    advanceUntilIdle()
+
+    val updated = ((viewModel.uiState.value.boards.sections as LoadableUiState.Content).value.first().groups.first().boards.first())
+    assertTrue(updated.isFavorite)
+  }
+
   private fun stateError(state: LoadableUiState<*>): LoadableUiState.Error {
     assertTrue(state is LoadableUiState.Error)
     return state as LoadableUiState.Error
@@ -143,10 +185,10 @@ class MainContentViewModelTest {
 
   private class FakeRepository(
     private val homeResult: Result<HomeReadData> = Result.success(
-      HomeReadData(boards = listOf(boardCategory()), activeTopics = listOf(topicSummary())),
+      HomeReadData(boards = listOf(boardSummary()), activeTopics = listOf(topicSummary())),
     ),
     private val boardsResult: Result<BoardsReadData> = Result.success(
-      BoardsReadData(subscribedBoards = emptyList(), remoteCategories = listOf(boardCategory())),
+      BoardsReadData(subscribedBoards = emptyList(), remoteSections = listOf(boardSection())),
     ),
     private val messagesResult: Result<MessagesReadData> = Result.success(
       MessagesReadData(messages = listOf(messageSummary())),
@@ -159,6 +201,7 @@ class MainContentViewModelTest {
     val loadBoardsSessions = mutableListOf<LoginSessionData?>()
     val loadMessagesSessions = mutableListOf<LoginSessionData?>()
     val loadProfileSessions = mutableListOf<LoginSessionData?>()
+    private val localFavorites = linkedMapOf<String, LocalFavoriteBoard>()
 
     override suspend fun loadHome(): Result<HomeReadData> {
       loadHomeCalls += 1
@@ -179,22 +222,62 @@ class MainContentViewModelTest {
       loadProfileSessions += session
       return profileResult
     }
+
+    override suspend fun loadBoardTopics(session: LoginSessionData?, fid: String, page: Int): Result<NgaTopicList> =
+      Result.success(NgaTopicList(topics = emptyList(), page = page, hasNextPage = false))
+
+    override suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int): Result<NgaThreadRead> =
+      Result.success(NgaThreadRead(tid = tid, subject = "", fid = "", page = page, posts = emptyList()))
+
+    override suspend fun listLocalFavoriteBoards(): Result<List<LocalFavoriteBoard>> =
+      Result.success(localFavorites.values.toList())
+
+    override suspend fun addLocalFavoriteBoard(board: LocalFavoriteBoard): Result<Unit> {
+      localFavorites[board.boardId] = board
+      return Result.success(Unit)
+    }
+
+    override suspend fun removeLocalFavoriteBoard(boardId: String): Result<Unit> {
+      localFavorites.remove(boardId)
+      return Result.success(Unit)
+    }
   }
 }
+
+private fun boardSummary(): NgaBoardSummary =
+  NgaBoardSummary(
+    boardId = "7",
+    name = "开发测试",
+    description = "客户端开发讨论",
+    todayTopicCount = 8,
+    unreadCount = 3,
+    isSubscribed = true,
+  )
+
+private fun publicBoardSummary(): NgaBoardSummary =
+  NgaBoardSummary(
+    boardId = "100",
+    name = "公开推荐板块",
+    description = "不应该作为登录首页关注板块",
+  )
 
 private fun boardCategory(): NgaBoardCategory =
   NgaBoardCategory(
     id = "dev",
     name = "开发测试",
-    boards =
+    boards = listOf(boardSummary()),
+  )
+
+private fun boardSection(): NgaBoardSection =
+  NgaBoardSection(
+    id = "dev",
+    name = "开发测试",
+    groups =
       listOf(
-        NgaBoardSummary(
-          boardId = "7",
-          name = "开发测试",
-          description = "客户端开发讨论",
-          todayTopicCount = 8,
-          unreadCount = 3,
-          isSubscribed = true,
+        NgaBoardGroup(
+          id = "dev-group",
+          name = "开发讨论组",
+          boards = listOf(boardSummary()),
         ),
       ),
   )
@@ -239,18 +322,53 @@ private fun profileCounters(): NgaProfileCounters =
 
 private fun boardPreview(): BoardPreview =
   BoardPreview(
+    id = "dev",
     name = "开发测试",
     metadata = "1 boards",
     marker = "开",
     badge = "3",
   )
 
+private fun homeBoardPreview(): BoardPreview =
+  BoardPreview(
+    id = "7",
+    name = "开发测试",
+    metadata = "客户端开发讨论",
+    marker = "开",
+    badge = "3",
+  )
+
+private fun boardSectionPreview(): BoardSectionPreview =
+  BoardSectionPreview(
+    id = "dev",
+    name = "开发测试",
+    groups =
+      listOf(
+        BoardGroupPreview(
+          id = "dev-group",
+          name = "开发讨论组",
+          boards =
+            listOf(
+              BoardPreview(
+                id = "7",
+                name = "开发测试",
+                metadata = "客户端开发讨论",
+                marker = "开",
+                badge = "3",
+                category = "开发测试 / 开发讨论组",
+              ),
+            ),
+        ),
+      ),
+  )
+
 private fun topicPreview(): TopicPreview =
   TopicPreview(
+    id = "1001",
     title = "Read model wiring",
     board = "开发测试",
     replies = "12 replies",
-    lastActive = "1700000000",
+    lastActive = "11-15 06:13",
     authorInitial = "测",
   )
 

@@ -3,8 +3,21 @@ package com.yanga.client.api
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal fun ngaJsonRoot(raw: String): JSONObject =
-  JSONObject(NgaResponseNormalizer.normalize(raw))
+internal fun ngaJsonRoot(raw: String): JSONObject {
+  val normalized = NgaResponseNormalizer.normalize(raw)
+  if (normalized.startsWith("[")) {
+    return try {
+      JSONObject().put("data", JSONArray(normalized))
+    } catch (e: Exception) {
+      JSONObject()
+    }
+  }
+  return try {
+    JSONObject(normalized)
+  } catch (e: Exception) {
+    JSONObject()
+  }
+}
 
 internal fun JSONObject.objectValue(vararg keys: String): JSONObject? =
   firstValue(*keys) as? JSONObject

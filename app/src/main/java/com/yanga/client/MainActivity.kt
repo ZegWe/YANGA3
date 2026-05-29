@@ -10,10 +10,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.yanga.client.theme.YangaTheme
 import com.yanga.client.ui.main.LoginSessionUiState
 import com.yanga.client.ui.main.MainScreen
+import com.yanga.client.data.DefaultNgaReadOnlyRepository
+import com.yanga.client.data.SharedPreferencesFavoriteBoardsStore
 
 class MainActivity : ComponentActivity() {
   private var loginSession by mutableStateOf<LoginSessionUiState?>(null)
@@ -24,10 +27,16 @@ class MainActivity : ComponentActivity() {
 
     enableEdgeToEdge()
     setContent {
+      val repository = remember {
+        DefaultNgaReadOnlyRepository(
+          favoriteBoardsStore = SharedPreferencesFavoriteBoardsStore(getPreferences(Context.MODE_PRIVATE)),
+        )
+      }
       YangaTheme {
         Surface(color = MaterialTheme.colorScheme.background) {
           MainScreen(
             loginSession = loginSession,
+            repository = repository,
             onLoginComplete = { session ->
               loginSession = session
               saveLoginSession(session)

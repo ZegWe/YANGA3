@@ -1,0 +1,13 @@
+{
+  "data": {
+    "list": [
+      {
+        "fid": "310",
+        "name": "真实关注板块",
+        "description": "来自用户关注接口",
+        "unread": 6,
+        "subscribed": "1"
+      }
+    ]
+  }
+}

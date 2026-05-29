@@ -29,7 +29,7 @@ class MainUiModelsContractTest {
 
     assertSame(LoadableUiState.Loading, state.home.activeTopics)
     assertSame(LoadableUiState.Loading, state.home.boards)
-    assertSame(LoadableUiState.Loading, state.boards.categories)
+    assertSame(LoadableUiState.Loading, state.boards.sections)
     assertSame(LoadableUiState.LoginRequired, state.messages.messages)
     assertSame(LoadableUiState.LoginRequired, state.profile.session)
     assertSame(LoadableUiState.LoginRequired, state.profile.counters)
@@ -45,7 +45,7 @@ class MainUiModelsContractTest {
 
     assertSame(LoadableUiState.Loading, state.home.activeTopics)
     assertSame(LoadableUiState.Loading, state.home.boards)
-    assertSame(LoadableUiState.Loading, state.boards.categories)
+    assertSame(LoadableUiState.Loading, state.boards.sections)
     assertSame(LoadableUiState.Loading, state.messages.messages)
     assertEquals(LoadableUiState.Content(session), state.profile.session)
     assertSame(LoadableUiState.Loading, state.profile.counters)
@@ -57,10 +57,11 @@ class MainUiModelsContractTest {
   @Test
   fun screenUiStatesCanExposeReadDataContent() {
     val favoriteBoards =
-      listOf(BoardPreview(name = "Board", metadata = "metadata", marker = "B", badge = "1"))
+      listOf(BoardPreview(id = "7", name = "Board", metadata = "metadata", marker = "B", badge = "1"))
     val latestTopics =
       listOf(
         TopicPreview(
+          id = "1001",
           title = "Topic",
           board = "Board",
           replies = "3 replies",
@@ -68,7 +69,21 @@ class MainUiModelsContractTest {
           authorInitial = "A",
         ),
       )
-    val categories = listOf(BoardPreview(name = "Category", metadata = "2 boards", marker = "C"))
+    val sections =
+      listOf(
+        BoardSectionPreview(
+          id = "section",
+          name = "Section",
+          groups =
+            listOf(
+              BoardGroupPreview(
+                id = "group",
+                name = "Group",
+                boards = listOf(BoardPreview(id = "8", name = "Child", metadata = "metadata", marker = "C")),
+              ),
+            ),
+        ),
+      )
     val messages = listOf(MessagePreview(contact = "Mod", preview = "Hello", time = "now"))
     val notifications =
       listOf(
@@ -87,7 +102,7 @@ class MainUiModelsContractTest {
         boards =
           BoardsUiState(
             subscribedBoards = LoadableUiState.Content(emptyList()),
-            categories = LoadableUiState.Content(categories),
+            sections = LoadableUiState.Content(sections),
           ),
         messages =
           MessagesUiState(
@@ -103,7 +118,7 @@ class MainUiModelsContractTest {
 
     assertEquals(favoriteBoards, (state.home.boards as LoadableUiState.Content).value)
     assertEquals(latestTopics, (state.home.activeTopics as LoadableUiState.Content).value)
-    assertEquals(categories, (state.boards.categories as LoadableUiState.Content).value)
+    assertEquals(sections, (state.boards.sections as LoadableUiState.Content).value)
     assertEquals(messages, (state.messages.messages as LoadableUiState.Content).value)
     assertEquals(session, (state.profile.session as LoadableUiState.Content).value)
     assertEquals(counters, (state.profile.counters as LoadableUiState.Content).value)

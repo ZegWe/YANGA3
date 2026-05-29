@@ -1,5 +1,6 @@
 package com.yanga.client.ui.main
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -12,21 +13,28 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yanga.client.api.NgaDomains
 import com.yanga.client.data.LoginSessionData
 
 @Composable
@@ -85,14 +93,16 @@ internal fun MessagesScreen(
 }
 
 @Composable
-@Suppress("UNUSED_PARAMETER")
 internal fun ProfileScreen(
   loginSession: LoginSessionUiState?,
   state: ProfileUiState = ProfileUiState(),
   onLoginClick: () -> Unit,
   onLogout: () -> Unit,
+  onEndpointChange: (String) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
+  var showEndpointDialog by remember { mutableStateOf(false) }
+
   Column(
     modifier = modifier
       .fillMaxSize()
@@ -112,6 +122,10 @@ internal fun ProfileScreen(
     SectionHeader(title = "Notification center")
     SettingsRowsContent(state = state.notifications)
     SectionHeader(title = "Settings")
+    SettingsRow(
+      row = SettingsPreview("端", "论坛端点", state.forumEndpoint),
+      onClick = { showEndpointDialog = true }
+    )
     state.settingsRows.forEach { row ->
       SettingsRow(row = row)
     }
@@ -119,6 +133,54 @@ internal fun ProfileScreen(
       row = SettingsPreview("黑", "Block list", "Private message blocked users"),
     )
   }
+
+  if (showEndpointDialog) {
+    EndpointSelectionDialog(
+      currentEndpoint = state.forumEndpoint,
+      onDismiss = { showEndpointDialog = false },
+      onSelect = {
+        onEndpointChange(it)
+        showEndpointDialog = false
+      }
+    )
+  }
+}
+
+@Composable
+private fun EndpointSelectionDialog(
+  currentEndpoint: String,
+  onDismiss: () -> Unit,
+  onSelect: (String) -> Unit,
+) {
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    title = { Text("选择论坛端点") },
+    text = {
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        NgaDomains.supported.forEach { domain ->
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { onSelect(domain) }
+              .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+          ) {
+            RadioButton(
+              selected = domain == currentEndpoint,
+              onClick = null
+            )
+            Text(text = domain, style = MaterialTheme.typography.bodyLarge)
+          }
+        }
+      }
+    },
+    confirmButton = {
+      TextButton(onClick = onDismiss) {
+        Text("关闭")
+      }
+    }
+  )
 }
 
 @Composable
@@ -329,10 +391,11 @@ private fun ProfileCounter(label: String, value: String, modifier: Modifier = Mo
 }
 
 @Composable
-private fun SettingsRow(row: SettingsPreview, modifier: Modifier = Modifier) {
+private fun SettingsRow(row: SettingsPreview, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
   Row(
     modifier = modifier
       .fillMaxWidth()
+      .clickable(onClick = onClick)
       .padding(vertical = 8.dp),
     horizontalArrangement = Arrangement.spacedBy(12.dp),
     verticalAlignment = Alignment.CenterVertically,

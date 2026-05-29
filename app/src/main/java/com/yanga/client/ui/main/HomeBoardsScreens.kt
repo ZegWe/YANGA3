@@ -6,25 +6,34 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 @Composable
 internal fun HomeScreen(
   loginSession: LoginSessionUiState?,
+  modifier: Modifier = Modifier,
   state: HomeUiState = HomeUiState(),
   onLoginClick: () -> Unit,
-  modifier: Modifier = Modifier,
+  onBoardClick: (BoardPreview) -> Unit = {},
+  onTopicClick: (TopicPreview) -> Unit = {},
 ) {
   Column(
     modifier = modifier
@@ -49,19 +58,22 @@ internal fun HomeScreen(
       LoginPrompt(onLoginClick = onLoginClick)
     }
 
-    SectionHeader(title = "Favorite boards", trailing = "Manage")
-    BoardGridState(state = state.boards)
-
     SectionHeader(title = "Active discussions", trailing = "Latest")
-    TopicListState(state = state.activeTopics)
+    TopicListState(state = state.activeTopics, onTopicClick = onTopicClick)
   }
 }
 
 @Composable
 internal fun BoardsScreen(
-  state: BoardsUiState = BoardsUiState(),
   modifier: Modifier = Modifier,
+  state: BoardsUiState = BoardsUiState(),
+  onBoardClick: (BoardPreview) -> Unit = {},
 ) {
+  var selectedCategoryIndex by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
+  val sections = (state.sections as? LoadableUiState.Content)?.value.orEmpty()
+  val selectorLabels = listOf("收藏") + sections.map { it.name }
+  val selectedIndex = selectedCategoryIndex.coerceIn(0, selectorLabels.lastIndex.coerceAtLeast(0))
+
   Column(
     modifier = modifier
       .fillMaxSize()
@@ -75,15 +87,63 @@ internal fun BoardsScreen(
     )
 
     SearchPill(text = "Board search")
-    FilterChipRow(labels = listOf("All", "Subscribed", "Game", "Life", "More"))
+    BoardCategorySelector(
+      labels = selectorLabels,
+      selectedIndex = selectedIndex,
+      onSelected = { selectedCategoryIndex = it },
+    )
 
-    SectionHeader(title = "Subscribed boards", trailing = "Reorder")
-    BoardListState(state = state.subscribedBoards, loginRequiredText = "Sign in to load subscribed boards")
+    if (selectedIndex == 0) {
+      BoardGridState(
+        state = state.subscribedBoards,
+        emptyText = "No favorite boards",
+        loadingText = "Loading favorite boards",
+        loginRequiredText = "Sign in to load favorite boards",
+        columns = 3,
+        onBoardClick = onBoardClick,
+      )
+    } else {
+      val sectionGroups = sections[selectedIndex - 1].groups
+      if (sectionGroups.isEmpty()) {
+        StateMessage(text = "No boards available")
+      } else {
+        sectionGroups.forEach { group ->
+          SectionHeader(title = group.name.ifBlank { "未命名分组" })
+          if (group.boards.isEmpty()) {
+            StateMessage(text = "No boards available")
+          } else {
+            BoardGrid(
+              boards = group.boards,
+              columns = 3,
+              onBoardClick = onBoardClick,
+            )
+          }
+        }
+      }
+    }
+  }
+}
 
-    SectionHeader(title = "Full forum directory")
-    BoardListState(state = state.categories, loginRequiredText = "Sign in to load forum directory")
-
-    ManageBoardsCard()
+@Composable
+private fun BoardCategorySelector(
+  labels: List<String>,
+  selectedIndex: Int,
+  onSelected: (Int) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Row(
+    modifier = modifier
+      .fillMaxWidth()
+      .horizontalScroll(rememberScrollState()),
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+  ) {
+    labels.forEachIndexed { index, label ->
+      FilterChip(
+        selected = selectedIndex == index,
+        onClick = { onSelected(index) },
+        label = { Text(label) },
+      )
+    }
   }
 }
 
@@ -117,37 +177,59 @@ private fun LoginPrompt(onLoginClick: () -> Unit, modifier: Modifier = Modifier)
 }
 
 @Composable
-private fun BoardGridState(state: LoadableUiState<List<BoardPreview>>, modifier: Modifier = Modifier) {
+private fun BoardGridState(
+  state: LoadableUiState<List<BoardPreview>>,
+  onBoardClick: (BoardPreview) -> Unit,
+  modifier: Modifier = Modifier,
+  emptyText: String = "No favorite boards",
+  loadingText: String = "Loading favorite boards",
+  loginRequiredText: String = "Sign in to load favorite boards",
+  columns: Int = 2,
+) {
   when (state) {
     is LoadableUiState.Content -> {
       if (state.value.isEmpty()) {
-        StateMessage(text = "No favorite boards")
+        StateMessage(text = emptyText)
       } else {
-        FavoriteBoardGrid(boards = state.value, modifier = modifier)
+        BoardGrid(
+          boards = state.value,
+          onBoardClick = onBoardClick,
+          modifier = modifier,
+          columns = columns,
+        )
       }
     }
     is LoadableUiState.Empty -> StateMessage(text = state.message)
     is LoadableUiState.Error -> StateMessage(text = state.message)
-    LoadableUiState.Loading -> StateMessage(text = "Loading favorite boards")
-    LoadableUiState.LoginRequired -> StateMessage(text = "Sign in to load favorite boards")
+    LoadableUiState.Loading -> StateMessage(text = loadingText)
+    LoadableUiState.LoginRequired -> StateMessage(text = loginRequiredText)
   }
 }
 
 @Composable
-private fun FavoriteBoardGrid(boards: List<BoardPreview>, modifier: Modifier = Modifier) {
+private fun BoardGrid(
+  boards: List<BoardPreview>,
+  onBoardClick: (BoardPreview) -> Unit,
+  modifier: Modifier = Modifier,
+  columns: Int = 2,
+) {
   Column(
     modifier = modifier.fillMaxWidth(),
     verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
-    boards.chunked(2).forEach { rowBoards ->
+    boards.chunked(columns).forEach { rowBoards ->
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
       ) {
         rowBoards.forEach { board ->
-          FavoriteBoardCard(board = board, modifier = Modifier.weight(1f))
+          FavoriteBoardCard(
+            board = board,
+            onClick = { onBoardClick(board) },
+            modifier = Modifier.weight(1f),
+          )
         }
-        if (rowBoards.size == 1) {
+        repeat(columns - rowBoards.size) {
           Column(modifier = Modifier.weight(1f)) {}
         }
       }
@@ -156,7 +238,11 @@ private fun FavoriteBoardGrid(boards: List<BoardPreview>, modifier: Modifier = M
 }
 
 @Composable
-private fun TopicListState(state: LoadableUiState<List<TopicPreview>>, modifier: Modifier = Modifier) {
+private fun TopicListState(
+  state: LoadableUiState<List<TopicPreview>>,
+  onTopicClick: (TopicPreview) -> Unit,
+  modifier: Modifier = Modifier,
+) {
   TonalCard(modifier = modifier) {
     when (state) {
       is LoadableUiState.Content -> {
@@ -164,7 +250,7 @@ private fun TopicListState(state: LoadableUiState<List<TopicPreview>>, modifier:
           Text(text = "No active discussions", style = MaterialTheme.typography.bodyMedium)
         } else {
           state.value.forEach { topic ->
-            TopicRow(topic = topic)
+            TopicRow(topic = topic, onClick = { onTopicClick(topic) })
           }
         }
       }
@@ -181,6 +267,7 @@ private fun TopicListState(state: LoadableUiState<List<TopicPreview>>, modifier:
 private fun BoardListState(
   state: LoadableUiState<List<BoardPreview>>,
   loginRequiredText: String,
+  onBoardClick: (BoardPreview) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   TonalCard(modifier = modifier) {
@@ -190,7 +277,7 @@ private fun BoardListState(
           Text(text = "No boards available", style = MaterialTheme.typography.bodyMedium)
         } else {
           state.value.forEach { board ->
-            BoardListRow(board = board)
+            BoardListRow(board = board, onClick = { onBoardClick(board) })
           }
         }
       }
@@ -211,27 +298,38 @@ private fun StateMessage(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun FavoriteBoardCard(board: BoardPreview, modifier: Modifier = Modifier) {
+private fun FavoriteBoardCard(
+  board: BoardPreview,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
   Card(
+    onClick = onClick,
     modifier = modifier,
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     shape = MaterialTheme.shapes.large,
   ) {
     Column(
-      modifier = Modifier.padding(14.dp),
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(14.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-      Marker(text = board.marker)
-      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      Marker(text = board.marker, iconUrl = board.iconUrl)
+      Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+      ) {
         Text(
           text = board.name,
-          style = MaterialTheme.typography.titleSmall,
+          modifier = Modifier.fillMaxWidth(),
+          style = MaterialTheme.typography.bodyMedium,
           fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-          text = board.metadata,
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          textAlign = TextAlign.Center,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
         )
       }
       board.badge?.let {
@@ -241,26 +339,6 @@ private fun FavoriteBoardCard(board: BoardPreview, modifier: Modifier = Modifier
           color = MaterialTheme.colorScheme.primary,
         )
       }
-    }
-  }
-}
-
-@Composable
-private fun ManageBoardsCard(modifier: Modifier = Modifier) {
-  TonalCard(modifier = modifier) {
-    Text(
-      text = "Manage boards",
-      style = MaterialTheme.typography.titleMedium,
-      fontWeight = FontWeight.SemiBold,
-    )
-    Text(
-      text = "Subscribe to favorite forums, hide noisy boards, and adjust the order shown on Home.",
-      style = MaterialTheme.typography.bodyMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    ActionChipRow(labels = listOf("Subscribe", "Hide boards", "Change order"))
-    OutlinedButton(onClick = {}) {
-      Text(text = "Open management")
     }
   }
 }

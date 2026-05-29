@@ -1,22 +1,90 @@
 package com.yanga.client.ui.main
 
+import com.yanga.client.api.NgaDomains
 import com.yanga.client.data.LoginSessionData
 
-enum class MainTab(val label: String) {
-  Home("Home"),
-  Boards("Boards"),
-  Messages("Messages"),
-  Profile("Profile"),
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+
+@Serializable
+sealed interface MainDestinationKey : NavKey {
+  @Serializable
+  data object Home : MainDestinationKey
+
+  @Serializable
+  data object Boards : MainDestinationKey
+
+  @Serializable
+  data object Messages : MainDestinationKey
+
+  @Serializable
+  data object Profile : MainDestinationKey
+
+  @Serializable
+  data object Login : MainDestinationKey
+
+  @Serializable
+  data class Board(
+    val fid: String,
+  ) : MainDestinationKey
+
+  @Serializable
+  data class Thread(
+    val tid: String,
+  ) : MainDestinationKey
 }
 
+enum class MainTab(val label: String, val icon: ImageVector) {
+  Home("Home", Icons.Filled.Home),
+  Boards("Boards", Icons.Filled.Dashboard),
+  Messages("Messages", Icons.Filled.Email),
+  Profile("Profile", Icons.Filled.Person),
+}
+
+enum class MainTopLevelDestination {
+  Home,
+  Boards,
+  Messages,
+  Profile,
+}
+
+val MainTab.destination: MainTopLevelDestination
+  get() =
+    when (this) {
+      MainTab.Home -> MainTopLevelDestination.Home
+      MainTab.Boards -> MainTopLevelDestination.Boards
+      MainTab.Messages -> MainTopLevelDestination.Messages
+      MainTab.Profile -> MainTopLevelDestination.Profile
+    }
+
+val MainTopLevelDestination.tab: MainTab
+  get() =
+    when (this) {
+      MainTopLevelDestination.Home -> MainTab.Home
+      MainTopLevelDestination.Boards -> MainTab.Boards
+      MainTopLevelDestination.Messages -> MainTab.Messages
+      MainTopLevelDestination.Profile -> MainTab.Profile
+    }
+
 data class BoardPreview(
+  val id: String,
   val name: String,
   val metadata: String,
   val marker: String,
   val badge: String? = null,
+  val iconUrl: String? = null,
+  val category: String = "",
+  val isFavorite: Boolean = false,
 )
 
 data class TopicPreview(
+  val id: String,
   val title: String,
   val board: String,
   val replies: String,
@@ -62,9 +130,21 @@ data class HomeUiState(
   val activeTopics: LoadableUiState<List<TopicPreview>> = LoadableUiState.Loading,
 )
 
+data class BoardGroupPreview(
+  val id: String,
+  val name: String,
+  val boards: List<BoardPreview>,
+)
+
+data class BoardSectionPreview(
+  val id: String,
+  val name: String,
+  val groups: List<BoardGroupPreview>,
+)
+
 data class BoardsUiState(
   val subscribedBoards: LoadableUiState<List<BoardPreview>> = LoadableUiState.Loading,
-  val categories: LoadableUiState<List<BoardPreview>> = LoadableUiState.Loading,
+  val sections: LoadableUiState<List<BoardSectionPreview>> = LoadableUiState.Loading,
 )
 
 data class MessagesUiState(
@@ -76,6 +156,7 @@ data class ProfileUiState(
   val counters: LoadableUiState<List<SettingsPreview>> = LoadableUiState.LoginRequired,
   val notifications: LoadableUiState<List<SettingsPreview>> = LoadableUiState.LoginRequired,
   val settingsRows: List<SettingsPreview> = defaultSettingsRows,
+  val forumEndpoint: String = NgaDomains.BBS_NGA_CN,
 ) {
   companion object {
     val defaultSettingsRows =
@@ -99,11 +180,37 @@ internal val privateMessages: List<MessagePreview> = emptyList()
 
 internal val settingsRows: List<SettingsPreview> = ProfileUiState.defaultSettingsRows
 
+data class PostPreview(
+  val author: String,
+  val floor: String,
+  val time: String,
+  val content: String,
+  val avatarInitial: String,
+)
+
+data class ThreadUiState(
+  val title: String = "",
+  val page: String = "1",
+  val replyCount: String = "0",
+  val posts: LoadableUiState<List<PostPreview>> = LoadableUiState.Loading,
+)
+
+data class BoardTopicListUiState(
+  val boardName: String = "",
+  val fid: String = "",
+  val iconUrl: String? = null,
+  val category: String = "",
+  val isFavorite: Boolean = false,
+  val topics: LoadableUiState<List<TopicPreview>> = LoadableUiState.Loading,
+)
+
 data class MainContentUiState(
   val home: HomeUiState = HomeUiState(),
   val boards: BoardsUiState = BoardsUiState(),
   val messages: MessagesUiState = MessagesUiState(),
   val profile: ProfileUiState = ProfileUiState(),
+  val activeBoard: BoardTopicListUiState? = null,
+  val activeThread: ThreadUiState? = null,
 ) {
   val isLoggedIn: Boolean
     get() = profile.session is LoadableUiState.Content

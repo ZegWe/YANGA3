@@ -22,7 +22,7 @@ class NgaReadOnlyRepositoryTest {
 
     val data = result.getOrThrow()
     assertEquals(2, data.boards.size)
-    assertEquals("general", data.boards[0].id)
+    assertEquals("7", data.boards[0].boardId)
     assertEquals(2, data.activeTopics.size)
     assertEquals("1001", data.activeTopics[0].topicId)
     assertEquals(
@@ -45,17 +45,76 @@ class NgaReadOnlyRepositoryTest {
   }
 
   @Test
-  fun loadBoardsFetchesRemoteCategoriesAndLeavesSubscribedBoardsEmpty() = runTest {
-    val transport = FakeTransport("app_api.php" to fixture("remote_board_categories.json"))
+  fun loadBoardsFetchesRemoteCategoriesAndSubscribedBoardsForSession() = runTest {
+    val transport = FakeTransport(
+      responses = mapOf(
+        RequestKey("nuke.php", mapOf("__lib" to "user_option", "__act" to "get", "type" to "1")) to
+          fixture("subscribed_boards.json"),
+      ),
+      fallbackResponses = mapOf(
+        "app_api.php" to fixture("remote_board_categories.json"),
+      ),
+    )
     val repository = DefaultNgaReadOnlyRepository(transport)
 
     val result = repository.loadBoards(session())
 
     val data = result.getOrThrow()
+    assertEquals(1, data.subscribedBoards.size)
+    assertEquals("310", data.subscribedBoards[0].boardId)
+    assertEquals("真实关注板块", data.subscribedBoards[0].name)
+    assertEquals(2, data.remoteSections.size)
+    assertEquals("综合", data.remoteSections[0].name)
+    assertEquals(listOf("nuke.php", "nuke.php", "app_api.php"), transport.requests.map { it.pathName() })
+    assertEquals("user_option", transport.requests[0].query["__lib"])
+    assertEquals("1", transport.requests[0].query["type"])
+  }
+
+  @Test
+  fun loadBoardsWithoutSessionSkipsSubscribedBoardsEndpoint() = runTest {
+    val transport = FakeTransport("app_api.php" to fixture("remote_board_categories.json"))
+    val repository = DefaultNgaReadOnlyRepository(transport)
+
+    val result = repository.loadBoards(null)
+
+    val data = result.getOrThrow()
     assertTrue(data.subscribedBoards.isEmpty())
-    assertEquals(2, data.remoteCategories.size)
-    assertEquals("综合", data.remoteCategories[0].name)
-    assertEquals(listOf("app_api.php"), transport.requests.map { it.pathName() })
+    assertEquals(2, data.remoteSections.size)
+    assertEquals(listOf("nuke.php", "app_api.php"), transport.requests.map { it.pathName() })
+  }
+
+  @Test
+  fun loadBoardsWithoutSessionReturnsLocalFavorites() = runTest {
+    val transport = FakeTransport("app_api.php" to fixture("remote_board_categories.json"))
+    val store = FakeFavoriteStore(mutableListOf(LocalFavoriteBoard(boardId = "123", name = "本地收藏", iconUrl = "i", category = "综合 / 分组")))
+    val repository = DefaultNgaReadOnlyRepository(transport, favoriteBoardsStore = store)
+
+    val result = repository.loadBoards(null)
+
+    val data = result.getOrThrow()
+    assertEquals(listOf("123"), data.subscribedBoards.map { it.boardId })
+    assertEquals("本地收藏", data.subscribedBoards.first().name)
+  }
+
+  @Test
+  fun loadBoardsDoesNotTreatRootSectionAsSubscribedFallback() = runTest {
+    val transport = FakeTransport(
+      responses = mapOf(
+        RequestKey("nuke.php", mapOf("__lib" to "user_option", "__act" to "get", "type" to "1")) to
+          fixture("subscribed_boards.json"),
+      ),
+      fallbackResponses = mapOf(
+        "app_api.php" to fixture("remote_board_categories.json"),
+      ),
+    )
+    val repository = DefaultNgaReadOnlyRepository(transport)
+
+    val result = repository.loadBoards(session())
+
+    val data = result.getOrThrow()
+    assertEquals(listOf("310"), data.subscribedBoards.map { it.boardId })
+    assertTrue(data.remoteSections.none { it.id == "0" || it.id == "-1" })
+    assertEquals(2, data.remoteSections.size)
   }
 
   @Test
@@ -174,6 +233,21 @@ class NgaReadOnlyRepositoryTest {
 
     private fun pathName(request: NgaRequest): String =
       request.url.substringAfterLast('/')
+  }
+
+  private class FakeFavoriteStore(
+    private val boards: MutableList<LocalFavoriteBoard> = mutableListOf(),
+  ) : FavoriteBoardsStore {
+    override fun list(): List<LocalFavoriteBoard> = boards.toList()
+
+    override fun upsert(board: LocalFavoriteBoard) {
+      boards.removeAll { it.boardId == board.boardId }
+      boards.add(board)
+    }
+
+    override fun remove(boardId: String) {
+      boards.removeAll { it.boardId == boardId }
+    }
   }
 
   private fun NgaRequest.key(): RequestKey =

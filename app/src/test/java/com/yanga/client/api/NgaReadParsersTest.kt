@@ -48,12 +48,69 @@ class NgaReadParsersTest {
         todayTopicCount = 9,
         unreadCount = 2,
         isSubscribed = true,
+        iconUrl = "https://img4.nga.178.com/ngabbs/nga_classic/f/app/7.png",
       ),
       categories[0].boards.single(),
     )
     assertEquals("2", categories[1].id)
     assertEquals("游戏", categories[1].name)
     assertEquals("10", categories[1].boards.single().boardId)
+  }
+
+  @Test
+  fun boardCategoryParserReadsRemoteResultGroupsAsBoardCategories() {
+    val sections =
+      NgaBoardCategoryParser.parseSections(
+        """
+        {
+          "code": 0,
+          "result": [
+            {
+              "id": "wow",
+              "name": "魔兽世界",
+              "groups": [
+                {
+                  "id": "classic",
+                  "name": "经典旧世",
+                  "forums": [
+                    {
+                      "id": 310,
+                      "name": "怀旧服讨论",
+                      "stid": 321
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+        """.trimIndent(),
+      )
+
+    assertEquals(1, sections.size)
+    assertEquals("wow", sections.single().id)
+    assertEquals("魔兽世界", sections.single().name)
+    assertEquals("classic", sections.single().groups.single().id)
+    assertEquals("经典旧世", sections.single().groups.single().name)
+    assertEquals("310", sections.single().groups.single().boards.single().boardId)
+    assertEquals("怀旧服讨论", sections.single().groups.single().boards.single().name)
+    assertEquals(
+      "https://img4.nga.178.com/proxy/cache_attach/ficon/321v.png",
+      sections.single().groups.single().boards.single().iconUrl,
+    )
+  }
+
+  @Test
+  fun boardCategoryParserParseSectionsSupportsLegacyCategoryShape() {
+    val sections = NgaBoardCategoryParser.parseSections(fixture("remote_board_categories.json"))
+
+    assertEquals(2, sections.size)
+    assertEquals("general", sections[0].id)
+    assertEquals("综合", sections[0].name)
+    assertEquals(1, sections[0].groups.size)
+    assertEquals("general", sections[0].groups[0].id)
+    assertEquals("综合", sections[0].groups[0].name)
+    assertEquals("7", sections[0].groups[0].boards[0].boardId)
   }
 
   @Test

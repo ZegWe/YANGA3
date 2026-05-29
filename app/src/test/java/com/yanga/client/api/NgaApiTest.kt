@@ -153,7 +153,7 @@ class NgaApiTest {
 
   @Test
   fun staticImageUrlsMatchReferenceTemplates() {
-    assertEquals("http://img4.nga.178.com/ngabbs/nga_classic/f/app/7.png", NgaStaticUrls.boardIcon(7))
+    assertEquals("https://img4.nga.178.com/ngabbs/nga_classic/f/app/7.png", NgaStaticUrls.boardIcon(7))
     assertEquals("https://img4.nga.178.com/proxy/cache_attach/ficon/123v.png", NgaStaticUrls.boardIconByStid(123))
     assertEquals("http://img6.nga.178.com/attachments/mon_a.jpg", NgaStaticUrls.expandRelativeImage("./mon_a.jpg"))
     assertFalse(NgaStaticUrls.expandRelativeImage("https://example.com/a.jpg").contains("img6.nga"))

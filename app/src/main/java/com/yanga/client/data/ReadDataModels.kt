@@ -1,6 +1,7 @@
 package com.yanga.client.data
 
-import com.yanga.client.api.NgaBoardCategory
+import com.yanga.client.api.NgaBoardSection
+import com.yanga.client.api.NgaBoardSummary
 import com.yanga.client.api.NgaMessageSummary
 import com.yanga.client.api.NgaNotificationSummary
 import com.yanga.client.api.NgaProfileCounters
@@ -13,13 +14,13 @@ data class LoginSessionData(
 )
 
 data class HomeReadData(
-  val boards: List<NgaBoardCategory>,
+  val boards: List<NgaBoardSummary>,
   val activeTopics: List<NgaTopicSummary>,
 )
 
 data class BoardsReadData(
-  val subscribedBoards: List<NgaBoardCategory>,
-  val remoteCategories: List<NgaBoardCategory>,
+  val subscribedBoards: List<NgaBoardSummary>,
+  val remoteSections: List<NgaBoardSection>,
 )
 
 data class MessagesReadData(

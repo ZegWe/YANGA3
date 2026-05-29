@@ -1,11 +1,14 @@
 package com.yanga.client.ui.main
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,9 +24,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.yanga.client.R
 
 @Composable
 internal fun PageHeader(title: String, subtitle: String, modifier: Modifier = Modifier) {
@@ -98,18 +105,27 @@ internal fun SectionHeader(
 }
 
 @Composable
-internal fun Marker(text: String, modifier: Modifier = Modifier) {
-  Surface(
+internal fun Marker(text: String, iconUrl: String? = null, modifier: Modifier = Modifier) {
+  Box(
     modifier = modifier.size(42.dp),
-    shape = MaterialTheme.shapes.medium,
-    color = MaterialTheme.colorScheme.secondaryContainer,
+    contentAlignment = Alignment.Center,
   ) {
-    Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-      Text(
-        text = text.take(1),
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSecondaryContainer,
-        fontWeight = FontWeight.Bold,
+    if (!iconUrl.isNullOrBlank()) {
+      AsyncImage(
+        model = iconUrl,
+        contentDescription = null,
+        placeholder = painterResource(id = R.drawable.default_board_icon),
+        error = painterResource(id = R.drawable.default_board_icon),
+        fallback = painterResource(id = R.drawable.default_board_icon),
+        contentScale = ContentScale.Fit,
+        modifier = Modifier.fillMaxSize(),
+      )
+    } else {
+      androidx.compose.foundation.Image(
+        painter = painterResource(id = R.drawable.default_board_icon),
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        modifier = Modifier.fillMaxSize(),
       )
     }
   }
@@ -136,15 +152,20 @@ internal fun RoundMarker(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun BoardListRow(board: BoardPreview, modifier: Modifier = Modifier) {
+internal fun BoardListRow(
+  board: BoardPreview,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
   Row(
     modifier = modifier
       .fillMaxWidth()
+      .clickable(onClick = onClick)
       .padding(vertical = 10.dp),
     horizontalArrangement = Arrangement.spacedBy(12.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    Marker(text = board.marker)
+    Marker(text = board.marker, iconUrl = board.iconUrl)
     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
       Text(text = board.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
       Text(
@@ -161,10 +182,15 @@ internal fun BoardListRow(board: BoardPreview, modifier: Modifier = Modifier) {
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-internal fun TopicRow(topic: TopicPreview, modifier: Modifier = Modifier) {
+internal fun TopicRow(
+  topic: TopicPreview,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
   Row(
     modifier = modifier
       .fillMaxWidth()
+      .clickable(onClick = onClick)
       .padding(vertical = 10.dp),
     horizontalArrangement = Arrangement.spacedBy(12.dp),
   ) {

@@ -3,13 +3,19 @@ package com.yanga.client.data
 import com.yanga.client.api.NgaAccountParser
 import com.yanga.client.api.NgaApi
 import com.yanga.client.api.NgaApiException
+import com.yanga.client.api.HttpUrlConnectionNgaTransport
 import com.yanga.client.api.NgaBoardCategoryParser
 import com.yanga.client.api.NgaHttpResponse
 import com.yanga.client.api.NgaHttpTransport
 import com.yanga.client.api.NgaMessageParser
 import com.yanga.client.api.NgaRequest
 import com.yanga.client.api.NgaSession
+import com.yanga.client.api.NgaThreadParser
+import com.yanga.client.api.NgaThreadRead
 import com.yanga.client.api.NgaTopicListParser
+import com.yanga.client.api.NgaTopicList
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class LoginRequiredException : IllegalStateException("Login is required for this read operation")
 
@@ -21,62 +27,102 @@ interface NgaReadOnlyRepository {
   suspend fun loadMessages(session: LoginSessionData?): Result<MessagesReadData>
 
   suspend fun loadProfile(session: LoginSessionData?): Result<ProfileReadData>
+
+  suspend fun loadBoardTopics(session: LoginSessionData?, fid: String, page: Int = 1): Result<NgaTopicList>
+
+  suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int = 1): Result<NgaThreadRead>
+
+  suspend fun listLocalFavoriteBoards(): Result<List<LocalFavoriteBoard>>
+
+  suspend fun addLocalFavoriteBoard(board: LocalFavoriteBoard): Result<Unit>
+
+  suspend fun removeLocalFavoriteBoard(boardId: String): Result<Unit>
 }
 
 class DefaultNgaReadOnlyRepository(
-  private val transport: NgaHttpTransport,
+  private val transport: NgaHttpTransport = HttpUrlConnectionNgaTransport(),
   private val userAgent: String = "Yanga Android",
+  private var baseUrl: String = com.yanga.client.api.NgaDomains.BBS_NGA_CN,
+  private val favoriteBoardsStore: FavoriteBoardsStore? = null,
 ) : NgaReadOnlyRepository {
-  override suspend fun loadHome(): Result<HomeReadData> {
+  fun setBaseUrl(url: String) {
+    baseUrl = url
+  }
+
+  override suspend fun loadHome(): Result<HomeReadData> = withContext(Dispatchers.IO) {
     val api = api()
-    val boards = execute(api.remoteBoardCategories(), NgaBoardCategoryParser::parse)
-    if (boards.isFailure) return Result.failure(boards.exceptionOrNull()!!)
+    val categoriesResult = execute(api.remoteBoardCategories(), NgaBoardCategoryParser::parse)
+    if (categoriesResult.isFailure) return@withContext Result.failure(categoriesResult.exceptionOrNull()!!)
+
+    val allCategories = categoriesResult.getOrThrow()
+    val favoriteBoards = allCategories.flatMap { it.boards }.take(6)
 
     val topics = execute(api.topicList(page = 1, recommend = true)) { raw ->
       NgaTopicListParser.parse(raw).topics
     }
-    if (topics.isFailure) return Result.failure(topics.exceptionOrNull()!!)
+    if (topics.isFailure) return@withContext Result.failure(topics.exceptionOrNull()!!)
 
-    return Result.success(
+    Result.success(
       HomeReadData(
-        boards = boards.getOrThrow(),
+        boards = favoriteBoards,
         activeTopics = topics.getOrThrow(),
       ),
     )
   }
 
-  override suspend fun loadBoards(session: LoginSessionData?): Result<BoardsReadData> {
-    val categories = execute(api(session).remoteBoardCategories(), NgaBoardCategoryParser::parse)
-    if (categories.isFailure) return Result.failure(categories.exceptionOrNull()!!)
+  override suspend fun loadBoards(session: LoginSessionData?): Result<BoardsReadData> = withContext(Dispatchers.IO) {
+    val api = api(session)
+    val subscribedBoards = if (session.requireLogin() != null) {
+      execute(api.subscribedBoards(), NgaBoardCategoryParser::parseBoards).getOrDefault(emptyList())
+    } else {
+      emptyList()
+    }
 
-    return Result.success(
+    val directoryResult = execute(api.fullForumDirectory(), NgaBoardCategoryParser::parseSections)
+
+    var allSections = directoryResult.getOrDefault(emptyList())
+    if (allSections.isEmpty()) {
+      allSections = execute(api.remoteBoardCategories(), NgaBoardCategoryParser::parseSections).getOrDefault(emptyList())
+    }
+
+    val legacySubscribedSection =
+      allSections.find {
+        it.name.contains("收藏") || it.name.contains("订阅")
+      }
+    val remoteSections = allSections.filter { it != legacySubscribedSection }
+    val remoteSubscribedBoards =
+      subscribedBoards.ifEmpty { legacySubscribedSection?.groups.orEmpty().flatMap { it.boards } }
+    val localFavorites = favoriteBoardsStore?.list().orEmpty().map { it.toBoardSummary() }
+    val resolvedSubscribedBoards = (localFavorites + remoteSubscribedBoards).distinctBy { it.boardId }
+
+    Result.success(
       BoardsReadData(
-        subscribedBoards = emptyList(),
-        remoteCategories = categories.getOrThrow(),
+        subscribedBoards = resolvedSubscribedBoards,
+        remoteSections = remoteSections,
       ),
     )
   }
 
-  override suspend fun loadMessages(session: LoginSessionData?): Result<MessagesReadData> {
+  override suspend fun loadMessages(session: LoginSessionData?): Result<MessagesReadData> = withContext(Dispatchers.IO) {
     val loginSession = session.requireLogin()
-      ?: return Result.failure(LoginRequiredException())
+      ?: return@withContext Result.failure(LoginRequiredException())
     val messages = execute(api(loginSession).messageList(page = 1), NgaMessageParser::parseList)
-    if (messages.isFailure) return Result.failure(messages.exceptionOrNull()!!)
+    if (messages.isFailure) return@withContext Result.failure(messages.exceptionOrNull()!!)
 
-    return Result.success(MessagesReadData(messages = messages.getOrThrow()))
+    Result.success(MessagesReadData(messages = messages.getOrThrow()))
   }
 
-  override suspend fun loadProfile(session: LoginSessionData?): Result<ProfileReadData> {
+  override suspend fun loadProfile(session: LoginSessionData?): Result<ProfileReadData> = withContext(Dispatchers.IO) {
     val loginSession = session.requireLogin()
-      ?: return Result.failure(LoginRequiredException())
+      ?: return@withContext Result.failure(LoginRequiredException())
     val api = api(loginSession)
     val notifications = execute(api.notifications(), NgaAccountParser::parseNotifications)
-    if (notifications.isFailure) return Result.failure(notifications.exceptionOrNull()!!)
+    if (notifications.isFailure) return@withContext Result.failure(notifications.exceptionOrNull()!!)
 
     val counters = execute(api.profile(mapOf("uid" to loginSession.uid)), NgaAccountParser::parseProfileCounters)
-    if (counters.isFailure) return Result.failure(counters.exceptionOrNull()!!)
+    if (counters.isFailure) return@withContext Result.failure(counters.exceptionOrNull()!!)
 
-    return Result.success(
+    Result.success(
       ProfileReadData(
         counters = counters.getOrThrow(),
         notifications = notifications.getOrThrow(),
@@ -84,8 +130,34 @@ class DefaultNgaReadOnlyRepository(
     )
   }
 
+  override suspend fun loadBoardTopics(session: LoginSessionData?, fid: String, page: Int): Result<NgaTopicList> = withContext(Dispatchers.IO) {
+    execute(api(session).topicList(fid = fid.toIntOrNull(), page = page), NgaTopicListParser::parse)
+  }
+
+  override suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int): Result<NgaThreadRead> = withContext(Dispatchers.IO) {
+    execute(api(session).articleRead(tid = tid.toIntOrNull(), page = page), NgaThreadParser::parseRead)
+  }
+
+  override suspend fun listLocalFavoriteBoards(): Result<List<LocalFavoriteBoard>> = withContext(Dispatchers.IO) {
+    runCatching { favoriteBoardsStore?.list().orEmpty() }
+  }
+
+  override suspend fun addLocalFavoriteBoard(board: LocalFavoriteBoard): Result<Unit> = withContext(Dispatchers.IO) {
+    runCatching {
+      favoriteBoardsStore?.upsert(board)
+      Unit
+    }
+  }
+
+  override suspend fun removeLocalFavoriteBoard(boardId: String): Result<Unit> = withContext(Dispatchers.IO) {
+    runCatching {
+      favoriteBoardsStore?.remove(boardId)
+      Unit
+    }
+  }
+
   private fun api(session: LoginSessionData? = null): NgaApi =
-    NgaApi(NgaSession(cookie = session?.cookie, userAgent = userAgent))
+    NgaApi(NgaSession(baseUrl = baseUrl, cookie = session?.cookie, userAgent = userAgent))
 
   private fun LoginSessionData?.requireLogin(): LoginSessionData? =
     this?.takeIf { it.cookie.isNotBlank() }

@@ -72,6 +72,10 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
 
   fun remoteBoardCategories(): NgaRequest = get("app_api.php", linkedMapOf("__lib" to "home", "__act" to "category"))
 
+  fun fullForumDirectory(): NgaRequest = get("nuke.php", linkedMapOf("__lib" to "forum_all", "__act" to "forum_all", "__output" to "8"))
+
+  fun subscribedBoards(): NgaRequest = get("nuke.php", linkedMapOf("__lib" to "user_option", "__act" to "get", "type" to "1", "__output" to "8"))
+
   fun loginPage(): NgaRequest = NgaRequest(
     method = NgaHttpMethod.GET,
     url = "https://bbs.nga.cn/nuke.php",
@@ -336,6 +340,7 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
       }
       put("User-Agent", session.userAgent)
       put("X-User-Agent", "Nga_Official")
+      put("Referer", session.normalizedBaseUrl)
     }
 
   private fun formBody(fields: Map<String, String>): NgaFormBody = formBody {

@@ -6,15 +6,26 @@ object NgaResponseNormalizer {
   private const val JS_MARKER = "/*\$js\$*/"
 
   fun normalize(raw: String): String {
-    var value = raw.trim()
-    if (value.startsWith(WRAPPER_PREFIX)) {
-      value = value.removePrefix(WRAPPER_PREFIX)
+    val value = raw.trim()
+    
+    val firstBrace = value.indexOf('{')
+    val firstBracket = value.indexOf('[')
+    val start = when {
+      firstBrace >= 0 && firstBracket >= 0 -> minOf(firstBrace, firstBracket)
+      firstBrace >= 0 -> firstBrace
+      firstBracket >= 0 -> firstBracket
+      else -> return value
     }
-    val errorFillIndex = value.indexOf(ERROR_FILL)
-    if (errorFillIndex >= 0) {
-      value = value.substring(0, errorFillIndex)
-    }
-    return value
+    
+    val lastBrace = value.lastIndexOf('}')
+    val lastBracket = value.lastIndexOf(']')
+    val end = maxOf(lastBrace, lastBracket)
+    
+    if (end <= start) return value
+    
+    val json = value.substring(start, end + 1)
+
+    return json
       .replace(JS_MARKER, "")
       .replace(Regex("\"content\":\\+(\\d+),"), "\"content\":\"+\$1\",")
       .replace(Regex("\"subject\":\\+(\\d+),"), "\"subject\":\"+\$1\",")

@@ -18,6 +18,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -25,6 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,7 +39,14 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.yanga.client.api.NgaPasswordLoginClient
+import com.yanga.client.data.DefaultNgaReadOnlyRepository
+import com.yanga.client.data.NgaReadOnlyRepository
 import com.yanga.client.theme.YangaTheme
+import androidx.navigation3.runtime.NavBackStack
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.ui.NavDisplay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -54,36 +63,222 @@ data class LoginSessionUiState(
 @Composable
 fun MainScreen(
   loginSession: LoginSessionUiState? = null,
+  repository: NgaReadOnlyRepository = remember { DefaultNgaReadOnlyRepository() },
   onLoginComplete: (LoginSessionUiState) -> Unit = {},
   onLogout: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
-  var showLogin by remember { mutableStateOf(false) }
-  var selectedTab by remember { mutableStateOf(MainTab.Home) }
+  val viewModel = remember(repository) { MainContentViewModel(repository) }
+  val contentState by viewModel.uiState.collectAsState()
+  val backStack = rememberNavBackStack(MainDestinationKey.Home)
 
-  if (showLogin) {
-    PasswordLoginScreen(
-      onLoginComplete = {
-        showLogin = false
-        onLoginComplete(it)
-      },
-      onClose = { showLogin = false },
-      modifier = modifier,
-    )
-    return
+  LaunchedEffect(loginSession, viewModel) {
+    viewModel.refresh(loginSession)
   }
 
+  LaunchedEffect(contentState.activeBoard) {
+    val board = contentState.activeBoard ?: return@LaunchedEffect
+    val boardKey = MainDestinationKey.Board(board.fid)
+    if (backStack.lastOrNull() != boardKey) {
+      backStack.add(boardKey)
+    }
+  }
+
+  LaunchedEffect(contentState.activeThread) {
+    val thread = contentState.activeThread ?: return@LaunchedEffect
+    val threadId = thread.title.ifBlank { "thread" }
+    val threadKey = MainDestinationKey.Thread(threadId)
+    if (backStack.lastOrNull() != threadKey) {
+      backStack.add(threadKey)
+    }
+  }
+
+  NavDisplay(
+    backStack = backStack,
+    onBack = {
+      when (backStack.lastOrNull()) {
+        is MainDestinationKey.Thread -> {
+          viewModel.backFromThread()
+          popBackStack(backStack)
+        }
+        is MainDestinationKey.Board -> {
+          viewModel.backFromBoard()
+          popBackStack(backStack)
+        }
+        is MainDestinationKey.Login -> popBackStack(backStack)
+        else -> {
+          if (backStack.count() > 1) {
+            popBackStack(backStack)
+          }
+        }
+      }
+    },
+    entryProvider =
+      entryProvider {
+        entry<MainDestinationKey.Home> {
+          MainRootScaffold(
+            selectedTab = MainTab.Home,
+            loginSession = loginSession,
+            contentState = contentState,
+            onTabSelected = { selectTopLevelDestination(backStack, it) },
+            onLoginClick = { backStack.add(MainDestinationKey.Login) },
+            onLogout = onLogout,
+            onEndpointChange = { viewModel.refresh(loginSession, it) },
+            onBoardClick = { viewModel.openBoard(it) },
+            onTopicClick = { viewModel.openThread(it) },
+            modifier = modifier,
+          )
+        }
+
+        entry<MainDestinationKey.Boards> {
+          MainRootScaffold(
+            selectedTab = MainTab.Boards,
+            loginSession = loginSession,
+            contentState = contentState,
+            onTabSelected = { selectTopLevelDestination(backStack, it) },
+            onLoginClick = { backStack.add(MainDestinationKey.Login) },
+            onLogout = onLogout,
+            onEndpointChange = { viewModel.refresh(loginSession, it) },
+            onBoardClick = { viewModel.openBoard(it) },
+            onTopicClick = { viewModel.openThread(it) },
+            modifier = modifier,
+          )
+        }
+
+        entry<MainDestinationKey.Messages> {
+          MainRootScaffold(
+            selectedTab = MainTab.Messages,
+            loginSession = loginSession,
+            contentState = contentState,
+            onTabSelected = { selectTopLevelDestination(backStack, it) },
+            onLoginClick = { backStack.add(MainDestinationKey.Login) },
+            onLogout = onLogout,
+            onEndpointChange = { viewModel.refresh(loginSession, it) },
+            onBoardClick = { viewModel.openBoard(it) },
+            onTopicClick = { viewModel.openThread(it) },
+            modifier = modifier,
+          )
+        }
+
+        entry<MainDestinationKey.Profile> {
+          MainRootScaffold(
+            selectedTab = MainTab.Profile,
+            loginSession = loginSession,
+            contentState = contentState,
+            onTabSelected = { selectTopLevelDestination(backStack, it) },
+            onLoginClick = { backStack.add(MainDestinationKey.Login) },
+            onLogout = onLogout,
+            onEndpointChange = { viewModel.refresh(loginSession, it) },
+            onBoardClick = { viewModel.openBoard(it) },
+            onTopicClick = { viewModel.openThread(it) },
+            modifier = modifier,
+          )
+        }
+
+        entry<MainDestinationKey.Login> {
+          PasswordLoginScreen(
+            onLoginComplete = {
+              popBackStack(backStack)
+              onLoginComplete(it)
+            },
+            onClose = {
+              popBackStack(backStack)
+            },
+            modifier = modifier,
+          )
+        }
+
+        entry<MainDestinationKey.Board> {
+          val boardState = contentState.activeBoard
+          if (boardState != null) {
+            BoardTopicListScreen(
+              state = boardState,
+              onBack = {
+                viewModel.backFromBoard()
+                popBackStack(backStack)
+              },
+              onTopicClick = { viewModel.openThread(it) },
+              onToggleFavorite = { viewModel.toggleActiveBoardFavorite() },
+              modifier = modifier,
+            )
+          } else {
+            Box(modifier = Modifier.fillMaxSize())
+          }
+        }
+
+        entry<MainDestinationKey.Thread> {
+          val threadState = contentState.activeThread
+          if (threadState != null) {
+            ThreadReadingScreen(
+              state = threadState,
+              onBack = {
+                viewModel.backFromThread()
+                popBackStack(backStack)
+              },
+              modifier = modifier,
+            )
+          } else {
+            Box(modifier = Modifier.fillMaxSize())
+          }
+        }
+      },
+  )
+}
+
+private fun popBackStack(backStack: NavBackStack<NavKey>) {
+  if (backStack.count() > 1) {
+    backStack.removeAt(backStack.lastIndex)
+  }
+}
+
+private fun selectTopLevelDestination(
+  backStack: NavBackStack<NavKey>,
+  tab: MainTab,
+) {
+  val destination =
+    when (tab) {
+      MainTab.Home -> MainDestinationKey.Home
+      MainTab.Boards -> MainDestinationKey.Boards
+      MainTab.Messages -> MainDestinationKey.Messages
+      MainTab.Profile -> MainDestinationKey.Profile
+    }
+
+  if (backStack.lastOrNull() == destination) return
+
+  while (backStack.count() > 1) {
+    backStack.removeAt(backStack.lastIndex)
+  }
+  backStack[0] = destination
+}
+
+@Composable
+private fun MainRootScaffold(
+  selectedTab: MainTab,
+  loginSession: LoginSessionUiState?,
+  contentState: MainContentUiState,
+  onTabSelected: (MainTab) -> Unit,
+  onLoginClick: () -> Unit,
+  onLogout: () -> Unit,
+  onEndpointChange: (String) -> Unit,
+  onBoardClick: (BoardPreview) -> Unit,
+  onTopicClick: (TopicPreview) -> Unit,
+  modifier: Modifier = Modifier,
+) {
   Scaffold(
     modifier = modifier.fillMaxSize(),
     bottomBar = {
-      YangaBottomNavigation(selectedTab = selectedTab, onTabSelected = { selectedTab = it })
+      YangaBottomNavigation(selectedTab = selectedTab, onTabSelected = onTabSelected)
     },
   ) { paddingValues ->
     MainTabContent(
       selectedTab = selectedTab,
       loginSession = loginSession,
-      onLoginClick = { showLogin = true },
+      contentState = contentState,
+      onLoginClick = onLoginClick,
       onLogout = onLogout,
+      onEndpointChange = onEndpointChange,
+      onBoardClick = onBoardClick,
+      onTopicClick = onTopicClick,
       paddingValues = paddingValues,
     )
   }
@@ -93,8 +288,12 @@ fun MainScreen(
 private fun MainTabContent(
   selectedTab: MainTab,
   loginSession: LoginSessionUiState?,
+  contentState: MainContentUiState,
   onLoginClick: () -> Unit,
   onLogout: () -> Unit,
+  onEndpointChange: (String) -> Unit,
+  onBoardClick: (BoardPreview) -> Unit,
+  onTopicClick: (TopicPreview) -> Unit,
   paddingValues: PaddingValues,
 ) {
   val contentModifier =
@@ -105,14 +304,37 @@ private fun MainTabContent(
       .padding(horizontal = 20.dp, vertical = 16.dp)
 
   when (selectedTab) {
-    MainTab.Home -> HomeScreen(loginSession = loginSession, onLoginClick = onLoginClick, modifier = contentModifier)
-    MainTab.Boards -> BoardsScreen(modifier = contentModifier)
-    MainTab.Messages -> MessagesScreen(modifier = contentModifier)
+    MainTab.Home ->
+      HomeScreen(
+        loginSession = loginSession,
+        state = contentState.home,
+        onLoginClick = onLoginClick,
+        onBoardClick = onBoardClick,
+        onTopicClick = onTopicClick,
+        modifier = contentModifier,
+      )
+
+    MainTab.Boards ->
+      BoardsScreen(
+        state = contentState.boards,
+        onBoardClick = onBoardClick,
+        modifier = contentModifier,
+      )
+    MainTab.Messages ->
+      MessagesScreen(
+        loginSession = loginSession,
+        state = contentState.messages,
+        onLoginClick = onLoginClick,
+        modifier = contentModifier,
+      )
+
     MainTab.Profile ->
       ProfileScreen(
         loginSession = loginSession,
+        state = contentState.profile,
         onLoginClick = onLoginClick,
         onLogout = onLogout,
+        onEndpointChange = onEndpointChange,
         modifier = contentModifier,
       )
   }
@@ -125,8 +347,7 @@ private fun YangaBottomNavigation(selectedTab: MainTab, onTabSelected: (MainTab)
       NavigationBarItem(
         selected = selectedTab == tab,
         onClick = { onTabSelected(tab) },
-        icon = { Text(tab.label.take(1)) },
-        label = { Text(tab.label) },
+        icon = { Icon(tab.icon, contentDescription = tab.label) },
       )
     }
   }
