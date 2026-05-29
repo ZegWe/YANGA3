@@ -73,7 +73,7 @@ class DefaultNgaReadOnlyRepository(
 
   override suspend fun loadBoards(session: LoginSessionData?): Result<BoardsReadData> = withContext(Dispatchers.IO) {
     val cacheKey = boardCacheKey(session)
-    boardsCacheStore?.load(cacheKey)?.let { cached ->
+    boardsCacheStore?.load(cacheKey)?.takeIf { it.remoteSections.isNotEmpty() }?.let { cached ->
       return@withContext Result.success(cached)
     }
 
@@ -106,7 +106,9 @@ class DefaultNgaReadOnlyRepository(
         subscribedBoards = resolvedSubscribedBoards,
         remoteSections = remoteSections,
       )
-    boardsCacheStore?.save(cacheKey, data)
+    if (remoteSections.isNotEmpty()) {
+      boardsCacheStore?.save(cacheKey, data)
+    }
     Result.success(data)
   }
 

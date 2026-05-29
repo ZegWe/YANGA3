@@ -118,6 +118,48 @@ class NgaReadOnlyRepositoryTest {
   }
 
   @Test
+  fun loadBoardsIgnoresCacheWhenRemoteSectionsEmpty() = runTest {
+    val cache =
+      FakeBoardsCacheStore(
+        cached =
+          BoardsReadData(
+            subscribedBoards = emptyList(),
+            remoteSections = emptyList(),
+          ),
+      )
+    val transport = FakeTransport("app_api.php" to fixture("remote_board_categories.json"))
+    val repository = DefaultNgaReadOnlyRepository(transport, boardsCacheStore = cache)
+
+    val result = repository.loadBoards(null)
+
+    val data = result.getOrThrow()
+    assertEquals(2, data.remoteSections.size)
+    assertTrue(transport.requests.isNotEmpty())
+    assertEquals(1, cache.saved.size)
+    assertEquals(2, cache.saved.single().remoteSections.size)
+  }
+
+  @Test
+  fun loadBoardsDoesNotCacheWhenRemoteSectionsEmpty() = runTest {
+    val cache = FakeBoardsCacheStore()
+    val transport =
+      FakeTransport(
+        fallbackResponses =
+          mapOf(
+            "nuke.php" to """{"error":{"0":"ACTION NOT FOUND"}}""",
+            "app_api.php" to """{"error":{"0":"temporary outage"}}""",
+          ),
+      )
+    val repository = DefaultNgaReadOnlyRepository(transport, boardsCacheStore = cache)
+
+    val result = repository.loadBoards(null)
+
+    val data = result.getOrThrow()
+    assertTrue(data.remoteSections.isEmpty())
+    assertTrue(cache.saved.isEmpty())
+  }
+
+  @Test
   fun loadMessagesWithoutSessionReturnsLoginRequiredFailure() = runTest {
     val repository = DefaultNgaReadOnlyRepository(FakeTransport())
 
@@ -233,6 +275,18 @@ class NgaReadOnlyRepositoryTest {
 
     private fun pathName(request: NgaRequest): String =
       request.url.substringAfterLast('/')
+  }
+
+  private class FakeBoardsCacheStore(
+    private val cached: BoardsReadData? = null,
+  ) : BoardsCacheStore {
+    val saved = mutableListOf<BoardsReadData>()
+
+    override fun load(cacheKey: String): BoardsReadData? = cached
+
+    override fun save(cacheKey: String, data: BoardsReadData) {
+      saved += data
+    }
   }
 
   private class FakeFavoriteStore(

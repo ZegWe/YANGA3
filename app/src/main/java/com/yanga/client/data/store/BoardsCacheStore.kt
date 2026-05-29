@@ -22,7 +22,8 @@ class SharedPreferencesBoardsCacheStore(
     val root = readRoot(cacheKey) ?: return null
     val timestamp = root.optLong(KEY_TIMESTAMP, 0L)
     if (timestamp <= 0L || nowProvider() - timestamp > ttlMs) return null
-    return parseBoards(root)
+    val data = parseBoards(root)
+    return data.takeIf { it.remoteSections.isNotEmpty() }
   }
 
   override fun save(cacheKey: String, data: BoardsReadData) {
