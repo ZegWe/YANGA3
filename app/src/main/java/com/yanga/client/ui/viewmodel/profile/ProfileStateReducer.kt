@@ -12,7 +12,7 @@ internal fun MainContentUiState.withProfileResult(
       copy(
         profile =
           profile.copy(
-            session = LoadableUiState.Content(session),
+            session = LoadableUiState.Content(session.copy(avatarUrl = data.avatarUrl)),
             counters = LoadableUiState.Content(data.counters.toPreviews()),
             notifications = LoadableUiState.Content(data.notifications.map { it.toPreview() }),
           ),

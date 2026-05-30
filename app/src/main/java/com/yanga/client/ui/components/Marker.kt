@@ -14,32 +14,37 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.CachePolicy
-import coil.request.ImageRequest
 import com.yanga.client.R
+import com.yanga.client.data.boards.BoardIconResolver
+import com.yanga.client.ui.components.BoardIconImage
 
 @Composable
-internal fun Marker(text: String, iconUrl: String? = null, modifier: Modifier = Modifier) {
-  Box(modifier = modifier.size(42.dp), contentAlignment = Alignment.Center) {
-    if (!iconUrl.isNullOrBlank()) {
-      AsyncImage(
-        model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-          .data(iconUrl)
-          .memoryCachePolicy(CachePolicy.ENABLED)
-          .diskCachePolicy(CachePolicy.ENABLED)
-          .networkCachePolicy(CachePolicy.ENABLED)
-          .build(),
+internal fun Marker(
+  text: String,
+  iconUrl: String? = null,
+  boardId: String? = null,
+  modifier: Modifier = Modifier,
+  iconSize: Dp = 42.dp,
+) {
+  val placeholder = painterResource(id = R.drawable.default_board_icon)
+  val resolvedUrl =
+    iconUrl?.takeIf { it.isNotBlank() }
+      ?: boardId?.let(BoardIconResolver::networkIconUrl)
+
+  Box(modifier = modifier.size(iconSize), contentAlignment = Alignment.Center) {
+    if (!resolvedUrl.isNullOrBlank()) {
+      BoardIconImage(
+        url = resolvedUrl,
         contentDescription = null,
-        error = painterResource(id = R.drawable.default_board_icon),
-        fallback = painterResource(id = R.drawable.default_board_icon),
-        contentScale = ContentScale.Fit,
         modifier = Modifier.fillMaxSize(),
+        sizeDp = iconSize,
+        contentScale = ContentScale.Fit,
       )
     } else {
       Image(
-        painter = painterResource(id = R.drawable.default_board_icon),
+        painter = placeholder,
         contentDescription = null,
         contentScale = ContentScale.Fit,
         modifier = Modifier.fillMaxSize(),
@@ -65,9 +70,3 @@ internal fun RoundMarker(text: String, modifier: Modifier = Modifier) {
     }
   }
 }
-
-
-
-
-
-

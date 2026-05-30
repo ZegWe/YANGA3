@@ -6,6 +6,8 @@ data class TopicPreview(
   val board: String,
   val replies: String,
   val lastActive: String,
+  val authorName: String = "",
+  val authorAvatarUrl: String? = null,
   val authorInitial: String,
 )
 

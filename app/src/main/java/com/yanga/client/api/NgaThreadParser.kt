@@ -16,6 +16,7 @@ data class NgaThreadPost(
   val fid: String,
   val authorId: String,
   val author: String,
+  val authorAvatarUrl: String? = null,
   val subject: String,
   val content: String,
   val lou: Int,
@@ -47,18 +48,31 @@ object NgaThreadParser {
   private fun JSONObject.toPost(topic: JSONObject, users: JSONObject): NgaThreadPost {
     val authorId = stringValue("authorid")
     val user = users.optJSONObject(authorId)
+    val author = resolveAuthorName(user)
+    val avatarRaw = user?.nullableStringValue("avatar") ?: nullableStringValue("avatar")
     return NgaThreadPost(
       pid = stringValue("pid"),
       tid = stringValue("tid").ifBlank { topic.stringValue("tid") },
       fid = stringValue("fid").ifBlank { topic.stringValue("fid") },
       authorId = authorId,
-      author = stringValue("author").ifBlank { user?.stringValue("username").orEmpty() },
+      author = author,
+      authorAvatarUrl = NgaAvatarUrls.resolve(avatarRaw, authorId),
       subject = stringValue("subject").ifBlank { topic.stringValue("subject") },
       content = stringValue("content"),
       lou = intValue("lou"),
       postDate = longValue("postdatetimestamp").takeIf { it > 0 } ?: longValue("postdate"),
     )
   }
+
+  private fun JSONObject.resolveAuthorName(user: JSONObject?): String =
+    stringValue("author")
+      .ifBlank { user?.stringValue("username").orEmpty() }
+      .ifBlank { user?.nullableStringValue("nickname").orEmpty() }
+
+  private fun JSONObject.nullableStringValue(vararg keys: String): String? =
+    keys.firstNotNullOfOrNull { key ->
+      opt(key)?.takeUnless { it == JSONObject.NULL }?.toString()?.takeIf { it.isNotBlank() }
+    }
 
   private fun JSONObject.stringValue(key: String): String =
     opt(key)?.takeUnless { it == JSONObject.NULL }?.toString().orEmpty()

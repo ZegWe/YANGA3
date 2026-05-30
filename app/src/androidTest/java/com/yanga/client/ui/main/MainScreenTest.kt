@@ -496,6 +496,8 @@ class MainScreenTest {
 
       override suspend fun removeLocalFavoriteBoard(boardId: String): Result<Unit> =
         Result.success(Unit)
+
+      override suspend fun refreshIncrementalBoardDirectoryIfDue(): Boolean = false
     }
 
   private val injectedHomeBoard =

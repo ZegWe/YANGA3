@@ -16,6 +16,9 @@ class ThreadContentViewModel(
   private val _state = MutableStateFlow<ThreadUiState?>(null)
   val state: StateFlow<ThreadUiState?> = _state.asStateFlow()
   private var loadingThreadId: String? = null
+  private var activeThreadId: String? = null
+
+  fun matchesThread(threadId: String): Boolean = activeThreadId == threadId
 
   fun openThread(session: LoginSessionData?, topic: TopicPreview) {
     openThread(session = session, destination = ThreadDestination(id = topic.id, title = topic.title))
@@ -24,7 +27,13 @@ class ThreadContentViewModel(
   fun openThread(session: LoginSessionData?, destination: ThreadDestination) {
     val threadId = destination.id
     val fallbackTitle = destination.title
+    val cached = _state.value
+    if (activeThreadId == threadId && cached?.posts is LoadableUiState.Content) {
+      loadingThreadId = threadId
+      return
+    }
     loadingThreadId = threadId
+    activeThreadId = threadId
     _state.value = ThreadUiState(title = fallbackTitle)
     viewModelScope.launch {
       val result = repository.loadThread(session, threadId)
@@ -50,6 +59,7 @@ class ThreadContentViewModel(
 
   fun backFromThread() {
     loadingThreadId = null
+    activeThreadId = null
     _state.value = null
   }
 }

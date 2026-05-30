@@ -2,14 +2,20 @@ package com.yanga.client.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -28,7 +34,9 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -38,7 +46,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+
+private const val BOARD_GRID_COLUMNS = 3
+
+private sealed interface BoardCategoryItem {
+  val key: String
+}
+
+private data class BoardCategoryHeader(val title: String) : BoardCategoryItem {
+  override val key: String = "header:$title"
+}
+
+private data class BoardCategoryBoard(val board: BoardPreview) : BoardCategoryItem {
+  override val key: String = "board:${board.id}"
+}
+
+private data class BoardCategoryMessage(val text: String) : BoardCategoryItem {
+  override val key: String = "message:$text"
+}
 
 @Composable
 internal fun HomeScreen(
@@ -83,13 +111,24 @@ internal fun BoardsScreen(
   onBoardClick: (BoardPreview) -> Unit = {},
 ) {
   val sections = (state.sections as? LoadableUiState.Content)?.value.orEmpty()
-  val categoryLabels = listOf("收藏") + sections.map { it.name }
-  var selectedCategoryIndex by rememberSaveable(categoryLabels) { androidx.compose.runtime.mutableIntStateOf(0) }
+  val categoryLabels = remember(sections) { listOf("收藏") + sections.map { it.name } }
+  val categoryLabelKey = remember(categoryLabels) { categoryLabels.joinToString("\u0000") }
+  var selectedCategoryIndex by rememberSaveable(categoryLabelKey) { androidx.compose.runtime.mutableIntStateOf(0) }
   selectedCategoryIndex = selectedCategoryIndex.coerceIn(0, categoryLabels.lastIndex.coerceAtLeast(0))
-  val pagerState = rememberPagerState(initialPage = selectedCategoryIndex, pageCount = { categoryLabels.size.coerceAtLeast(1) })
+  val pagerState =
+    rememberPagerState(
+      initialPage = selectedCategoryIndex,
+      pageCount = { categoryLabels.size.coerceAtLeast(1) },
+    )
   val scope = rememberCoroutineScope()
-  LaunchedEffect(pagerState.currentPage) {
-    selectedCategoryIndex = pagerState.currentPage
+  val selectedTabIndex by remember { derivedStateOf { pagerState.currentPage } }
+  LaunchedEffect(selectedTabIndex) {
+    selectedCategoryIndex = selectedTabIndex
+  }
+  LaunchedEffect(categoryLabels.size) {
+    if (pagerState.currentPage > categoryLabels.lastIndex) {
+      scope.launch { pagerState.scrollToPage(categoryLabels.lastIndex.coerceAtLeast(0)) }
+    }
   }
 
   Column(
@@ -102,7 +141,7 @@ internal fun BoardsScreen(
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Text(
-        text = "主页",
+        text = "YANGA",
         style = MaterialTheme.typography.titleLarge,
         fontWeight = FontWeight.SemiBold,
       )
@@ -118,7 +157,7 @@ internal fun BoardsScreen(
     }
 
     PrimaryScrollableTabRow(
-      selectedTabIndex = pagerState.currentPage,
+      selectedTabIndex = selectedTabIndex,
       modifier = Modifier.fillMaxWidth(),
       edgePadding = 0.dp,
       divider = {
@@ -130,7 +169,7 @@ internal fun BoardsScreen(
       indicator = {
         TabRowDefaults.PrimaryIndicator(
           modifier = Modifier.tabIndicatorOffset(
-            selectedTabIndex = pagerState.currentPage,
+            selectedTabIndex = selectedTabIndex,
             matchContentSize = false,
           ),
           color = MaterialTheme.colorScheme.primary,
@@ -139,10 +178,10 @@ internal fun BoardsScreen(
     ) {
       categoryLabels.forEachIndexed { index, label ->
         Tab(
-          selected = pagerState.currentPage == index,
+          selected = selectedTabIndex == index,
           onClick = {
             selectedCategoryIndex = index
-            scope.launch { pagerState.animateScrollToPage(index) }
+            navigateToCategoryTab(scope, pagerState, selectedTabIndex, index)
           },
           text = { Text(text = label) },
         )
@@ -151,51 +190,154 @@ internal fun BoardsScreen(
 
     HorizontalPager(
       state = pagerState,
-      beyondViewportPageCount = 1,
-      modifier = Modifier
-        .fillMaxSize(),
+      beyondViewportPageCount = 0,
+      key = { page -> categoryLabels.getOrElse(page) { page.toString() } },
+      modifier = Modifier.fillMaxSize(),
     ) { page ->
-      LazyColumn(
-        modifier = Modifier
-          .fillMaxSize()
-          .padding(horizontal = 24.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 18.dp, bottom = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-      ) {
-        if (page == 0) {
-          item {
-            BoardGridState(
-              state = state.subscribedBoards,
-              emptyText = "No favorite boards",
-              loadingText = "Loading favorite boards",
-              loginRequiredText = "Sign in to load favorite boards",
-              columns = 3,
-              onBoardClick = onBoardClick,
-            )
-          }
-        } else {
-          val sectionGroups = sections[page - 1].groups
-          if (sectionGroups.isEmpty()) {
-            item { StateMessage(text = "No boards available") }
-          } else {
-            items(sectionGroups.size) { index ->
-              val group = sectionGroups[index]
-              Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeader(title = group.name.ifBlank { "未命名分组" })
-                if (group.boards.isEmpty()) {
-                  StateMessage(text = "No boards available")
-                } else {
-                  BoardGrid(
-                    boards = group.boards,
-                    columns = 3,
-                    onBoardClick = onBoardClick,
-                  )
-                }
-              }
-            }
-          }
+      BoardCategoryPage(
+        page = page,
+        subscribedBoards = state.subscribedBoards,
+        sections = sections,
+        onBoardClick = onBoardClick,
+      )
+    }
+  }
+}
+
+@Composable
+private fun BoardCategoryPage(
+  page: Int,
+  subscribedBoards: LoadableUiState<List<BoardPreview>>,
+  sections: List<BoardSectionPreview>,
+  onBoardClick: (BoardPreview) -> Unit,
+) {
+  val items =
+    remember(page, subscribedBoards, sections) {
+      buildBoardCategoryItems(
+        page = page,
+        subscribedBoards = subscribedBoards,
+        sections = sections,
+      )
+    }
+  val gridState = rememberSaveable(page, saver = LazyGridState.Saver) { LazyGridState() }
+  BoardCategoryLazyGrid(
+    items = items,
+    onBoardClick = onBoardClick,
+    state = gridState,
+    modifier = Modifier.fillMaxSize(),
+  )
+}
+
+@Composable
+private fun BoardCategoryLazyGrid(
+  items: List<BoardCategoryItem>,
+  onBoardClick: (BoardPreview) -> Unit,
+  state: LazyGridState,
+  modifier: Modifier = Modifier,
+) {
+  LazyVerticalGrid(
+    columns = GridCells.Fixed(BOARD_GRID_COLUMNS),
+    state = state,
+    modifier = modifier,
+    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 18.dp),
+    horizontalArrangement = Arrangement.spacedBy(12.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
+  ) {
+    items(
+      items = items,
+      key = { item -> item.key },
+      span = { item ->
+        when (item) {
+          is BoardCategoryBoard -> GridItemSpan(1)
+          is BoardCategoryHeader, is BoardCategoryMessage -> GridItemSpan(maxLineSpan)
         }
+      },
+    ) { item ->
+      when (item) {
+        is BoardCategoryHeader ->
+          SectionHeader(
+            title = item.title,
+            modifier = Modifier.padding(bottom = 6.dp),
+          )
+        is BoardCategoryMessage ->
+          TonalCard(modifier = Modifier.fillMaxWidth()) {
+            Text(text = item.text, style = MaterialTheme.typography.bodyMedium)
+          }
+        is BoardCategoryBoard ->
+          FavoriteBoardCard(
+            board = item.board,
+            onClick = onBoardClick,
+            modifier = Modifier.fillMaxWidth(),
+          )
       }
+    }
+  }
+}
+
+private fun buildBoardCategoryItems(
+  page: Int,
+  subscribedBoards: LoadableUiState<List<BoardPreview>>,
+  sections: List<BoardSectionPreview>,
+): List<BoardCategoryItem> =
+  buildList {
+    if (page == 0) {
+      addFavoriteBoardItems(
+        state = subscribedBoards,
+        emptyText = "No favorite boards",
+        loadingText = "Loading favorite boards",
+        loginRequiredText = "Sign in to load favorite boards",
+      )
+      return@buildList
+    }
+
+    val sectionGroups = sections.getOrNull(page - 1)?.groups.orEmpty()
+    if (sectionGroups.isEmpty()) {
+      add(BoardCategoryMessage("No boards available"))
+      return@buildList
+    }
+
+    sectionGroups.forEach { group ->
+      add(BoardCategoryHeader(group.name.ifBlank { "未命名分组" }))
+      if (group.boards.isEmpty()) {
+        add(BoardCategoryMessage("No boards available"))
+      } else {
+        group.boards.forEach { board -> add(BoardCategoryBoard(board)) }
+      }
+    }
+  }
+
+private fun MutableList<BoardCategoryItem>.addFavoriteBoardItems(
+  state: LoadableUiState<List<BoardPreview>>,
+  emptyText: String,
+  loadingText: String,
+  loginRequiredText: String,
+) {
+  when (state) {
+    is LoadableUiState.Content -> {
+      if (state.value.isEmpty()) {
+        add(BoardCategoryMessage(emptyText))
+      } else {
+        state.value.forEach { board -> add(BoardCategoryBoard(board)) }
+      }
+    }
+    is LoadableUiState.Empty -> add(BoardCategoryMessage(state.message))
+    is LoadableUiState.Error -> add(BoardCategoryMessage(state.message))
+    LoadableUiState.Loading -> add(BoardCategoryMessage(loadingText))
+    LoadableUiState.LoginRequired -> add(BoardCategoryMessage(loginRequiredText))
+  }
+}
+
+private fun navigateToCategoryTab(
+  scope: CoroutineScope,
+  pagerState: PagerState,
+  fromIndex: Int,
+  toIndex: Int,
+) {
+  scope.launch {
+    if (abs(toIndex - fromIndex) <= 1) {
+      pagerState.animateScrollToPage(toIndex)
+    } else {
+      pagerState.scrollToPage(toIndex)
     }
   }
 }
@@ -224,67 +366,6 @@ private fun LoginPrompt(onLoginClick: () -> Unit, modifier: Modifier = Modifier)
       )
       Button(onClick = onLoginClick) {
         Text(text = "Sign in")
-      }
-    }
-  }
-}
-
-@Composable
-private fun BoardGridState(
-  state: LoadableUiState<List<BoardPreview>>,
-  onBoardClick: (BoardPreview) -> Unit,
-  modifier: Modifier = Modifier,
-  emptyText: String = "No favorite boards",
-  loadingText: String = "Loading favorite boards",
-  loginRequiredText: String = "Sign in to load favorite boards",
-  columns: Int = 2,
-) {
-  when (state) {
-    is LoadableUiState.Content -> {
-      if (state.value.isEmpty()) {
-        StateMessage(text = emptyText)
-      } else {
-        BoardGrid(
-          boards = state.value,
-          onBoardClick = onBoardClick,
-          modifier = modifier,
-          columns = columns,
-        )
-      }
-    }
-    is LoadableUiState.Empty -> StateMessage(text = state.message)
-    is LoadableUiState.Error -> StateMessage(text = state.message)
-    LoadableUiState.Loading -> StateMessage(text = loadingText)
-    LoadableUiState.LoginRequired -> StateMessage(text = loginRequiredText)
-  }
-}
-
-@Composable
-private fun BoardGrid(
-  boards: List<BoardPreview>,
-  onBoardClick: (BoardPreview) -> Unit,
-  modifier: Modifier = Modifier,
-  columns: Int = 2,
-) {
-  Column(
-    modifier = modifier.fillMaxWidth(),
-    verticalArrangement = Arrangement.spacedBy(12.dp),
-  ) {
-    boards.chunked(columns).forEach { rowBoards ->
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-      ) {
-        rowBoards.forEach { board ->
-          FavoriteBoardCard(
-            board = board,
-            onClick = { onBoardClick(board) },
-            modifier = Modifier.weight(1f),
-          )
-        }
-        repeat(columns - rowBoards.size) {
-          Column(modifier = Modifier.weight(1f)) {}
-        }
       }
     }
   }
@@ -353,11 +434,11 @@ private fun StateMessage(text: String, modifier: Modifier = Modifier) {
 @Composable
 private fun FavoriteBoardCard(
   board: BoardPreview,
-  onClick: () -> Unit,
+  onClick: (BoardPreview) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   Card(
-    onClick = onClick,
+    onClick = { onClick(board) },
     modifier = modifier,
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     shape = MaterialTheme.shapes.large,
@@ -369,7 +450,7 @@ private fun FavoriteBoardCard(
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-      Marker(text = board.marker, iconUrl = board.iconUrl)
+      Marker(text = board.marker, iconUrl = board.iconUrl, boardId = board.id)
       Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -395,11 +476,3 @@ private fun FavoriteBoardCard(
     }
   }
 }
-
-
-
-
-
-
-
-

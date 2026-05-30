@@ -13,13 +13,10 @@ sealed interface MainDestinationKey : NavKey {
   @Serializable data object Home : MainDestinationKey
   @Serializable data object Messages : MainDestinationKey
   @Serializable data object Profile : MainDestinationKey
-  @Serializable data object Login : MainDestinationKey
-  @Serializable data class Board(val fid: String) : MainDestinationKey
-  @Serializable data class Thread(val tid: String) : MainDestinationKey
 }
 
 enum class MainTab(val label: String, val icon: ImageVector) {
-  Home("主页", Icons.Filled.Home),
+  Home("Home", Icons.Filled.Home),
   Messages("Messages", Icons.Filled.Email),
   Profile("Profile", Icons.Filled.Person),
 }

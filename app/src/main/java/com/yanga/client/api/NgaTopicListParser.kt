@@ -6,9 +6,11 @@ object NgaTopicListParser {
   fun parse(raw: String): NgaTopicList {
     val root = ngaJsonRoot(raw)
     val data = root.objectValue("data") ?: root
-    val topics = data.objectListValue("__T", "topics", "list").mapNotNull { topic ->
-      topic.toTopicSummary()
-    }
+    val users = data.objectValue("__U")
+    val topics =
+      data.objectListValue("__T", "topics", "list").mapNotNull { topic ->
+        topic.toTopicSummary(users)
+      }
     val page = data.intValue("__PAGE", "page").takeIf { it > 0 } ?: 1
 
     return NgaTopicList(
@@ -19,20 +21,32 @@ object NgaTopicListParser {
     )
   }
 
-  private fun JSONObject.toTopicSummary(): NgaTopicSummary? {
+  private fun JSONObject.toTopicSummary(users: JSONObject?): NgaTopicSummary? {
     val topicId = stringValue("tid", "topic_id", "topicId", "id")
     if (topicId.isBlank()) return null
+
+    val authorId = nullableStringValue("authorid", "author_id", "authorId", "uid")
+    val user = authorId?.let { users?.optJSONObject(it) }
+    val authorName =
+      nullableStringValue("author", "username", "author_name", "authorName")
+        ?: user?.nullableStringValue("username", "nickname")
 
     return NgaTopicSummary(
       topicId = topicId,
       boardId = stringValue("fid", "board_id", "boardId"),
       boardName = stringValue("fname", "forumname", "forum_name", "board_name", "boardName"),
       title = stringValue("subject", "title"),
-      authorId = nullableStringValue("authorid", "author_id", "authorId", "uid"),
-      authorName = nullableStringValue("author", "username", "author_name", "authorName"),
+      authorId = authorId,
+      authorName = authorName,
+      authorAvatarUrl = authorId?.let { id -> NgaAvatarUrls.resolve(user?.nullableStringValue("avatar"), id) },
       replyCount = intValue("replies", "reply_count", "replyCount"),
       lastPostAt = nullableLongValue("lastpost", "last_post_at", "lastPostAt", "postdatetimestamp", "postdate"),
       isFavorited = booleanValue("favor", "is_favorited", "isFavorited", "favorited"),
     )
   }
+
+  private fun JSONObject.nullableStringValue(vararg keys: String): String? =
+    keys.firstNotNullOfOrNull { key ->
+      opt(key)?.takeUnless { it == JSONObject.NULL }?.toString()?.takeIf { it.isNotBlank() }
+    }
 }

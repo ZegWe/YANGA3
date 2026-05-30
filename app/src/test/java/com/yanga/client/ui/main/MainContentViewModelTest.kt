@@ -148,12 +148,13 @@ class MainContentViewModelTest {
   fun mapperFormatsTopicBoardMessageNotificationAndCountersIntoPreviews() {
     assertEquals(
       TopicPreview(
+        id = "1001",
         title = "Read model wiring",
         board = "开发测试",
         replies = "12 replies",
         lastActive = "11-15 06:13",
+        authorName = "测试员",
         authorInitial = "测",
-        id = "1001",
       ),
       topicSummary().toPreview(),
     )
@@ -241,6 +242,8 @@ class MainContentViewModelTest {
       localFavorites.remove(boardId)
       return Result.success(Unit)
     }
+
+    override suspend fun refreshIncrementalBoardDirectoryIfDue(): Boolean = false
   }
 }
 
@@ -369,6 +372,7 @@ private fun topicPreview(): TopicPreview =
     board = "开发测试",
     replies = "12 replies",
     lastActive = "11-15 06:13",
+    authorName = "测试员",
     authorInitial = "测",
   )
 

@@ -32,6 +32,18 @@ class BoardContentViewModel(
 
   fun openBoard(session: LoginSessionData?, destination: BoardDestination) {
     val boardId = destination.id
+    val cached = _state.value
+    if (cached?.fid == boardId && cached.topics is LoadableUiState.Content) {
+      loadingBoardId = boardId
+      _state.value =
+        cached.copy(
+          boardName = destination.name,
+          iconUrl = destination.iconUrl,
+          category = destination.category,
+          isFavorite = destination.isFavorite,
+        )
+      return
+    }
     loadingBoardId = boardId
     _state.value =
       BoardTopicListUiState(

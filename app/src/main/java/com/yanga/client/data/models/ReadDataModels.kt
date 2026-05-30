@@ -11,6 +11,7 @@ data class LoginSessionData(
   val username: String,
   val uid: String,
   val cookie: String,
+  val avatarUrl: String? = null,
 )
 
 data class HomeReadData(
@@ -30,4 +31,5 @@ data class MessagesReadData(
 data class ProfileReadData(
   val counters: NgaProfileCounters,
   val notifications: List<NgaNotificationSummary>,
+  val avatarUrl: String? = null,
 )

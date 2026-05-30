@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.yanga.client.data.LoginSessionData
 import com.yanga.client.data.LocalFavoriteBoard
 import com.yanga.client.data.NgaReadOnlyRepository
+import com.yanga.client.data.boards.BoardsCatalog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,11 +14,61 @@ import kotlinx.coroutines.launch
 
 class BoardsListViewModel(
   private val repository: NgaReadOnlyRepository,
+  private val boardsCatalog: BoardsCatalog? = null,
 ) : ViewModel() {
   private val _state = MutableStateFlow(BoardsUiState())
   val state: StateFlow<BoardsUiState> = _state.asStateFlow()
 
+  init {
+    boardsCatalog?.let { catalog ->
+      _state.value = catalog.state.value
+      viewModelScope.launch {
+        catalog.state.collect { loaded -> _state.value = loaded }
+      }
+    }
+  }
+
   fun refresh(session: LoginSessionData?) {
+    val catalog = boardsCatalog
+    if (catalog != null) {
+      catalog.reload(session)
+      return
+    }
+    refreshFromRepository(session)
+  }
+
+  fun applyEndpoint(baseUrl: String) {
+    boardsCatalog?.applyEndpoint(baseUrl)
+  }
+
+  fun onBoardOpened() {
+    boardsCatalog?.onBoardOpened()
+  }
+
+  fun toggleBoardFavorite(board: BoardPreview) {
+    boardsCatalog?.toggleLocalFavorite(board) ?: toggleBoardFavoriteLocally(board)
+  }
+
+  private fun toggleBoardFavoriteLocally(board: BoardPreview) {
+    viewModelScope.launch {
+      val currentlyFavorite = board.isFavorite
+      if (currentlyFavorite) {
+        repository.removeLocalFavoriteBoard(board.id)
+      } else {
+        repository.addLocalFavoriteBoard(
+          LocalFavoriteBoard(
+            boardId = board.id,
+            name = board.name,
+            iconUrl = board.iconUrl,
+            category = board.category,
+          ),
+        )
+      }
+      applyLocalFavorites(boardId = board.id, isFavorite = !currentlyFavorite)
+    }
+  }
+
+  private fun refreshFromRepository(session: LoginSessionData?) {
     viewModelScope.launch {
       _state.update { it.copy(subscribedBoards = LoadableUiState.Loading, sections = LoadableUiState.Loading) }
       val result = repository.loadBoards(session)
@@ -39,25 +90,6 @@ class BoardsListViewModel(
           },
         )
       }
-    }
-  }
-
-  fun toggleBoardFavorite(board: BoardPreview) {
-    viewModelScope.launch {
-      val currentlyFavorite = board.isFavorite
-      if (currentlyFavorite) {
-        repository.removeLocalFavoriteBoard(board.id)
-      } else {
-        repository.addLocalFavoriteBoard(
-          LocalFavoriteBoard(
-            boardId = board.id,
-            name = board.name,
-            iconUrl = board.iconUrl,
-            category = board.category,
-          ),
-        )
-      }
-      applyLocalFavorites(boardId = board.id, isFavorite = !currentlyFavorite)
     }
   }
 
@@ -117,4 +149,3 @@ class BoardsListViewModel(
     }
   }
 }
-

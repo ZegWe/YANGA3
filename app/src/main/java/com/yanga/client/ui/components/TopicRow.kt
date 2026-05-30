@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yanga.client.ui.components.UserAvatar
 
 @Composable
 internal fun TopicRow(topic: TopicPreview, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -20,7 +21,11 @@ internal fun TopicRow(topic: TopicPreview, onClick: () -> Unit, modifier: Modifi
     modifier = modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp),
     horizontalArrangement = Arrangement.spacedBy(12.dp),
   ) {
-    RoundMarker(text = topic.authorInitial)
+    UserAvatar(
+      name = topic.authorName.ifBlank { topic.authorInitial },
+      avatarUrl = topic.authorAvatarUrl,
+      size = 42.dp,
+    )
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
       Text(
         text = topic.title,
@@ -29,6 +34,15 @@ internal fun TopicRow(topic: TopicPreview, onClick: () -> Unit, modifier: Modifi
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
       )
+      if (topic.authorName.isNotBlank()) {
+        Text(
+          text = topic.authorName,
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+      }
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(topic.replies, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(topic.board, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -37,9 +51,3 @@ internal fun TopicRow(topic: TopicPreview, onClick: () -> Unit, modifier: Modifi
     }
   }
 }
-
-
-
-
-
-

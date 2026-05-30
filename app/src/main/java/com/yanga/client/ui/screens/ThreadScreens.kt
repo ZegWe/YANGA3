@@ -1,6 +1,5 @@
 package com.yanga.client.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,35 +9,49 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yanga.client.data.image.imageCacheManager
+import com.yanga.client.ui.components.CachedPostImage
+import com.yanga.client.ui.components.UserAvatar
+import com.yanga.client.ui.content.PostContentPart
+import com.yanga.client.ui.content.PostContentParser
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,7 +68,12 @@ internal fun BoardTopicListScreen(
       TopAppBar(
         title = {
           Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Marker(text = state.boardName, iconUrl = state.iconUrl, modifier = Modifier.size(32.dp))
+            Marker(
+              text = state.boardName,
+              iconUrl = state.iconUrl,
+              modifier = Modifier.size(32.dp),
+              iconSize = 32.dp,
+            )
             Column {
               Text(text = state.boardName, style = MaterialTheme.typography.titleMedium)
               if (state.fid.isNotBlank()) {
@@ -129,6 +147,10 @@ internal fun ThreadReadingScreen(
   onBack: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
+  var menuExpanded by remember { mutableStateOf(false) }
+  var isFavorited by remember { mutableStateOf(false) }
+  var showJumpFloorDialog by remember { mutableStateOf(false) }
+
   Scaffold(
     modifier = modifier.fillMaxSize(),
     topBar = {
@@ -154,14 +176,31 @@ internal fun ThreadReadingScreen(
           }
         },
         actions = {
-          IconButton(onClick = {}) {
-            Icon(Icons.Filled.MoreVert, contentDescription = "More")
+          Box {
+            IconButton(onClick = { menuExpanded = true }) {
+              Icon(Icons.Filled.MoreVert, contentDescription = "More")
+            }
+            ThreadOverflowMenu(
+              expanded = menuExpanded,
+              isFavorited = isFavorited,
+              onDismiss = { menuExpanded = false },
+              onToggleFavorite = {
+                isFavorited = !isFavorited
+                menuExpanded = false
+              },
+              onJumpFloor = {
+                menuExpanded = false
+                showJumpFloorDialog = true
+              },
+            )
           }
         }
       )
     },
-    bottomBar = {
-      ThreadBottomBar()
+    floatingActionButton = {
+      FloatingActionButton(onClick = {}) {
+        Icon(Icons.Filled.Edit, contentDescription = "Reply")
+      }
     }
   ) { paddingValues ->
     Column(
@@ -173,10 +212,11 @@ internal fun ThreadReadingScreen(
       verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
       ThreadTitleCard(title = state.title)
-      FilterChipRow(labels = listOf("All", "Author only", "Images only", "Jump floor"))
+      FilterChipRow(labels = listOf("All", "Author only", "Images only"))
 
       when (state.posts) {
         is LoadableUiState.Content -> {
+          PrefetchPostImages(posts = state.posts.value)
           for (post in state.posts.value) {
             PostItem(post = post)
           }
@@ -188,6 +228,13 @@ internal fun ThreadReadingScreen(
         }
       }
     }
+  }
+
+  if (showJumpFloorDialog) {
+    JumpFloorDialog(
+      onDismiss = { showJumpFloorDialog = false },
+      onConfirm = { showJumpFloorDialog = false },
+    )
   }
 }
 
@@ -210,7 +257,7 @@ private fun ThreadTitleCard(title: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun PostItem(post: PostPreview, modifier: Modifier = Modifier) {
-  val contentParts = remember(post.content) { parsePostContent(post.content) }
+  val contentParts = remember(post.content) { PostContentParser.parse(post.content) }
 
   Column(
     modifier = modifier
@@ -223,19 +270,12 @@ private fun PostItem(post: PostPreview, modifier: Modifier = Modifier) {
       horizontalArrangement = Arrangement.spacedBy(12.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
-      Box(
-        modifier = Modifier
-          .size(40.dp)
-          .clip(CircleShape)
-          .background(MaterialTheme.colorScheme.tertiaryContainer),
-        contentAlignment = Alignment.Center
-      ) {
-        Text(
-          text = post.avatarInitial,
-          style = MaterialTheme.typography.titleSmall,
-          color = MaterialTheme.colorScheme.onTertiaryContainer
-        )
-      }
+      UserAvatar(
+        name = post.author,
+        avatarUrl = post.authorAvatarUrl,
+        modifier = Modifier.size(40.dp),
+        size = 40.dp,
+      )
       Column(modifier = Modifier.weight(1f)) {
         Text(text = post.author, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         Text(
@@ -248,14 +288,14 @@ private fun PostItem(post: PostPreview, modifier: Modifier = Modifier) {
 
     for (part in contentParts) {
       when (part) {
-        is ContentPart.Text -> {
+        is PostContentPart.Text -> {
           Text(
             text = part.text,
             style = MaterialTheme.typography.bodyLarge,
             lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.3f
           )
         }
-        is ContentPart.Quote -> {
+        is PostContentPart.Quote -> {
           Surface(
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -271,95 +311,96 @@ private fun PostItem(post: PostPreview, modifier: Modifier = Modifier) {
             )
           }
         }
+        is PostContentPart.Image -> {
+          CachedPostImage(url = part.url)
+        }
       }
     }
-  }
-}
-
-private sealed class ContentPart {
-  data class Text(val text: String) : ContentPart()
-  data class Quote(val text: String) : ContentPart()
-}
-
-private fun parsePostContent(content: String): List<ContentPart> {
-  val parts = mutableListOf<ContentPart>()
-  val current = content
-    .replace("<br/>", "\n")
-    .replace("<br />", "\n")
-    .replace("&nbsp;", " ")
-    .replace("&lt;", "<")
-    .replace("&gt;", ">")
-    .replace("&amp;", "&")
-
-  val quoteRegex = Regex("\\[quote\\]([\\s\\S]*?)\\[/quote\\]")
-  var match = quoteRegex.find(current)
-  var lastIndex = 0
-
-  while (match != null) {
-    if (match.range.first > lastIndex) {
-      val textBefore = current.substring(lastIndex, match.range.first).trim()
-      if (textBefore.isNotEmpty()) {
-        parts.add(ContentPart.Text(textBefore))
-      }
-    }
-
-    val quoteContent = match.groupValues[1].trim()
-    if (quoteContent.isNotEmpty()) {
-      parts.add(ContentPart.Quote(quoteContent))
-    }
-
-    lastIndex = match.range.last + 1
-    match = quoteRegex.find(current, lastIndex)
-  }
-
-  if (lastIndex < current.length) {
-    val remaining = current.substring(lastIndex).trim()
-    if (remaining.isNotEmpty()) {
-      parts.add(ContentPart.Text(remaining))
-    }
-  }
-
-  return if (parts.isEmpty() && current.isNotBlank()) {
-    listOf(ContentPart.Text(current))
-  } else {
-    parts
   }
 }
 
 @Composable
-private fun ThreadBottomBar() {
-  Surface(
-    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    tonalElevation = 3.dp
-  ) {
-    Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 16.dp, vertical = 8.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-      Surface(
-        modifier = Modifier.weight(1f),
-        color = MaterialTheme.colorScheme.surface,
-        shape = MaterialTheme.shapes.extraLarge,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-      ) {
-        Text(
-          text = "Reply to thread...",
-          modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-          style = MaterialTheme.typography.bodyMedium,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-      }
-      IconButton(onClick = {}) {
-        Icon(Icons.Filled.Favorite, contentDescription = "Favorite")
-      }
-      IconButton(onClick = {}) {
-        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
-      }
+private fun PrefetchPostImages(posts: List<PostPreview>) {
+  val context = LocalContext.current
+  val imageUrls =
+    remember(posts) {
+      buildList {
+        posts.mapNotNullTo(this) { it.authorAvatarUrl?.takeIf(String::isNotBlank) }
+        posts.flatMap { post ->
+          PostContentParser.parse(post.content).filterIsInstance<PostContentPart.Image>().map { it.url }
+        }
+      }.distinct()
+    }
+
+  LaunchedEffect(imageUrls) {
+    if (imageUrls.isEmpty()) return@LaunchedEffect
+    withContext(Dispatchers.IO) {
+      context.imageCacheManager().prefetchAll(context, imageUrls)
     }
   }
+}
+
+@Composable
+private fun ThreadOverflowMenu(
+  expanded: Boolean,
+  isFavorited: Boolean,
+  onDismiss: () -> Unit,
+  onToggleFavorite: () -> Unit,
+  onJumpFloor: () -> Unit,
+) {
+  DropdownMenu(
+    expanded = expanded,
+    onDismissRequest = onDismiss,
+  ) {
+    DropdownMenuItem(
+      text = { Text(if (isFavorited) "取消收藏" else "收藏") },
+      onClick = onToggleFavorite,
+      leadingIcon = {
+        Icon(
+          imageVector = if (isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
+          contentDescription = null,
+        )
+      },
+    )
+    DropdownMenuItem(
+      text = { Text("跳楼") },
+      onClick = onJumpFloor,
+    )
+  }
+}
+
+@Composable
+private fun JumpFloorDialog(
+  onDismiss: () -> Unit,
+  onConfirm: (String) -> Unit,
+) {
+  var floorInput by remember { mutableStateOf("") }
+
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    title = { Text("跳楼") },
+    text = {
+      OutlinedTextField(
+        value = floorInput,
+        onValueChange = { floorInput = it.filter { char -> char.isDigit() } },
+        label = { Text("楼层") },
+        singleLine = true,
+      )
+    },
+    confirmButton = {
+      TextButton(
+        onClick = { onConfirm(floorInput) },
+        enabled = floorInput.isNotBlank(),
+      ) {
+        Text("跳转")
+      }
+    },
+    dismissButton = {
+      TextButton(onClick = onDismiss) {
+        Text("取消")
+      }
+    },
+  )
 }
 
 

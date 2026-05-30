@@ -388,7 +388,7 @@ class NgaApiTest {
       window.script_muti_get_var_store={
         "data":{
           "__T":{"tid":46634352,"fid":7,"subject":"测试主题"},
-          "__U":{"42":{"uid":42,"username":"作者A"}},
+          "__U":{"42":{"uid":42,"username":"作者A","avatar":".a/12345_67890.jpg?1234567890"}},
           "__R":{
             "0":{
               "pid":101,
@@ -416,6 +416,10 @@ class NgaApiTest {
     assertEquals("101", thread.posts.first().pid)
     assertEquals("42", thread.posts.first().authorId)
     assertEquals("作者A", thread.posts.first().author)
+    assertEquals(
+      "https://img4.nga.178.com/avatars/2002/039/003/000/12345_67890.jpg?1234567890",
+      thread.posts.first().authorAvatarUrl,
+    )
     assertEquals("正文<br/>内容", thread.posts.first().content)
     assertEquals(1770000000L, thread.posts.first().postDate)
   }

@@ -2,6 +2,7 @@ package com.yanga.client.ui
 
 data class PostPreview(
   val author: String,
+  val authorAvatarUrl: String? = null,
   val floor: String,
   val time: String,
   val content: String,

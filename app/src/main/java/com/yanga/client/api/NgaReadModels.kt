@@ -7,6 +7,7 @@ data class NgaTopicSummary(
   val title: String,
   val authorId: String? = null,
   val authorName: String? = null,
+  val authorAvatarUrl: String? = null,
   val replyCount: Int = 0,
   val lastPostAt: Long? = null,
   val isFavorited: Boolean = false,
@@ -69,4 +70,9 @@ data class NgaProfileCounters(
   val subscribedBoards: Int = 0,
   val unreadNotifications: Int = 0,
   val unreadMessages: Int = 0,
+)
+
+data class NgaProfileParseResult(
+  val counters: NgaProfileCounters,
+  val avatarUrl: String? = null,
 )

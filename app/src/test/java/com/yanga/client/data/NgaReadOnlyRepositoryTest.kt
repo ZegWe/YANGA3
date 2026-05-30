@@ -1,8 +1,12 @@
 package com.yanga.client.data
 
+import com.yanga.client.api.NgaBoardGroup
+import com.yanga.client.api.NgaBoardSection
+import com.yanga.client.api.NgaBoardSummary
 import com.yanga.client.api.NgaHttpResponse
 import com.yanga.client.api.NgaHttpTransport
 import com.yanga.client.api.NgaRequest
+import com.yanga.client.data.boards.BoardSectionDirectory
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -65,9 +69,48 @@ class NgaReadOnlyRepositoryTest {
     assertEquals("真实关注板块", data.subscribedBoards[0].name)
     assertEquals(2, data.remoteSections.size)
     assertEquals("综合", data.remoteSections[0].name)
-    assertEquals(listOf("nuke.php", "nuke.php", "app_api.php"), transport.requests.map { it.pathName() })
-    assertEquals("user_option", transport.requests[0].query["__lib"])
-    assertEquals("1", transport.requests[0].query["type"])
+    assertEquals(listOf("nuke.php", "app_api.php", "nuke.php"), transport.requests.map { it.pathName() })
+    assertEquals("user_option", transport.requests[2].query["__lib"])
+    assertEquals("1", transport.requests[2].query["type"])
+  }
+
+  @Test
+  fun loadBoardsUsesCachedDirectoryWhenFetchFails() = runTest {
+    val transport =
+      FakeTransport(
+        fallbackResponses =
+          mapOf(
+            "nuke.php" to """{"error":{"0":"ACTION NOT FOUND"}}""",
+            "app_api.php" to """{"error":{"0":"temporary outage"}}""",
+          ),
+      )
+    val directory =
+      FakeBoardSectionDirectory(
+        sections =
+          listOf(
+            NgaBoardSection(
+              id = "wow",
+              name = "魔兽世界",
+              groups =
+                listOf(
+                  NgaBoardGroup(
+                    id = "10000",
+                    name = "魔兽世界",
+                    boards = listOf(NgaBoardSummary(boardId = "7", name = "议事厅")),
+                  ),
+                ),
+            ),
+          ),
+      )
+    val repository = DefaultNgaReadOnlyRepository(transport, boardSectionDirectory = directory)
+
+    val result = repository.loadBoards(null)
+
+    val data = result.getOrThrow()
+    assertEquals(1, data.remoteSections.size)
+    assertEquals("议事厅", data.remoteSections.single().groups.single().boards.single().name)
+    assertTrue(transport.requests.isNotEmpty())
+    assertEquals(null, directory.savedSections)
   }
 
   @Test
@@ -118,30 +161,21 @@ class NgaReadOnlyRepositoryTest {
   }
 
   @Test
-  fun loadBoardsIgnoresCacheWhenRemoteSectionsEmpty() = runTest {
-    val cache =
-      FakeBoardsCacheStore(
-        cached =
-          BoardsReadData(
-            subscribedBoards = emptyList(),
-            remoteSections = emptyList(),
-          ),
-      )
+  fun loadBoardsSavesDirectoryWhenFetchSucceeds() = runTest {
+    val directory = FakeBoardSectionDirectory()
     val transport = FakeTransport("app_api.php" to fixture("remote_board_categories.json"))
-    val repository = DefaultNgaReadOnlyRepository(transport, boardsCacheStore = cache)
+    val repository = DefaultNgaReadOnlyRepository(transport, boardSectionDirectory = directory)
 
     val result = repository.loadBoards(null)
 
     val data = result.getOrThrow()
     assertEquals(2, data.remoteSections.size)
-    assertTrue(transport.requests.isNotEmpty())
-    assertEquals(1, cache.saved.size)
-    assertEquals(2, cache.saved.single().remoteSections.size)
+    assertEquals(2, directory.savedSections?.size)
   }
 
   @Test
-  fun loadBoardsDoesNotCacheWhenRemoteSectionsEmpty() = runTest {
-    val cache = FakeBoardsCacheStore()
+  fun loadBoardsFailsWhenFetchFailsAndDirectoryCacheEmpty() = runTest {
+    val directory = FakeBoardSectionDirectory()
     val transport =
       FakeTransport(
         fallbackResponses =
@@ -150,13 +184,12 @@ class NgaReadOnlyRepositoryTest {
             "app_api.php" to """{"error":{"0":"temporary outage"}}""",
           ),
       )
-    val repository = DefaultNgaReadOnlyRepository(transport, boardsCacheStore = cache)
+    val repository = DefaultNgaReadOnlyRepository(transport, boardSectionDirectory = directory)
 
     val result = repository.loadBoards(null)
 
-    val data = result.getOrThrow()
-    assertTrue(data.remoteSections.isEmpty())
-    assertTrue(cache.saved.isEmpty())
+    assertTrue(result.isFailure)
+    assertEquals(null, directory.savedSections)
   }
 
   @Test
@@ -212,6 +245,10 @@ class NgaReadOnlyRepositoryTest {
     assertEquals("701", data.notifications[0].id)
     assertEquals(5, data.counters.favoriteTopics)
     assertEquals(3, data.counters.subscribedBoards)
+    assertEquals(
+      "https://img.nga.178.com/avatars/2002/f61/d13/003/64044897_0.jpg?93",
+      data.avatarUrl,
+    )
     assertEquals(
       listOf("noti", "ucp"),
       transport.requests.map { it.query.getValue("__lib") },
@@ -277,16 +314,22 @@ class NgaReadOnlyRepositoryTest {
       request.url.substringAfterLast('/')
   }
 
-  private class FakeBoardsCacheStore(
-    private val cached: BoardsReadData? = null,
-  ) : BoardsCacheStore {
-    val saved = mutableListOf<BoardsReadData>()
+  private class FakeBoardSectionDirectory(
+    private val sections: List<NgaBoardSection> = emptyList(),
+  ) : BoardSectionDirectory {
+    var savedSections: List<NgaBoardSection>? = null
 
-    override fun load(cacheKey: String): BoardsReadData? = cached
+    override fun loadSections(): List<NgaBoardSection> = sections
 
-    override fun save(cacheKey: String, data: BoardsReadData) {
-      saved += data
+    override fun saveSections(sections: List<NgaBoardSection>) {
+      savedSections = sections
     }
+
+    override fun lastIncrementalRequestAt(): Long = 0L
+
+    override fun clear() = Unit
+
+    override fun markIncrementalRequested(at: Long) = Unit
   }
 
   private class FakeFavoriteStore(

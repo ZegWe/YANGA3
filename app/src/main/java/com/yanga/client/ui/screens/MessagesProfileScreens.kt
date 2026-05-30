@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yanga.client.api.NgaDomains
 import com.yanga.client.data.LoginSessionData
+import com.yanga.client.ui.components.UserAvatar
 
 @Composable
 internal fun MessagesScreen(
@@ -260,7 +261,15 @@ private fun ProfileAccountCard(
       verticalAlignment = Alignment.CenterVertically,
     ) {
       val markerText = if (session is LoadableUiState.Content) session.value.username else "未"
-      RoundMarker(text = markerText)
+      if (session is LoadableUiState.Content) {
+        UserAvatar(
+          name = session.value.username,
+          avatarUrl = session.value.avatarUrl,
+          size = 42.dp,
+        )
+      } else {
+        RoundMarker(text = markerText)
+      }
       Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         when (session) {
           LoadableUiState.Loading -> {

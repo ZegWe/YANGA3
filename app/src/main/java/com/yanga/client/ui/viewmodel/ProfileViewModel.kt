@@ -45,7 +45,7 @@ class ProfileViewModel(
         result.fold(
           onSuccess = { data ->
             current.copy(
-              session = LoadableUiState.Content(session),
+              session = LoadableUiState.Content(session.copy(avatarUrl = data.avatarUrl)),
               counters = LoadableUiState.Content(data.counters.toPreviews()),
               notifications = LoadableUiState.Content(data.notifications.map { it.toPreview() }),
             )

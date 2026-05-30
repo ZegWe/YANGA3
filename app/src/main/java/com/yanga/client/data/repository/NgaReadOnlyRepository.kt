@@ -14,8 +14,11 @@ import com.yanga.client.api.NgaThreadParser
 import com.yanga.client.api.NgaThreadRead
 import com.yanga.client.api.NgaTopicListParser
 import com.yanga.client.api.NgaTopicList
+import com.yanga.client.data.boards.BoardListIncrementalMerger
+import com.yanga.client.data.boards.BoardSectionDirectory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 
 class LoginRequiredException : IllegalStateException("Login is required for this read operation")
 
@@ -37,6 +40,8 @@ interface NgaReadOnlyRepository {
   suspend fun addLocalFavoriteBoard(board: LocalFavoriteBoard): Result<Unit>
 
   suspend fun removeLocalFavoriteBoard(boardId: String): Result<Unit>
+
+  suspend fun refreshIncrementalBoardDirectoryIfDue(): Boolean
 }
 
 class DefaultNgaReadOnlyRepository(
@@ -44,11 +49,13 @@ class DefaultNgaReadOnlyRepository(
   private val userAgent: String = "Yanga Android",
   private var baseUrl: String = com.yanga.client.api.NgaDomains.BBS_NGA_CN,
   private val favoriteBoardsStore: FavoriteBoardsStore? = null,
-  private val boardsCacheStore: BoardsCacheStore? = null,
+  private val boardSectionDirectory: BoardSectionDirectory? = null,
 ) : NgaReadOnlyRepository {
   fun setBaseUrl(url: String) {
     baseUrl = url
   }
+
+  fun currentBaseUrl(): String = baseUrl
 
   override suspend fun loadHome(): Result<HomeReadData> = withContext(Dispatchers.IO) {
     val api = api()
@@ -72,44 +79,93 @@ class DefaultNgaReadOnlyRepository(
   }
 
   override suspend fun loadBoards(session: LoginSessionData?): Result<BoardsReadData> = withContext(Dispatchers.IO) {
-    val cacheKey = boardCacheKey(session)
-    boardsCacheStore?.load(cacheKey)?.takeIf { it.remoteSections.isNotEmpty() }?.let { cached ->
-      return@withContext Result.success(cached)
-    }
-
-    val api = api(session)
-    val subscribedBoards = if (session.requireLogin() != null) {
-      execute(api.subscribedBoards(), NgaBoardCategoryParser::parseBoards).getOrDefault(emptyList())
-    } else {
-      emptyList()
-    }
-
-    val directoryResult = execute(api.fullForumDirectory(), NgaBoardCategoryParser::parseSections)
-
-    var allSections = directoryResult.getOrDefault(emptyList())
-    if (allSections.isEmpty()) {
-      allSections = execute(api.remoteBoardCategories(), NgaBoardCategoryParser::parseSections).getOrDefault(emptyList())
-    }
-
-    val legacySubscribedSection =
-      allSections.find {
-        it.name.contains("收藏") || it.name.contains("订阅")
+    val cachedSections = boardSectionDirectory?.loadSections().orEmpty()
+    val fetchResult = fetchRemoteSections(session)
+    val fetchedSections = fetchResult.getOrNull().orEmpty().filterLegacySubscribedSection()
+    val remoteSections =
+      if (fetchedSections.isNotEmpty()) {
+        boardSectionDirectory?.saveSections(fetchedSections)
+        fetchedSections
+      } else {
+        cachedSections
       }
-    val remoteSections = allSections.filter { it != legacySubscribedSection }
-    val remoteSubscribedBoards =
-      subscribedBoards.ifEmpty { legacySubscribedSection?.groups.orEmpty().flatMap { it.boards } }
-    val localFavorites = favoriteBoardsStore?.list().orEmpty().map { it.toBoardSummary() }
-    val resolvedSubscribedBoards = (localFavorites + remoteSubscribedBoards).distinctBy { it.boardId }
 
-    val data =
+    if (remoteSections.isEmpty()) {
+      return@withContext Result.failure(
+        fetchResult.exceptionOrNull() ?: IllegalStateException("Board directory is empty"),
+      )
+    }
+
+    val subscribedBoards = loadSubscribedBoards(session, remoteSections)
+    val localFavorites = favoriteBoardsStore?.list().orEmpty().map { it.toBoardSummary() }
+    val resolvedSubscribedBoards = (localFavorites + subscribedBoards).distinctBy { it.boardId }
+
+    Result.success(
       BoardsReadData(
         subscribedBoards = resolvedSubscribedBoards,
         remoteSections = remoteSections,
-      )
-    if (remoteSections.isNotEmpty()) {
-      boardsCacheStore?.save(cacheKey, data)
+      ),
+    )
+  }
+
+  override suspend fun refreshIncrementalBoardDirectoryIfDue(): Boolean = withContext(Dispatchers.IO) {
+    val directory = boardSectionDirectory ?: return@withContext false
+    if (System.currentTimeMillis() - directory.lastIncrementalRequestAt() < INCREMENTAL_REQUEST_INTERVAL_MS) {
+      return@withContext false
     }
-    Result.success(data)
+
+    val categoryRaw =
+      execute(api().remoteBoardCategories()) { raw -> raw }
+        .getOrNull()
+        .orEmpty()
+    if (categoryRaw.isBlank()) return@withContext false
+
+    val merged = BoardListIncrementalMerger.merge(directory.loadSections(), categoryRaw) ?: return@withContext false
+    directory.saveSections(merged)
+    directory.markIncrementalRequested(System.currentTimeMillis())
+    true
+  }
+
+  private suspend fun loadSubscribedBoards(
+    session: LoginSessionData?,
+    remoteSections: List<com.yanga.client.api.NgaBoardSection>,
+  ): List<com.yanga.client.api.NgaBoardSummary> {
+    val api = api(session)
+    val subscribedBoards =
+      if (session.requireLogin() != null) {
+        execute(api.subscribedBoards(), NgaBoardCategoryParser::parseBoards).getOrDefault(emptyList())
+      } else {
+        emptyList()
+      }
+    val legacySubscribedSection =
+      remoteSections.find {
+        it.name.contains("收藏") || it.name.contains("订阅")
+      }
+    return subscribedBoards.ifEmpty { legacySubscribedSection?.groups.orEmpty().flatMap { it.boards } }
+  }
+
+  private suspend fun fetchRemoteSections(session: LoginSessionData?): Result<List<com.yanga.client.api.NgaBoardSection>> {
+    val api = api(session)
+    val directoryResult = execute(api.fullForumDirectory(), NgaBoardCategoryParser::parseSections)
+    if (directoryResult.isSuccess) {
+      val sections = directoryResult.getOrThrow().filterLegacySubscribedSection()
+      if (sections.isNotEmpty()) return Result.success(sections)
+    }
+
+    val categoryResult = execute(api.remoteBoardCategories(), NgaBoardCategoryParser::parseSections)
+    if (categoryResult.isSuccess) {
+      return Result.success(categoryResult.getOrThrow().filterLegacySubscribedSection())
+    }
+
+    return directoryResult.takeIf { it.isFailure } ?: categoryResult
+  }
+
+  private fun List<com.yanga.client.api.NgaBoardSection>.filterLegacySubscribedSection(): List<com.yanga.client.api.NgaBoardSection> {
+    val legacySubscribedSection =
+      find {
+        it.name.contains("收藏") || it.name.contains("订阅")
+      }
+    return filter { it != legacySubscribedSection }
   }
 
   override suspend fun loadMessages(session: LoginSessionData?): Result<MessagesReadData> = withContext(Dispatchers.IO) {
@@ -128,13 +184,19 @@ class DefaultNgaReadOnlyRepository(
     val notifications = execute(api.notifications(), NgaAccountParser::parseNotifications)
     if (notifications.isFailure) return@withContext Result.failure(notifications.exceptionOrNull()!!)
 
-    val counters = execute(api.profile(mapOf("uid" to loginSession.uid)), NgaAccountParser::parseProfileCounters)
-    if (counters.isFailure) return@withContext Result.failure(counters.exceptionOrNull()!!)
+    val profile =
+      execute(
+        api.profile(mapOf("uid" to loginSession.uid)),
+      ) { raw -> NgaAccountParser.parseProfile(raw, loginSession.uid) }
+    if (profile.isFailure) return@withContext Result.failure(profile.exceptionOrNull()!!)
+
+    val profileData = profile.getOrThrow()
 
     Result.success(
       ProfileReadData(
-        counters = counters.getOrThrow(),
+        counters = profileData.counters,
         notifications = notifications.getOrThrow(),
+        avatarUrl = profileData.avatarUrl,
       ),
     )
   }
@@ -171,11 +233,6 @@ class DefaultNgaReadOnlyRepository(
   private fun LoginSessionData?.requireLogin(): LoginSessionData? =
     this?.takeIf { it.cookie.isNotBlank() }
 
-  private fun boardCacheKey(session: LoginSessionData?): String {
-    val uid = session?.uid.orEmpty().ifBlank { "guest" }
-    return "${baseUrl.trimEnd('/')}_$uid"
-  }
-
   private fun <T> execute(request: NgaRequest, parser: (String) -> T): Result<T> =
     runCatching {
       val response = transport.execute(request).getOrThrow()
@@ -187,4 +244,8 @@ class DefaultNgaReadOnlyRepository(
 
   private fun NgaHttpResponse.toException(request: NgaRequest): NgaApiException =
     NgaApiException("NGA request failed with HTTP $code for ${request.url}")
+
+  private companion object {
+    val INCREMENTAL_REQUEST_INTERVAL_MS = TimeUnit.DAYS.toMillis(1)
+  }
 }

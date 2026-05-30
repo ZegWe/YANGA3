@@ -23,7 +23,7 @@ internal fun BoardListRow(board: BoardPreview, onClick: () -> Unit, modifier: Mo
     horizontalArrangement = Arrangement.spacedBy(12.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    Marker(text = board.marker, iconUrl = board.iconUrl)
+    Marker(text = board.marker, iconUrl = board.iconUrl, boardId = board.id)
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
       Text(text = board.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
       Text(

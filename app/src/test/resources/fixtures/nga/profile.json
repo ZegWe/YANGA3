@@ -1,5 +1,10 @@
 {
   "data": {
+    "0": {
+      "uid": "42",
+      "username": "测试",
+      "avatar": "https://img.nga.178.com/avatars/2002/f61/d13/003/64044897_0.jpg?93"
+    },
     "counters": {
       "favorite_topics": "5",
       "subscribed_boards": 3,
