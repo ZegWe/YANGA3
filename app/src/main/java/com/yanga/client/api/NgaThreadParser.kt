@@ -47,16 +47,17 @@ object NgaThreadParser {
 
   private fun JSONObject.toPost(topic: JSONObject, users: JSONObject): NgaThreadPost {
     val authorId = stringValue("authorid")
-    val user = users.optJSONObject(authorId)
+    val user = lookupUser(users, authorId)
     val author = resolveAuthorName(user)
     val avatarRaw = user?.nullableStringValue("avatar") ?: nullableStringValue("avatar")
+    val memberId = user?.nullableStringValue("memberid", "gid", "groupid")
     return NgaThreadPost(
       pid = stringValue("pid"),
       tid = stringValue("tid").ifBlank { topic.stringValue("tid") },
       fid = stringValue("fid").ifBlank { topic.stringValue("fid") },
       authorId = authorId,
       author = author,
-      authorAvatarUrl = NgaAvatarUrls.resolve(avatarRaw, authorId),
+      authorAvatarUrl = NgaAvatarUrls.resolveUserAvatar(avatarRaw, authorId, memberId),
       subject = stringValue("subject").ifBlank { topic.stringValue("subject") },
       content = stringValue("content"),
       lou = intValue("lou"),

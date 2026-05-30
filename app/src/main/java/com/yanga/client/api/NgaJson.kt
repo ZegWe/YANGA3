@@ -69,6 +69,23 @@ internal fun JSONObject.booleanValue(vararg keys: String): Boolean =
 internal fun JSONObject.objectListValue(vararg keys: String): List<JSONObject> =
   firstValue(*keys).toObjectList()
 
+internal fun JSONObject.lookupUser(users: JSONObject?, userId: String?): JSONObject? {
+  if (users == null || userId.isNullOrBlank()) return null
+
+  users.optJSONObject(userId)?.let { return it }
+
+  userId.toLongOrNull()?.let { numericId ->
+    users.optJSONObject(numericId.toString())?.let { return it }
+  }
+
+  for (key in users.keys()) {
+    val candidate = users.optJSONObject(key) ?: continue
+    if (candidate.stringValue("uid") == userId) return candidate
+  }
+
+  return null
+}
+
 internal fun Any?.toObjectList(): List<JSONObject> =
   when (this) {
     is JSONArray -> (0 until length()).mapNotNull { index -> optJSONObject(index) }

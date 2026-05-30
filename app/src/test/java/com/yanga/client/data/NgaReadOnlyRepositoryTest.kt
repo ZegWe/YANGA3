@@ -38,6 +38,7 @@ class NgaReadOnlyRepositoryTest {
             "page" to "1",
             "lite" to "js",
             "noprefix" to "",
+            "user" to "1",
             "recommend" to "1",
             "order_by" to "postdatedesc",
             "user" to "1",

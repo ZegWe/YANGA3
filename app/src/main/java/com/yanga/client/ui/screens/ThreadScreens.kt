@@ -46,7 +46,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yanga.client.data.image.imageCacheManager
+import androidx.compose.material3.HorizontalDivider
 import com.yanga.client.ui.components.CachedPostImage
+import com.yanga.client.ui.components.PrefetchUserAvatars
+import com.yanga.client.ui.components.TopicListItem
 import com.yanga.client.ui.components.UserAvatar
 import com.yanga.client.ui.content.PostContentPart
 import com.yanga.client.ui.content.PostContentParser
@@ -127,8 +130,11 @@ internal fun BoardTopicListScreen(
       TonalCard {
         when (state.topics) {
           is LoadableUiState.Content -> {
-            for (topic in state.topics.value) {
-              TopicRow(topic = topic, onClick = { onTopicClick(topic) })
+            state.topics.value.forEachIndexed { index, topic ->
+              TopicListItem(topic = topic, onClick = { onTopicClick(topic) })
+              if (index < state.topics.value.lastIndex) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+              }
             }
           }
           else -> {
@@ -321,14 +327,13 @@ private fun PostItem(post: PostPreview, modifier: Modifier = Modifier) {
 
 @Composable
 private fun PrefetchPostImages(posts: List<PostPreview>) {
+  PrefetchUserAvatars(posts.map { it.authorAvatarUrl })
+
   val context = LocalContext.current
   val imageUrls =
     remember(posts) {
-      buildList {
-        posts.mapNotNullTo(this) { it.authorAvatarUrl?.takeIf(String::isNotBlank) }
-        posts.flatMap { post ->
-          PostContentParser.parse(post.content).filterIsInstance<PostContentPart.Image>().map { it.url }
-        }
+      posts.flatMap { post ->
+        PostContentParser.parse(post.content).filterIsInstance<PostContentPart.Image>().map { it.url }
       }.distinct()
     }
 

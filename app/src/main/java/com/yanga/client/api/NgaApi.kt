@@ -37,10 +37,10 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
       put("page", page.toString())
       put("lite", "js")
       put("noprefix", "")
+      put("user", "1")
       if (recommend) {
         put("recommend", "1")
         put("order_by", "postdatedesc")
-        put("user", "1")
       }
     },
   )

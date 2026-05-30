@@ -1,6 +1,13 @@
 window.script_muti_get_var_store={
   "data": {
     "__PAGE": "2",
+    "__U": {
+      "42": {
+        "uid": 42,
+        "username": "作者A",
+        "avatar": ".a/12345_67890.jpg?1234567890"
+      }
+    },
     "__T": {
       "1001": {
         "tid": 1001,

@@ -4,11 +4,10 @@ data class TopicPreview(
   val id: String,
   val title: String,
   val board: String,
-  val replies: String,
+  val replyCount: Int,
   val lastActive: String,
   val authorName: String = "",
-  val authorAvatarUrl: String? = null,
-  val authorInitial: String,
+  val authorId: String = "",
 )
 
 data class HomeUiState(

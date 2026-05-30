@@ -151,10 +151,10 @@ class MainContentViewModelTest {
         id = "1001",
         title = "Read model wiring",
         board = "开发测试",
-        replies = "12 replies",
+        replyCount = 12,
         lastActive = "11-15 06:13",
         authorName = "测试员",
-        authorInitial = "测",
+        authorId = "42",
       ),
       topicSummary().toPreview(),
     )
@@ -291,6 +291,7 @@ private fun topicSummary(): NgaTopicSummary =
     boardId = "7",
     boardName = "开发测试",
     title = "Read model wiring",
+    authorId = "42",
     authorName = "测试员",
     replyCount = 12,
     lastPostAt = 1_700_000_000,
@@ -370,10 +371,10 @@ private fun topicPreview(): TopicPreview =
     id = "1001",
     title = "Read model wiring",
     board = "开发测试",
-    replies = "12 replies",
+    replyCount = 12,
     lastActive = "11-15 06:13",
     authorName = "测试员",
-    authorInitial = "测",
+    authorId = "42",
   )
 
 private fun messagePreview(): MessagePreview =

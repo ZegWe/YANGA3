@@ -64,9 +64,8 @@ class MainUiModelsContractTest {
           id = "1001",
           title = "Topic",
           board = "Board",
-          replies = "3 replies",
+          replyCount = 3,
           lastActive = "now",
-          authorInitial = "A",
         ),
       )
     val sections =

@@ -35,6 +35,7 @@ class NgaApiTest {
     assertEquals("2", request.query["page"])
     assertEquals("js", request.query["lite"])
     assertTrue(request.query.containsKey("noprefix"))
+    assertEquals("1", request.query["user"])
     assertEquals("%E6%B5%8B%E8%AF%95", request.query["key"])
   }
 
@@ -167,6 +168,7 @@ class NgaApiTest {
     assertEquals("1", authorSearch.query["favor"])
     assertEquals("1", authorSearch.query["content"])
     assertEquals("%D5%C5%C8%FD", authorSearch.query["author"])
+    assertEquals("1", authorSearch.query["user"])
     assertFalse(authorSearch.query.containsKey("fid"))
 
     val stidSearch = api.topicList(stid = 99, fid = 7, fidGroup = "user", recommend = true)

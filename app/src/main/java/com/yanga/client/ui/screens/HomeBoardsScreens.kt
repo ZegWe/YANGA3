@@ -46,7 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import kotlin.math.abs
+import com.yanga.client.ui.components.TopicListItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -181,7 +181,7 @@ internal fun BoardsScreen(
           selected = selectedTabIndex == index,
           onClick = {
             selectedCategoryIndex = index
-            navigateToCategoryTab(scope, pagerState, selectedTabIndex, index)
+            navigateToCategoryTab(scope, pagerState, index)
           },
           text = { Text(text = label) },
         )
@@ -330,15 +330,10 @@ private fun MutableList<BoardCategoryItem>.addFavoriteBoardItems(
 private fun navigateToCategoryTab(
   scope: CoroutineScope,
   pagerState: PagerState,
-  fromIndex: Int,
   toIndex: Int,
 ) {
   scope.launch {
-    if (abs(toIndex - fromIndex) <= 1) {
-      pagerState.animateScrollToPage(toIndex)
-    } else {
-      pagerState.scrollToPage(toIndex)
-    }
+    pagerState.animateScrollToPage(toIndex)
   }
 }
 
@@ -383,8 +378,14 @@ private fun TopicListState(
         if (state.value.isEmpty()) {
           Text(text = "No active discussions", style = MaterialTheme.typography.bodyMedium)
         } else {
-          state.value.forEach { topic ->
-            TopicRow(topic = topic, onClick = { onTopicClick(topic) })
+          state.value.forEachIndexed { index, topic ->
+            TopicListItem(
+              topic = topic,
+              onClick = { onTopicClick(topic) },
+            )
+            if (index < state.value.lastIndex) {
+              HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+            }
           }
         }
       }

@@ -26,10 +26,12 @@ object NgaTopicListParser {
     if (topicId.isBlank()) return null
 
     val authorId = nullableStringValue("authorid", "author_id", "authorId", "uid")
-    val user = authorId?.let { users?.optJSONObject(it) }
+    val user = lookupUser(users, authorId)
     val authorName =
       nullableStringValue("author", "username", "author_name", "authorName")
         ?: user?.nullableStringValue("username", "nickname")
+    val avatarRaw = user?.nullableStringValue("avatar") ?: nullableStringValue("avatar")
+    val memberId = user?.nullableStringValue("memberid", "gid", "groupid")
 
     return NgaTopicSummary(
       topicId = topicId,
@@ -38,7 +40,7 @@ object NgaTopicListParser {
       title = stringValue("subject", "title"),
       authorId = authorId,
       authorName = authorName,
-      authorAvatarUrl = authorId?.let { id -> NgaAvatarUrls.resolve(user?.nullableStringValue("avatar"), id) },
+      authorAvatarUrl = NgaAvatarUrls.resolveUserAvatar(avatarRaw, authorId.orEmpty(), memberId),
       replyCount = intValue("replies", "reply_count", "replyCount"),
       lastPostAt = nullableLongValue("lastpost", "last_post_at", "lastPostAt", "postdatetimestamp", "postdate"),
       isFavorited = booleanValue("favor", "is_favorited", "isFavorited", "favorited"),

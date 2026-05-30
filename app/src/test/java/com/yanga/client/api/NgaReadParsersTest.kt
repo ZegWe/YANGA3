@@ -21,6 +21,7 @@ class NgaReadParsersTest {
         title = "公开主题",
         authorId = "42",
         authorName = "作者A",
+        authorAvatarUrl = "https://img4.nga.178.com/avatars/2002/039/003/000/12345_67890.jpg?1234567890",
         replyCount = 12,
         lastPostAt = 1770001111L,
         isFavorited = true,

@@ -8,10 +8,9 @@ internal fun NgaTopicSummary.toPreview(): TopicPreview {
     id = topicId,
     title = title,
     board = boardName,
-    replies = "$replyCount replies",
+    replyCount = replyCount,
     lastActive = lastPostAt?.toUiDateTimeString() ?: "",
     authorName = displayName,
-    authorAvatarUrl = authorAvatarUrl,
-    authorInitial = displayName.initialOrFallback(),
+    authorId = authorId.orEmpty(),
   )
 }

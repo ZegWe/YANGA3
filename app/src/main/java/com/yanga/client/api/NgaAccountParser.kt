@@ -25,12 +25,16 @@ object NgaAccountParser {
     )
   }
 
-  fun parseProfileAvatar(raw: String, uid: String = ""): String? {
+  fun parseProfileAvatar(raw: String, uid: String = ""): String? =
+    parsePublicUserAvatar(raw, uid)
+
+  fun parsePublicUserAvatar(raw: String, uid: String = ""): String? {
     val root = ngaJsonRoot(raw)
     val data = root.objectValue("data") ?: root
     val profile = data.objectValue("0") ?: data
-    val avatarRaw = profile.nullableStringValue("avatar")
-    return NgaAvatarUrls.resolve(avatarRaw, uid.ifBlank { profile.stringValue("uid") })
+    val resolvedUid = uid.ifBlank { profile.stringValue("uid") }
+    val memberId = profile.nullableStringValue("memberid", "gid", "groupid")
+    return NgaAvatarUrls.resolveUserAvatar(profile.nullableStringValue("avatar"), resolvedUid, memberId)
   }
 
   fun parseProfile(raw: String, uid: String = ""): NgaProfileParseResult =

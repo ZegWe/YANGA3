@@ -7,6 +7,19 @@ object NgaAvatarUrls {
   private val RELATIVE_AVATAR =
     Regex("""^\.a/(\d+)_(\d+)\.(jpg|png|gif)\?(\d+)""", RegexOption.IGNORE_CASE)
 
+  fun resolveUserAvatar(
+    raw: String?,
+    userId: String = "",
+    memberId: String? = null,
+  ): String? =
+    resolve(raw, userId) ?: defaultMemberAvatar(memberId)
+
+  fun defaultMemberAvatar(memberId: String?): String? {
+    val id = memberId?.trim()?.toIntOrNull() ?: return null
+    if (id <= 0) return null
+    return "${NgaStaticUrls.emoticonBaseUrl}ac$id.png"
+  }
+
   fun resolve(raw: String?, authorId: String = ""): String? {
     val value = raw?.trim().orEmpty()
     if (value.isBlank()) return null
