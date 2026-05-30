@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<resources>
+    <!-- Activity slide transition; was config_mediumAnimTime (~300ms). -->
+    <integer name="activity_transition_duration">150</integer>
+</resources>

@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.yanga.client.ui.BoardContentViewModel
 import com.yanga.client.ui.BoardPreview
 import com.yanga.client.ui.BoardTopicListScreen
+import com.yanga.client.ui.BoardTopicListUiState
 import com.yanga.client.ui.navigation.HomeActivityIntents
 import com.yanga.client.ui.toData
 
@@ -29,31 +30,37 @@ class BoardTopicListActivity : YangaComposeActivity() {
       boardContentViewModel.openBoard(sessionData, destination)
     }
 
-    val boardState = boardContentState?.takeIf { it.fid == destination.id }
-    if (boardState != null) {
-      BoardTopicListScreen(
-        state = boardState,
-        onBack = { backDispatcher?.onBackPressed() },
-        onTopicClick = { topic ->
-          context.startActivity(HomeActivityIntents.thread(context, topic))
-        },
-        onToggleFavorite = {
-          val board =
-            BoardPreview(
-              id = boardState.fid,
-              name = boardState.boardName,
-              metadata = "fid: ${boardState.fid}",
-              marker = boardState.boardName.take(1),
-              iconUrl = boardState.iconUrl,
-              category = boardState.category,
-              isFavorite = boardState.isFavorite,
-            )
-          app.boardsCatalog.toggleLocalFavorite(board)
-          boardContentViewModel.setFavorite(!boardState.isFavorite)
-        },
-        modifier = Modifier.fillMaxSize(),
-      )
-    }
+    val boardState =
+      boardContentState?.takeIf { it.fid == destination.id }
+        ?: BoardTopicListUiState(
+          boardName = destination.name,
+          fid = destination.id,
+          iconUrl = destination.iconUrl,
+          category = destination.category,
+          isFavorite = destination.isFavorite,
+        )
+    BoardTopicListScreen(
+      state = boardState,
+      onBack = { backDispatcher?.onBackPressed() },
+      onTopicClick = { topic ->
+        context.startActivity(HomeActivityIntents.thread(context, topic))
+      },
+      onToggleFavorite = {
+        val board =
+          BoardPreview(
+            id = boardState.fid,
+            name = boardState.boardName,
+            metadata = "fid: ${boardState.fid}",
+            marker = boardState.boardName.take(1),
+            iconUrl = boardState.iconUrl,
+            category = boardState.category,
+            isFavorite = boardState.isFavorite,
+          )
+        app.boardsCatalog.toggleLocalFavorite(board)
+        boardContentViewModel.setFavorite(!boardState.isFavorite)
+      },
+      modifier = Modifier.fillMaxSize(),
+    )
   }
 
   companion object {

@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.yanga.client.ui.ThreadContentViewModel
 import com.yanga.client.ui.ThreadReadingScreen
+import com.yanga.client.ui.ThreadUiState
 import com.yanga.client.ui.navigation.HomeActivityIntents
 import com.yanga.client.ui.toData
 
@@ -26,14 +27,14 @@ class ThreadActivity : YangaComposeActivity() {
       threadContentViewModel.openThread(sessionData, destination)
     }
 
-    val threadState = threadContentState?.takeIf { threadContentViewModel.matchesThread(destination.id) }
-    if (threadState != null) {
-      ThreadReadingScreen(
-        state = threadState,
-        onBack = { backDispatcher?.onBackPressed() },
-        modifier = Modifier.fillMaxSize(),
-      )
-    }
+    val threadState =
+      threadContentState?.takeIf { threadContentViewModel.matchesThread(destination.id) }
+        ?: ThreadUiState(title = destination.title)
+    ThreadReadingScreen(
+      state = threadState,
+      onBack = { backDispatcher?.onBackPressed() },
+      modifier = Modifier.fillMaxSize(),
+    )
   }
 
   companion object {
