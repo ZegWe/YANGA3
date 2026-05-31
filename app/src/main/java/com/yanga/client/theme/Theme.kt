@@ -12,7 +12,7 @@ import com.materialkolor.rememberDynamicColorScheme
 @Composable
 fun YangaTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
-  dynamicColor: Boolean = false,
+  dynamicColor: Boolean = true,
   content: @Composable () -> Unit,
 ) {
   val colorScheme =
