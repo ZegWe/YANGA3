@@ -76,6 +76,41 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
 
   fun subscribedBoards(): NgaRequest = get("nuke.php", linkedMapOf("__lib" to "user_option", "__act" to "get", "type" to "1", "__output" to "8"))
 
+  fun subBoardFilterGet(parentFid: String): NgaRequest =
+    get(
+      path = "nuke.php",
+      query =
+        linkedMapOf(
+          "__lib" to "user_option",
+          "__act" to "get",
+          "raw" to "3",
+          "type" to "1",
+          "info" to "add_to_block_tids",
+          "fid" to parentFid,
+          "__output" to "8",
+        ),
+    )
+
+  fun subBoardFilterSet(parentFid: String, blockId: String, visible: Boolean): NgaRequest {
+    val action = if (visible) "del" else "add"
+    return NgaRequest(
+      method = NgaHttpMethod.POST,
+      url = "${session.normalizedBaseUrl}/nuke.php",
+      query =
+        linkedMapOf(
+          "__lib" to "user_option",
+          "__act" to "set",
+          "raw" to "3",
+          "type" to "1",
+          "info" to "add_to_block_tids",
+          "fid" to parentFid,
+          "__output" to "8",
+          action to blockId,
+        ),
+      headers = commonHeaders(),
+    )
+  }
+
   fun loginPage(): NgaRequest = NgaRequest(
     method = NgaHttpMethod.GET,
     url = "https://bbs.nga.cn/nuke.php",

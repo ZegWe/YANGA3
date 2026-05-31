@@ -10,7 +10,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.yanga.client.ui.BoardContentViewModel
+import com.yanga.client.ui.BoardDestination
 import com.yanga.client.ui.BoardPreview
+import com.yanga.client.ui.SubBoardOption
 import com.yanga.client.ui.BoardTopicListScreen
 import com.yanga.client.ui.BoardTopicListUiState
 import com.yanga.client.ui.navigation.HomeActivityIntents
@@ -22,7 +24,10 @@ class BoardTopicListActivity : YangaComposeActivity() {
     val context = LocalContext.current
     val destination = remember { HomeActivityIntents.boardDestination(intent) }
     val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
-    val boardContentViewModel = remember(app.repository) { BoardContentViewModel(app.repository) }
+    val boardContentViewModel =
+      remember(app.repository, app.subBoardFilterStore) {
+        BoardContentViewModel(app.repository, app.subBoardFilterStore)
+      }
     val boardContentState by boardContentViewModel.state.collectAsState()
     val sessionData = loginSession?.toData()
 
@@ -59,8 +64,29 @@ class BoardTopicListActivity : YangaComposeActivity() {
         app.boardsCatalog.toggleLocalFavorite(board)
         boardContentViewModel.setFavorite(!boardState.isFavorite)
       },
+      onSelectAllSubBoards = boardContentViewModel::selectAllSubBoards,
+      onSetSubBoardEnabled = boardContentViewModel::setSubBoardEnabled,
+      onOpenSubBoard = { subBoard -> openSubBoard(context, subBoard, boardState) },
+      onTopicFilterChange = boardContentViewModel::setTopicFilter,
+      onRefresh = boardContentViewModel::refresh,
       modifier = Modifier.fillMaxSize(),
     )
+  }
+
+  private fun openSubBoard(
+    context: android.content.Context,
+    subBoard: SubBoardOption,
+    parent: BoardTopicListUiState,
+  ) {
+    val destination =
+      BoardDestination(
+        id = subBoard.id,
+        name = subBoard.name,
+        iconUrl = parent.iconUrl,
+        category = parent.category,
+        isFavorite = false,
+      )
+    context.startActivity(HomeActivityIntents.boardTopics(context, destination))
   }
 
   companion object {

@@ -11,12 +11,23 @@ data class NgaTopicSummary(
   val replyCount: Int = 0,
   val lastPostAt: Long? = null,
   val isFavorited: Boolean = false,
+  val subForumFid: String? = null,
+  val categoryTopicId: String? = null,
+)
+
+data class NgaSubBoard(
+  val id: String,
+  val name: String,
+  val valueId: String = id.removePrefix("t"),
+  val subscribeId: String? = null,
 )
 
 data class NgaTopicList(
   val topics: List<NgaTopicSummary>,
   val page: Int,
   val hasNextPage: Boolean,
+  val subBoards: List<NgaSubBoard> = emptyList(),
+  val boardFid: String = "",
 )
 
 data class NgaBoardSummary(

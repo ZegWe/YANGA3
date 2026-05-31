@@ -1,12 +1,12 @@
 package com.yanga.client.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -51,6 +51,37 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 private const val BOARD_GRID_COLUMNS = 3
+
+/** Matches [androidx.compose.material3.TopAppBar] content row height without status-bar insets. */
+private val BoardsScreenHeaderHeight = 64.dp
+
+@Composable
+private fun BoardsScreenHeader(
+  onSearchClick: () -> Unit = {},
+  modifier: Modifier = Modifier,
+) {
+  Box(
+    modifier = modifier
+      .fillMaxWidth()
+      .height(BoardsScreenHeaderHeight),
+  ) {
+    Text(
+      text = "YANGA",
+      modifier = Modifier.align(Alignment.Center),
+      style = MaterialTheme.typography.titleLarge,
+      fontWeight = FontWeight.SemiBold,
+    )
+    IconButton(
+      modifier = Modifier.align(Alignment.CenterEnd),
+      onClick = onSearchClick,
+    ) {
+      Icon(
+        imageVector = Icons.Outlined.Search,
+        contentDescription = "搜索",
+      )
+    }
+  }
+}
 
 private sealed interface BoardCategoryItem {
   val key: String
@@ -134,27 +165,7 @@ internal fun BoardsScreen(
   Column(
     modifier = modifier.fillMaxSize(),
   ) {
-    Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 24.dp, vertical = 0.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      Text(
-        text = "YANGA",
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.SemiBold,
-      )
-      Spacer(modifier = Modifier.weight(1f))
-      IconButton(
-        onClick = {},
-      ) {
-        Icon(
-          imageVector = Icons.Outlined.Search,
-          contentDescription = "搜索",
-        )
-      }
-    }
+    BoardsScreenHeader()
 
     PrimaryScrollableTabRow(
       selectedTabIndex = selectedTabIndex,
@@ -170,7 +181,7 @@ internal fun BoardsScreen(
         TabRowDefaults.PrimaryIndicator(
           modifier = Modifier.tabIndicatorOffset(
             selectedTabIndex = selectedTabIndex,
-            matchContentSize = false,
+            matchContentSize = true,
           ),
           color = MaterialTheme.colorScheme.primary,
         )

@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
@@ -15,6 +17,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -22,10 +25,12 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -33,6 +38,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,6 +55,7 @@ import com.yanga.client.data.image.imageCacheManager
 import androidx.compose.material3.HorizontalDivider
 import com.yanga.client.ui.components.CachedPostImage
 import com.yanga.client.ui.components.PrefetchUserAvatars
+import com.yanga.client.ui.components.SubBoardDirectorySheet
 import com.yanga.client.ui.components.TopicListItem
 import com.yanga.client.ui.components.UserAvatar
 import com.yanga.client.ui.content.PostContentPart
@@ -56,15 +63,23 @@ import com.yanga.client.ui.content.PostContentParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun BoardTopicListScreen(
   state: BoardTopicListUiState,
   onBack: () -> Unit,
   onTopicClick: (TopicPreview) -> Unit,
   onToggleFavorite: () -> Unit,
+  onSelectAllSubBoards: () -> Unit = {},
+  onSetSubBoardEnabled: (String, Boolean) -> Unit = { _, _ -> },
+  onOpenSubBoard: (SubBoardOption) -> Unit = {},
+  onTopicFilterChange: (BoardTopicFilter) -> Unit = {},
+  onRefresh: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
+  var showSubBoardSheet by remember { mutableStateOf(false) }
+  var menuExpanded by remember { mutableStateOf(false) }
+  val subBoardOptions = (state.subBoards as? LoadableUiState.Content)?.value.orEmpty()
   Scaffold(
     modifier = modifier.fillMaxSize(),
     topBar = {
@@ -101,6 +116,30 @@ internal fun BoardTopicListScreen(
               contentDescription = if (state.isFavorite) "Unfavorite board" else "Favorite board",
             )
           }
+          IconButton(onClick = {}) {
+            Icon(
+              imageVector = Icons.Outlined.Search,
+              contentDescription = "搜索",
+            )
+          }
+          Box {
+            IconButton(onClick = { menuExpanded = true }) {
+              Icon(Icons.Filled.MoreVert, contentDescription = "目录")
+            }
+            DropdownMenu(
+              expanded = menuExpanded,
+              onDismissRequest = { menuExpanded = false },
+            ) {
+              DropdownMenuItem(
+                text = { Text("子版块") },
+                enabled = subBoardOptions.size >= 2,
+                onClick = {
+                  menuExpanded = false
+                  showSubBoardSheet = true
+                },
+              )
+            }
+          }
         }
       )
     },
@@ -113,36 +152,128 @@ internal fun BoardTopicListScreen(
     Column(
       modifier = Modifier
         .padding(paddingValues)
-        .fillMaxSize()
-        .verticalScroll(rememberScrollState())
-        .padding(16.dp),
-      verticalArrangement = Arrangement.spacedBy(16.dp)
+        .fillMaxSize(),
     ) {
-      SearchPill(text = "Search in ${state.boardName}")
-      FilterChipRow(labels = listOf("All", "Essence", "Latest reply", "Favorites"))
-
-      SectionHeader(title = "Pinned topics")
-      TonalCard {
-        Text("Pinned topics would go here", style = MaterialTheme.typography.bodyMedium)
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+      ) {
+        FilterChipRow(
+          labels = listOf("全部", "精华"),
+          selectedIndex = if (state.selectedTopicFilter == BoardTopicFilter.Recommend) 1 else 0,
+          onSelectedIndexChange = { index ->
+            onTopicFilterChange(if (index == 1) BoardTopicFilter.Recommend else BoardTopicFilter.All)
+          },
+        )
       }
 
-      SectionHeader(title = "Topics")
-      TonalCard {
-        when (state.topics) {
-          is LoadableUiState.Content -> {
-            state.topics.value.forEachIndexed { index, topic ->
-              TopicListItem(topic = topic, onClick = { onTopicClick(topic) })
-              if (index < state.topics.value.lastIndex) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-              }
+      PullToRefreshBox(
+        isRefreshing = state.isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize(),
+      ) {
+        when (val topics = state.topics) {
+          LoadableUiState.Loading -> {
+            Box(
+              modifier = Modifier.fillMaxSize(),
+              contentAlignment = Alignment.Center,
+            ) {
+              LoadingIndicator(modifier = Modifier.size(64.dp))
             }
           }
           else -> {
-            Text("No topics available", style = MaterialTheme.typography.bodyMedium)
+            LazyColumn(
+              modifier = Modifier.fillMaxSize(),
+              contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
+              verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+              when (topics) {
+                is LoadableUiState.Content -> {
+                  if (topics.value.isEmpty()) {
+                    item(key = "topics-empty") {
+                      TonalCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                          Text(
+                            text =
+                              if (state.selectedSubBoardIds.isNotEmpty()) {
+                                "No topics match the current sub-board filter"
+                              } else {
+                                "No topics available"
+                              },
+                            style = MaterialTheme.typography.bodyMedium,
+                          )
+                          if (state.selectedSubBoardIds.isNotEmpty()) {
+                            TextButton(onClick = onSelectAllSubBoards) {
+                              Text("Show all sub-boards")
+                            }
+                          }
+                        }
+                      }
+                    }
+                  } else {
+                    item(key = "topics-card") {
+                      TonalCard {
+                        Column {
+                          topics.value.forEachIndexed { index, topic ->
+                            TopicListItem(topic = topic, onClick = { onTopicClick(topic) })
+                            if (index < topics.value.lastIndex) {
+                              HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                is LoadableUiState.Empty -> {
+                  item(key = "topics-empty-state") {
+                    TonalCard {
+                      Text(topics.message, style = MaterialTheme.typography.bodyMedium)
+                    }
+                  }
+                }
+                is LoadableUiState.Error -> {
+                  item(key = "topics-error") {
+                    TonalCard {
+                      Text(
+                        text = topics.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                      )
+                    }
+                  }
+                }
+                LoadableUiState.LoginRequired -> {
+                  item(key = "topics-login-required") {
+                    TonalCard {
+                      Text("Sign in to load topics", style = MaterialTheme.typography.bodyMedium)
+                    }
+                  }
+                }
+                LoadableUiState.Loading -> Unit
+              }
+            }
           }
         }
       }
     }
+  }
+
+  if (showSubBoardSheet && subBoardOptions.size >= 2) {
+    SubBoardDirectorySheet(
+      boardName = state.boardName,
+      options = subBoardOptions,
+      selectedIds = state.selectedSubBoardIds,
+      onDismiss = { showSubBoardSheet = false },
+      onSetSubBoardEnabled = onSetSubBoardEnabled,
+      onSelectAllSubBoards = onSelectAllSubBoards,
+      onOpenSubBoard = { option ->
+        showSubBoardSheet = false
+        onOpenSubBoard(option)
+      },
+    )
   }
 }
 

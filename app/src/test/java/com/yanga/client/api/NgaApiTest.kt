@@ -177,6 +177,10 @@ class NgaApiTest {
     assertEquals("1", stidSearch.query["recommend"])
     assertEquals("postdatedesc", stidSearch.query["order_by"])
     assertEquals("1", stidSearch.query["user"])
+
+    val subBoardFilter = api.topicList(fid = 7, fidGroup = "448,-692072")
+    assertEquals("7", subBoardFilter.query["fid"])
+    assertEquals("448,-692072", subBoardFilter.query["fidgroup"])
   }
 
   @Test
@@ -340,6 +344,26 @@ class NgaApiTest {
     assertEquals("read", read.query["act"])
     assertEquals("abc", read.query["mid"])
     assertEquals("4", read.query["page"])
+  }
+
+  @Test
+  fun subBoardFilterGetAndSetUseBlockListContract() {
+    val get = api.subBoardFilterGet(parentFid = "-7861121")
+    assertEquals(NgaHttpMethod.GET, get.method)
+    assertEquals("user_option", get.query["__lib"])
+    assertEquals("get", get.query["__act"])
+    assertEquals("1", get.query["type"])
+    assertEquals("add_to_block_tids", get.query["info"])
+    assertEquals("-7861121", get.query["fid"])
+
+    val show = api.subBoardFilterSet(parentFid = "-7861121", blockId = "4654", visible = true)
+    assertEquals(NgaHttpMethod.POST, show.method)
+    assertEquals("del", show.query.keys.firstOrNull { it == "del" || it == "add" })
+    assertEquals("4654", show.query["del"])
+    assertEquals("add_to_block_tids", show.query["info"])
+
+    val hide = api.subBoardFilterSet(parentFid = "-7861121", blockId = "4654", visible = false)
+    assertEquals("4654", hide.query["add"])
   }
 
   @Test

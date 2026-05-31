@@ -1,5 +1,6 @@
 package com.yanga.client.data
 
+import android.util.Log
 import com.yanga.client.api.NgaAccountParser
 import com.yanga.client.api.NgaApi
 import com.yanga.client.api.NgaApiException
@@ -12,8 +13,10 @@ import com.yanga.client.api.NgaRequest
 import com.yanga.client.api.NgaSession
 import com.yanga.client.api.NgaThreadParser
 import com.yanga.client.api.NgaThreadRead
+import com.yanga.client.api.NgaSubBoardFilterParser
 import com.yanga.client.api.NgaTopicListParser
 import com.yanga.client.api.NgaTopicList
+import com.yanga.client.data.SubBoardVisibilityChange
 import com.yanga.client.data.boards.BoardListIncrementalMerger
 import com.yanga.client.data.boards.BoardSectionDirectory
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +34,13 @@ interface NgaReadOnlyRepository {
 
   suspend fun loadProfile(session: LoginSessionData?): Result<ProfileReadData>
 
-  suspend fun loadBoardTopics(session: LoginSessionData?, fid: String, page: Int = 1): Result<NgaTopicList>
+  suspend fun loadBoardTopics(
+    session: LoginSessionData?,
+    fid: String,
+    page: Int = 1,
+    fidGroup: String? = null,
+    recommend: Boolean = false,
+  ): Result<NgaTopicList>
 
   suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int = 1): Result<NgaThreadRead>
 
@@ -42,6 +51,14 @@ interface NgaReadOnlyRepository {
   suspend fun removeLocalFavoriteBoard(boardId: String): Result<Unit>
 
   suspend fun refreshIncrementalBoardDirectoryIfDue(): Boolean
+
+  suspend fun loadBlockedSubBoards(session: LoginSessionData?, parentFid: String): Result<Set<String>>
+
+  suspend fun applySubBoardVisibilityChanges(
+    session: LoginSessionData?,
+    parentFid: String,
+    changes: List<SubBoardVisibilityChange>,
+  ): Result<Unit>
 }
 
 class DefaultNgaReadOnlyRepository(
@@ -51,6 +68,7 @@ class DefaultNgaReadOnlyRepository(
   private val favoriteBoardsStore: FavoriteBoardsStore? = null,
   private val boardSectionDirectory: BoardSectionDirectory? = null,
 ) : NgaReadOnlyRepository {
+  private val logTag = "YangaSubBoardRpc"
   fun setBaseUrl(url: String) {
     baseUrl = url
   }
@@ -201,12 +219,60 @@ class DefaultNgaReadOnlyRepository(
     )
   }
 
-  override suspend fun loadBoardTopics(session: LoginSessionData?, fid: String, page: Int): Result<NgaTopicList> = withContext(Dispatchers.IO) {
-    execute(api(session).topicList(fid = fid.toIntOrNull(), page = page), NgaTopicListParser::parse)
+  override suspend fun loadBoardTopics(
+    session: LoginSessionData?,
+    fid: String,
+    page: Int,
+    fidGroup: String?,
+    recommend: Boolean,
+  ): Result<NgaTopicList> = withContext(Dispatchers.IO) {
+    val stid = fid.removePrefix("t").toIntOrNull().takeIf { fid.startsWith("t") }
+    val numericFid = if (fid.startsWith("t")) null else fid.toIntOrNull()
+    Log.d(logTag, "loadBoardTopics fid=$fid stid=$stid page=$page fidGroup=$fidGroup recommend=$recommend hasCookie=${!session?.cookie.isNullOrBlank()}")
+    execute(
+      api(session).topicList(fid = numericFid, stid = stid, page = page, fidGroup = fidGroup, recommend = recommend),
+      NgaTopicListParser::parse,
+    )
   }
 
   override suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int): Result<NgaThreadRead> = withContext(Dispatchers.IO) {
     execute(api(session).articleRead(tid = tid.toIntOrNull(), page = page), NgaThreadParser::parseRead)
+  }
+
+  override suspend fun loadBlockedSubBoards(session: LoginSessionData?, parentFid: String): Result<Set<String>> =
+    withContext(Dispatchers.IO) {
+      val loginSession = session.requireLogin() ?: return@withContext Result.success(emptySet())
+      val result = execute(api(loginSession).subBoardFilterGet(parentFid), NgaSubBoardFilterParser::parseBlockedIds)
+      Log.d(logTag, "subBoardFilterGet fid=$parentFid result=${result.getOrNull()} error=${result.exceptionOrNull()?.message}")
+      result
+    }
+
+  override suspend fun applySubBoardVisibilityChanges(
+    session: LoginSessionData?,
+    parentFid: String,
+    changes: List<SubBoardVisibilityChange>,
+  ): Result<Unit> = withContext(Dispatchers.IO) {
+    val loginSession = session.requireLogin() ?: return@withContext Result.failure(LoginRequiredException())
+    if (changes.isEmpty()) return@withContext Result.success(Unit)
+    runCatching {
+      val ngaApi = api(loginSession)
+      changes.forEach { change ->
+        val blockId = change.board.subscribeId ?: return@forEach
+        Log.d(logTag, "subBoardFilterSet fid=$parentFid blockId=$blockId visible=${change.visible}")
+        val responseText =
+          executeText(
+            ngaApi.subBoardFilterSet(
+              parentFid = parentFid,
+              blockId = blockId,
+              visible = change.visible,
+            ),
+          ).getOrThrow()
+        Log.d(logTag, "subBoardFilterSetResponse fid=$parentFid blockId=$blockId body=${responseText.take(200)}")
+        if (!responseText.contains("成功")) {
+          throw IllegalStateException("subBoardFilterSet failed for blockId=$blockId")
+        }
+      }
+    }
   }
 
   override suspend fun listLocalFavoriteBoards(): Result<List<LocalFavoriteBoard>> = withContext(Dispatchers.IO) {
@@ -235,11 +301,36 @@ class DefaultNgaReadOnlyRepository(
 
   private fun <T> execute(request: NgaRequest, parser: (String) -> T): Result<T> =
     runCatching {
+      if (request.url.contains("thread.php") || request.url.contains("nuke.php")) {
+        Log.d(logTag, "request ${request.method} ${requestDebugUrl(request)}")
+      }
+      val response = transport.execute(request).getOrThrow()
+      if (!response.isSuccessful) {
+        Log.e(logTag, "http failed code=${response.code} url=${requestDebugUrl(request)}")
+        throw response.toException(request)
+      }
+      parser(response.text)
+    }
+
+  private fun executeVoid(request: NgaRequest): Result<Unit> =
+    runCatching {
       val response = transport.execute(request).getOrThrow()
       if (!response.isSuccessful) {
         throw response.toException(request)
       }
-      parser(response.text)
+    }
+
+  private fun executeText(request: NgaRequest): Result<String> =
+    runCatching {
+      if (request.url.contains("thread.php") || request.url.contains("nuke.php")) {
+        Log.d(logTag, "request ${request.method} ${requestDebugUrl(request)}")
+      }
+      val response = transport.execute(request).getOrThrow()
+      if (!response.isSuccessful) {
+        Log.e(logTag, "http failed code=${response.code} url=${requestDebugUrl(request)}")
+        throw response.toException(request)
+      }
+      response.text
     }
 
   private fun NgaHttpResponse.toException(request: NgaRequest): NgaApiException =
@@ -247,5 +338,14 @@ class DefaultNgaReadOnlyRepository(
 
   private companion object {
     val INCREMENTAL_REQUEST_INTERVAL_MS = TimeUnit.DAYS.toMillis(1)
+  }
+
+  private fun requestDebugUrl(request: NgaRequest): String {
+    if (request.query.isEmpty()) return request.url
+    val query =
+      request.query.entries.joinToString("&") { (key, value) ->
+        if (value.isEmpty()) key else "$key=$value"
+      }
+    return "${request.url}?$query"
   }
 }

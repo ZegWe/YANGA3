@@ -6,10 +6,12 @@ object NgaTopicListParser {
   fun parse(raw: String): NgaTopicList {
     val root = ngaJsonRoot(raw)
     val data = root.objectValue("data") ?: root
+    val boardMeta = data.objectValue("__F")
+    val boardFid = boardMeta?.stringValue("fid", "id").orEmpty()
     val users = data.objectValue("__U")
     val topics =
       data.objectListValue("__T", "topics", "list").mapNotNull { topic ->
-        topic.toTopicSummary(users)
+        topic.toTopicSummary(users = users, mainBoardFid = boardFid)
       }
     val page = data.intValue("__PAGE", "page").takeIf { it > 0 } ?: 1
 
@@ -18,10 +20,34 @@ object NgaTopicListParser {
       page = page,
       hasNextPage = data.booleanValue("has_next_page", "hasNextPage", "next")
         || data.intValue("__ROWS", "rows", "total") > topics.size,
+      subBoards = parseSubBoards(data),
+      boardFid = boardFid,
     )
   }
 
-  private fun JSONObject.toTopicSummary(users: JSONObject?): NgaTopicSummary? {
+  private fun parseSubBoards(data: JSONObject): List<NgaSubBoard> {
+    val subForums = data.objectValue("__F")?.objectValue("sub_forums") ?: return emptyList()
+    return subForums.keys().asSequence().mapNotNull { key ->
+      val entry = subForums.optJSONObject(key) ?: return@mapNotNull null
+      val name =
+        entry.optString("1").ifBlank {
+          entry.stringValue("name", "title")
+        }
+      if (name.isBlank()) return@mapNotNull null
+      NgaSubBoard(
+        id = key,
+        name = name,
+        valueId = entry.opt("0")?.toString()?.takeIf { it.isNotBlank() } ?: key.removePrefix("t"),
+        // user_option add_to_block_tids uses thread/board ids aligned with sub_forums[3]/[0],
+        // not the auxiliary marker in sub_forums[4].
+        subscribeId =
+          entry.opt("3")?.toString()?.takeIf { it.isNotBlank() }
+            ?: entry.opt("0")?.toString()?.takeIf { it.isNotBlank() },
+      )
+    }.sortedBy { it.name }.toList()
+  }
+
+  private fun JSONObject.toTopicSummary(users: JSONObject?, mainBoardFid: String): NgaTopicSummary? {
     val topicId = stringValue("tid", "topic_id", "topicId", "id")
     if (topicId.isBlank()) return null
 
@@ -32,10 +58,28 @@ object NgaTopicListParser {
         ?: user?.nullableStringValue("username", "nickname")
     val avatarRaw = user?.nullableStringValue("avatar") ?: nullableStringValue("avatar")
     val memberId = user?.nullableStringValue("memberid", "gid", "groupid")
+    val topicFid = stringValue("fid", "board_id", "boardId")
+    val parent = optJSONObject("parent")
+    val parentFid = parent?.opt("0")?.toString()?.takeIf { it.isNotBlank() }
+    val parentCategoryTopicId = parent?.opt("1")?.toString()?.takeIf { it.isNotBlank() }
+    val miscCategoryTopicId =
+      optJSONObject("topic_misc_var")
+        ?.opt("2")
+        ?.toString()
+        ?.takeIf { it.isNotBlank() }
+    val categoryTopicId = parentCategoryTopicId ?: miscCategoryTopicId
+    val subForumFid =
+      when {
+        parentCategoryTopicId != null -> null
+        mainBoardFid.isBlank() -> null
+        parentFid != null && parentFid != mainBoardFid -> parentFid
+        topicFid.isNotBlank() && topicFid != mainBoardFid -> topicFid
+        else -> null
+      }
 
     return NgaTopicSummary(
       topicId = topicId,
-      boardId = stringValue("fid", "board_id", "boardId"),
+      boardId = topicFid,
       boardName = stringValue("fname", "forumname", "forum_name", "board_name", "boardName"),
       title = stringValue("subject", "title"),
       authorId = authorId,
@@ -44,6 +88,8 @@ object NgaTopicListParser {
       replyCount = intValue("replies", "reply_count", "replyCount"),
       lastPostAt = nullableLongValue("lastpost", "last_post_at", "lastPostAt", "postdatetimestamp", "postdate"),
       isFavorited = booleanValue("favor", "is_favorited", "isFavorited", "favorited"),
+      subForumFid = subForumFid,
+      categoryTopicId = categoryTopicId,
     )
   }
 

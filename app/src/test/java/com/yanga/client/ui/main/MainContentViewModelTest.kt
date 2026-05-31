@@ -18,6 +18,7 @@ import com.yanga.client.data.LocalFavoriteBoard
 import com.yanga.client.data.MessagesReadData
 import com.yanga.client.data.NgaReadOnlyRepository
 import com.yanga.client.data.ProfileReadData
+import com.yanga.client.data.SubBoardVisibilityChange
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -224,7 +225,13 @@ class MainContentViewModelTest {
       return profileResult
     }
 
-    override suspend fun loadBoardTopics(session: LoginSessionData?, fid: String, page: Int): Result<NgaTopicList> =
+    override suspend fun loadBoardTopics(
+      session: LoginSessionData?,
+      fid: String,
+      page: Int,
+      fidGroup: String?,
+      recommend: Boolean,
+    ): Result<NgaTopicList> =
       Result.success(NgaTopicList(topics = emptyList(), page = page, hasNextPage = false))
 
     override suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int): Result<NgaThreadRead> =
@@ -244,6 +251,15 @@ class MainContentViewModelTest {
     }
 
     override suspend fun refreshIncrementalBoardDirectoryIfDue(): Boolean = false
+
+    override suspend fun loadBlockedSubBoards(session: LoginSessionData?, parentFid: String): Result<Set<String>> =
+      Result.success(emptySet())
+
+    override suspend fun applySubBoardVisibilityChanges(
+      session: LoginSessionData?,
+      parentFid: String,
+      changes: List<SubBoardVisibilityChange>,
+    ): Result<Unit> = Result.success(Unit)
   }
 }
 

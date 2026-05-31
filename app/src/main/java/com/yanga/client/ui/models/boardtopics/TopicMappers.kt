@@ -1,6 +1,15 @@
 package com.yanga.client.ui
 
+import com.yanga.client.api.NgaSubBoard
 import com.yanga.client.api.NgaTopicSummary
+
+internal fun NgaSubBoard.toOption(): SubBoardOption =
+  SubBoardOption(
+    id = id,
+    name = name,
+    valueId = valueId,
+    subscribeId = subscribeId,
+  )
 
 internal fun NgaTopicSummary.toPreview(): TopicPreview {
   val displayName = authorName.orEmpty()

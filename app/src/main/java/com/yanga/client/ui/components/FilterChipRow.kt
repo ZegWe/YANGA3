@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 internal fun FilterChipRow(
   labels: List<String>,
   selectedIndex: Int = 0,
+  onSelectedIndexChange: (Int) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   FlowRow(
@@ -23,7 +24,11 @@ internal fun FilterChipRow(
     verticalArrangement = Arrangement.spacedBy(8.dp),
   ) {
     labels.forEachIndexed { index, label ->
-      FilterChip(selected = index == selectedIndex, onClick = {}, label = { Text(label) })
+      FilterChip(
+        selected = index == selectedIndex,
+        onClick = { onSelectedIndexChange(index) },
+        label = { Text(label) },
+      )
     }
   }
 }

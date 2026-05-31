@@ -6,6 +6,8 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.yanga.client.data.DefaultNgaReadOnlyRepository
 import com.yanga.client.data.SharedPreferencesFavoriteBoardsStore
+import com.yanga.client.data.SharedPreferencesSubBoardFilterStore
+import com.yanga.client.data.SubBoardFilterStore
 import com.yanga.client.data.boards.BoardsCatalog
 import com.yanga.client.data.boards.LocalBoardListStore
 import com.yanga.client.data.image.ImageCacheManager
@@ -23,12 +25,16 @@ class YangaApplication : Application(), ImageLoaderFactory {
   lateinit var boardsCatalog: BoardsCatalog
     private set
 
+  lateinit var subBoardFilterStore: SubBoardFilterStore
+    private set
+
   private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
   override fun onCreate() {
     super.onCreate()
     imageCacheManager = ImageCacheManager(this)
     val preferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    subBoardFilterStore = SharedPreferencesSubBoardFilterStore(preferences)
     val boardSectionDirectory = LocalBoardListStore(applicationContext, preferences)
     repository =
       DefaultNgaReadOnlyRepository(

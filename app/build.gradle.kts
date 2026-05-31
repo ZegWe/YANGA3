@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.yanga.client"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig {
         applicationId = "com.yanga.client"
         minSdk = 24

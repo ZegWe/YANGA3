@@ -102,11 +102,24 @@ class MainContentViewModel(
       )
     }
     viewModelScope.launch {
-      val result = repository.loadBoardTopics(session, boardId)
+      val currentBoard = _uiState.value.activeBoard
+      val fidGroup =
+        currentBoard?.selectedSubBoardIds
+          ?.takeIf { it.isNotEmpty() }
+          ?.joinToString(",")
+      val result = repository.loadBoardTopics(session, boardId, fidGroup = fidGroup)
       _uiState.update { state ->
         if (loadingBoardId == boardId && state.activeBoard != null) {
           state.copy(
             activeBoard = state.activeBoard.copy(
+              subBoards =
+                result.fold(
+                  onSuccess = { data ->
+                    val options = data.subBoards.map { it.toOption() }
+                    if (options.isEmpty()) LoadableUiState.Empty("No sub-boards") else LoadableUiState.Content(options)
+                  },
+                  onFailure = { it.toLoadableError() },
+                ),
               topics = result.fold(
                 onSuccess = { LoadableUiState.Content(it.topics.map { t -> t.toPreview() }) },
                 onFailure = { it.toLoadableError() },

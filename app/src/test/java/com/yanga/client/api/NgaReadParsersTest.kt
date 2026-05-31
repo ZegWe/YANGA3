@@ -32,6 +32,22 @@ class NgaReadParsersTest {
     assertEquals("8", topics.topics[1].boardId)
     assertEquals("酒馆", topics.topics[1].boardName)
     assertFalse(topics.topics[1].isFavorited)
+    assertTrue(topics.subBoards.isEmpty())
+  }
+
+  @Test
+  fun topicListParserReadsSubBoardsFromForumMetadata() {
+    val topics = NgaTopicListParser.parse(fixture("topic_list_with_sub_boards.json"))
+
+    assertEquals(3, topics.subBoards.size)
+    assertEquals(
+      listOf(
+        NgaSubBoard(id = "448", name = "同人作品", valueId = "448", subscribeId = "4654"),
+        NgaSubBoard(id = "t7348283", name = "招募 求职 师徒", valueId = "7348283", subscribeId = "542"),
+        NgaSubBoard(id = "517", name = "衍生讨论", valueId = "517", subscribeId = "40"),
+      ),
+      topics.subBoards,
+    )
   }
 
   @Test

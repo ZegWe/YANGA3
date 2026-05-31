@@ -481,7 +481,12 @@ class MainScreenTest {
           ),
         )
 
-      override suspend fun loadBoardTopics(session: LoginSessionData?, fid: String, page: Int): Result<NgaTopicList> =
+      override suspend fun loadBoardTopics(
+        session: LoginSessionData?,
+        fid: String,
+        page: Int,
+        fidGroup: String?,
+      ): Result<NgaTopicList> =
         Result.success(NgaTopicList(topics = emptyList(), page = page, hasNextPage = false))
 
       override suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int): Result<NgaThreadRead> =
@@ -497,6 +502,15 @@ class MainScreenTest {
         Result.success(Unit)
 
       override suspend fun refreshIncrementalBoardDirectoryIfDue(): Boolean = false
+
+      override suspend fun loadBlockedSubBoards(session: LoginSessionData?, parentFid: String): Result<Set<String>> =
+        Result.success(emptySet())
+
+      override suspend fun applySubBoardVisibilityChanges(
+        session: LoginSessionData?,
+        parentFid: String,
+        changes: List<com.yanga.client.data.SubBoardVisibilityChange>,
+      ): Result<Unit> = Result.success(Unit)
     }
 
   private val injectedHomeBoard =
