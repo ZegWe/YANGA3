@@ -25,9 +25,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.SecondaryScrollableTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
@@ -167,25 +166,11 @@ internal fun BoardsScreen(
   ) {
     BoardsScreenHeader()
 
-    PrimaryScrollableTabRow(
+    SecondaryScrollableTabRow(
       selectedTabIndex = selectedTabIndex,
       modifier = Modifier.fillMaxWidth(),
       edgePadding = 0.dp,
-      divider = {
-        HorizontalDivider(
-          color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-          thickness = 1.dp,
-        )
-      },
-      indicator = {
-        TabRowDefaults.PrimaryIndicator(
-          modifier = Modifier.tabIndicatorOffset(
-            selectedTabIndex = selectedTabIndex,
-            matchContentSize = true,
-          ),
-          color = MaterialTheme.colorScheme.primary,
-        )
-      },
+      divider = { HorizontalDivider() },
     ) {
       categoryLabels.forEachIndexed { index, label ->
         Tab(
@@ -395,7 +380,7 @@ private fun TopicListState(
               onClick = { onTopicClick(topic) },
             )
             if (index < state.value.lastIndex) {
-              HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+              HorizontalDivider()
             }
           }
         }

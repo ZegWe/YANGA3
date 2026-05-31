@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="window_background">#FF1C1B1F</color>
+    <!-- Launch window fallback for API 30 and below (dark). API 31+ uses system dynamic colors. -->
+    <color name="window_background">#16130B</color>
 </resources>

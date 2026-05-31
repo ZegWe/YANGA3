@@ -97,7 +97,7 @@ internal fun SubBoardFilterSheet(
         }
       }
 
-      HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+      HorizontalDivider()
 
       LazyColumn(
         modifier = Modifier

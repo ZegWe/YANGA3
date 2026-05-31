@@ -219,7 +219,7 @@ internal fun BoardTopicListScreen(
                           topics.value.forEachIndexed { index, topic ->
                             TopicListItem(topic = topic, onClick = { onTopicClick(topic) })
                             if (index < topics.value.lastIndex) {
-                              HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                              HorizontalDivider()
                             }
                           }
                         }
@@ -435,9 +435,13 @@ private fun PostItem(post: PostPreview, modifier: Modifier = Modifier) {
         is PostContentPart.Quote -> {
           Surface(
             modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
             shape = MaterialTheme.shapes.small,
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+            border =
+              androidx.compose.foundation.BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant,
+              ),
           ) {
             Text(
               text = part.text,

@@ -72,7 +72,7 @@ internal fun SubBoardDirectorySheet(
         Text("全部显示")
       }
 
-      HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+      HorizontalDivider()
 
       LazyColumn(
         modifier =
@@ -96,7 +96,7 @@ internal fun SubBoardDirectorySheet(
                 .clickable { onOpenSubBoard(option) },
             overlineContent = { Text("点击进入子版块") },
           )
-          HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+          HorizontalDivider()
         }
       }
     }
