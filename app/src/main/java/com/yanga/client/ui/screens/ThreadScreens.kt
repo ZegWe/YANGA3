@@ -78,8 +78,8 @@ internal fun BoardTopicListScreen(
   modifier: Modifier = Modifier,
 ) {
   var showSubBoardSheet by remember { mutableStateOf(false) }
-  var menuExpanded by remember { mutableStateOf(false) }
   val subBoardOptions = (state.subBoards as? LoadableUiState.Content)?.value.orEmpty()
+  val hasSubBoards = subBoardOptions.isNotEmpty()
   Scaffold(
     modifier = modifier.fillMaxSize(),
     topBar = {
@@ -122,24 +122,6 @@ internal fun BoardTopicListScreen(
               contentDescription = "搜索",
             )
           }
-          Box {
-            IconButton(onClick = { menuExpanded = true }) {
-              Icon(Icons.Filled.MoreVert, contentDescription = "目录")
-            }
-            DropdownMenu(
-              expanded = menuExpanded,
-              onDismissRequest = { menuExpanded = false },
-            ) {
-              DropdownMenuItem(
-                text = { Text("子版块") },
-                enabled = subBoardOptions.size >= 2,
-                onClick = {
-                  menuExpanded = false
-                  showSubBoardSheet = true
-                },
-              )
-            }
-          }
         }
       )
     },
@@ -160,13 +142,24 @@ internal fun BoardTopicListScreen(
           .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
       ) {
-        FilterChipRow(
-          labels = listOf("全部", "精华"),
-          selectedIndex = if (state.selectedTopicFilter == BoardTopicFilter.Recommend) 1 else 0,
-          onSelectedIndexChange = { index ->
-            onTopicFilterChange(if (index == 1) BoardTopicFilter.Recommend else BoardTopicFilter.All)
-          },
-        )
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          FilterChipRow(
+            labels = listOf("全部", "精华"),
+            selectedIndex = if (state.selectedTopicFilter == BoardTopicFilter.Recommend) 1 else 0,
+            onSelectedIndexChange = { index ->
+              onTopicFilterChange(if (index == 1) BoardTopicFilter.Recommend else BoardTopicFilter.All)
+            },
+            modifier = if (hasSubBoards) Modifier.weight(1f) else Modifier.fillMaxWidth(),
+          )
+          if (hasSubBoards) {
+            TextButton(onClick = { showSubBoardSheet = true }) {
+              Text("子版块")
+            }
+          }
+        }
       }
 
       PullToRefreshBox(
@@ -261,7 +254,7 @@ internal fun BoardTopicListScreen(
     }
   }
 
-  if (showSubBoardSheet && subBoardOptions.size >= 2) {
+  if (showSubBoardSheet && hasSubBoards) {
     SubBoardDirectorySheet(
       boardName = state.boardName,
       options = subBoardOptions,
