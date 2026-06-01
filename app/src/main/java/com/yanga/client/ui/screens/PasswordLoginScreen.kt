@@ -2,6 +2,7 @@ package com.yanga.client.ui
 
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,7 +28,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalAutofillManager
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.yanga.client.api.NgaPasswordLoginClient
@@ -45,6 +52,7 @@ internal fun PasswordLoginScreen(
   modifier: Modifier = Modifier,
 ) {
   val scope = rememberCoroutineScope()
+  val autofillManager = LocalAutofillManager.current
   val client = remember { NgaPasswordLoginClient() }
   var name by remember { mutableStateOf("") }
   var password by remember { mutableStateOf("") }
@@ -88,7 +96,16 @@ internal fun PasswordLoginScreen(
       enabled = !loading,
       label = { Text(text = "用户名 / 邮箱 / UID") },
       singleLine = true,
-      modifier = Modifier.fillMaxWidth(),
+      keyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Text,
+        imeAction = ImeAction.Next,
+        autoCorrectEnabled = false,
+      ),
+      modifier = Modifier
+        .fillMaxWidth()
+        .semantics {
+          contentType = ContentType.Username + ContentType.EmailAddress
+        },
     )
     OutlinedTextField(
       value = password,
@@ -100,7 +117,14 @@ internal fun PasswordLoginScreen(
       label = { Text(text = "密码") },
       visualTransformation = PasswordVisualTransformation(),
       singleLine = true,
-      modifier = Modifier.fillMaxWidth(),
+      keyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Password,
+        imeAction = ImeAction.Next,
+        autoCorrectEnabled = false,
+      ),
+      modifier = Modifier
+        .fillMaxWidth()
+        .semantics { contentType = ContentType.Password },
     )
     Row(
       modifier = Modifier.fillMaxWidth(),
@@ -130,6 +154,10 @@ internal fun PasswordLoginScreen(
       enabled = !loading,
       label = { Text(text = "图形验证码") },
       singleLine = true,
+      keyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Number,
+        imeAction = ImeAction.Done,
+      ),
       modifier = Modifier.fillMaxWidth(),
     )
     error?.let {
@@ -151,6 +179,7 @@ internal fun PasswordLoginScreen(
           loading = false
           result
             .onSuccess {
+              autofillManager?.commit()
               onLoginComplete(
                 LoginSessionUiState(
                   username = it.session.username,
