@@ -8,7 +8,7 @@ android {
     namespace = "com.yanga.client"
     compileSdk = 37
     defaultConfig {
-        applicationId = "com.yanga.client"
+        applicationId = "com.zegwe.yanga"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -16,6 +16,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
