@@ -2,23 +2,79 @@ package com.yanga.client.ui
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
 class ThreadReadingScreenTest {
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
+
+  @Test
+  fun threadReadingScreenDoesNotLeaveLargeGapAfterLastPost() {
+    val posts =
+      (1..18).map { index ->
+        PostPreview(
+          author = "reader$index",
+          floor = "${index}楼",
+          time = "now",
+          avatarInitial = "R",
+          content = "正文 $index",
+        )
+      }
+
+    composeTestRule.setContent {
+      ThreadReadingScreen(
+        state =
+          ThreadUiState(
+            title = "Long thread",
+            page = "1",
+            replyCount = posts.size.toString(),
+            posts = LoadableUiState.Content(posts),
+          ),
+        onBack = {},
+      )
+    }
+
+    composeTestRule
+      .onAllNodes(hasScrollAction())[1]
+      .performScrollToNode(hasContentDescription("Post card 18楼"))
+    repeat(4) {
+      composeTestRule.onAllNodes(hasScrollAction())[1].performTouchInput { swipeUp() }
+      composeTestRule.waitForIdle()
+    }
+
+    val rootBottom = composeTestRule.onRoot().getUnclippedBoundsInRoot().bottom
+    val lastPostBottom =
+      composeTestRule
+        .onNodeWithContentDescription("Post card 18楼")
+        .getUnclippedBoundsInRoot()
+        .bottom
+
+    val bottomGap = rootBottom - lastPostBottom
+    assertTrue(
+      "Expected the final post to sit close to the screen bottom, but gap was $bottomGap",
+      bottomGap <= 32.dp,
+    )
+  }
 
   @Test
   fun threadReadingScreenRendersParsedRichContent() {
