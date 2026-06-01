@@ -11,6 +11,7 @@ import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.geometry.Offset
 import org.junit.Rule
 import org.junit.Test
@@ -63,7 +64,30 @@ class ThreadReadingScreenTest {
     composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").performTouchInput { swipeLeft() }
     composeTestRule.onNodeWithContentDescription("Image preview 2 of 2").assertExists()
 
-    composeTestRule.onNodeWithContentDescription("Image preview 2 of 2").performClick()
+    composeTestRule.onNodeWithContentDescription("Image preview page 2").performTouchInput {
+      down(center)
+      up()
+    }
+    composeTestRule.waitUntil(timeoutMillis = 1_000) {
+      composeTestRule.onAllNodesWithContentDescription("Close image preview").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithContentDescription("Close image preview").assertExists()
+    composeTestRule.onNodeWithContentDescription("Image preview page 2").performTouchInput {
+      down(center)
+      up()
+    }
+    composeTestRule.waitUntil(timeoutMillis = 1_000) {
+      composeTestRule.onAllNodesWithContentDescription("Close image preview").fetchSemanticsNodes().isEmpty()
+    }
+    composeTestRule.onAllNodesWithContentDescription("Close image preview").assertCountEquals(0)
+    composeTestRule.onNodeWithContentDescription("Image preview page 2").performTouchInput {
+      down(center)
+      up()
+    }
+    composeTestRule.waitUntil(timeoutMillis = 1_000) {
+      composeTestRule.onAllNodesWithContentDescription("Close image preview").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithContentDescription("Close image preview").performClick()
     composeTestRule.onAllNodesWithContentDescription("Post image")[0].performClick()
     composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").performTouchInput {
       val middle = center
@@ -77,7 +101,62 @@ class ThreadReadingScreenTest {
     }
     composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").assertExists()
 
-    composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").performClick()
+    composeTestRule.onNodeWithContentDescription("Image preview page 1").performTouchInput {
+      down(center)
+      up()
+      advanceEventTime(100)
+      down(center)
+      up()
+    }
+    composeTestRule.onNodeWithContentDescription("Image preview page 1").performTouchInput {
+      down(center)
+      up()
+    }
+    composeTestRule.waitUntil(timeoutMillis = 1_000) {
+      composeTestRule.onAllNodesWithContentDescription("Close image preview").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithContentDescription("Close image preview").assertExists()
+    composeTestRule.onNodeWithContentDescription("Image preview page 1").performTouchInput {
+      down(center)
+      up()
+    }
+    composeTestRule.waitUntil(timeoutMillis = 1_000) {
+      composeTestRule.onAllNodesWithContentDescription("Close image preview").fetchSemanticsNodes().isEmpty()
+    }
+    composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithContentDescription("Image preview 2 of 2").assertExists()
+    composeTestRule.onNodeWithContentDescription("Image preview 2 of 2").performTouchInput { swipeRight() }
+    composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").assertExists()
+
+    composeTestRule.onNodeWithContentDescription("Image preview page 1").performTouchInput {
+      down(center)
+      up()
+      advanceEventTime(100)
+      down(center)
+      up()
+    }
+    composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").assertExists()
+    composeTestRule.onNodeWithContentDescription("Image preview page 1").performTouchInput {
+      down(center)
+      up()
+      advanceEventTime(100)
+      down(center)
+      up()
+    }
+    composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithContentDescription("Image preview 2 of 2").assertExists()
+    composeTestRule.onNodeWithContentDescription("Image preview 2 of 2").performTouchInput { swipeRight() }
+    composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").assertExists()
+
+    composeTestRule.onNodeWithContentDescription("Image preview page 1").performTouchInput {
+      down(center)
+      up()
+    }
+    composeTestRule.waitUntil(timeoutMillis = 1_000) {
+      composeTestRule.onAllNodesWithContentDescription("Close image preview").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithContentDescription("Close image preview").performClick()
     composeTestRule.onAllNodesWithContentDescription("Image preview", substring = true).assertCountEquals(0)
   }
 }

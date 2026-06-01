@@ -57,4 +57,49 @@ class ImagePreviewPanBoundsTest {
       ),
     )
   }
+
+  @Test
+  fun togglePreviewScaleZoomsToFixedScaleWhenImageIsNotZoomed() {
+    assertEquals(
+      ImagePreviewTransform(scale = 2.5f, offset = Offset.Zero, dragEnabled = true),
+      togglePreviewScaleOnDoubleTap(
+        scale = 1f,
+        offset = Offset(120f, -80f),
+        dragEnabled = false,
+      ),
+    )
+  }
+
+  @Test
+  fun togglePreviewScaleResetsWhenImageIsZoomed() {
+    assertEquals(
+      ImagePreviewTransform(scale = 1f, offset = Offset.Zero, dragEnabled = false),
+      togglePreviewScaleOnDoubleTap(
+        scale = 2.5f,
+        offset = Offset(120f, -80f),
+        dragEnabled = true,
+      ),
+    )
+  }
+
+  @Test
+  fun previewPanConsumesOnlyRealPanChanges() {
+    assertEquals(
+      false,
+      shouldConsumePreviewPanChange(
+        scale = 2.5f,
+        dragEnabled = true,
+        panChange = Offset.Zero,
+      ),
+    )
+
+    assertEquals(
+      true,
+      shouldConsumePreviewPanChange(
+        scale = 2.5f,
+        dragEnabled = true,
+        panChange = Offset(1f, 0f),
+      ),
+    )
+  }
 }

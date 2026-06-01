@@ -95,7 +95,9 @@ import com.yanga.client.ui.components.UserAvatar
 import com.yanga.client.ui.content.PostContentPart
 import com.yanga.client.ui.content.PostContentParser
 import com.yanga.client.ui.content.PostTextStyleRange
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -542,6 +544,7 @@ private fun ImagePreviewDialog(
       imageUrls.size
     }
   var currentPageScale by remember { mutableStateOf(1f) }
+  var headerVisible by remember { mutableStateOf(false) }
 
   LaunchedEffect(currentIndex, imageUrls.size) {
     val targetPage = currentIndex.coerceIn(0, imageUrls.lastIndex)
@@ -587,8 +590,30 @@ private fun ImagePreviewDialog(
               currentPageScale = scale
             }
           },
-          onDismiss = onDismiss,
+          onToggleHeader = { headerVisible = !headerVisible },
         )
+      }
+      if (headerVisible) {
+        Row(
+          modifier =
+            Modifier
+              .align(Alignment.TopStart)
+              .fillMaxWidth()
+              .background(Color.Black.copy(alpha = 0.56f))
+              .padding(top = 24.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          IconButton(
+            onClick = onDismiss,
+            modifier = Modifier.semantics { contentDescription = "Close image preview" },
+          ) {
+            Icon(
+              imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+              contentDescription = null,
+              tint = Color.White,
+            )
+          }
+        }
       }
     }
   }
@@ -600,7 +625,7 @@ private fun ImagePreviewPage(
   page: Int,
   isCurrentPage: Boolean,
   onCurrentPageScaleChange: (Float) -> Unit,
-  onDismiss: () -> Unit,
+  onToggleHeader: () -> Unit,
 ) {
   var scale by remember(url) { mutableStateOf(1f) }
   var offset by remember(url) { mutableStateOf(Offset.Zero) }
@@ -624,50 +649,65 @@ private fun ImagePreviewPage(
         .onSizeChanged { viewportSize = it }
         .semantics { contentDescription = "Image preview page ${page + 1}" }
         .pointerInput(url) {
-          detectTapGestures(
-            onTap = { onDismiss() },
-            onLongPress = { dragEnabled = true },
-          )
-        }
-        .pointerInput(url, scale, dragEnabled) {
-          awaitPointerEventScope {
-            while (true) {
-              val event = awaitPointerEvent()
-              val pressed = event.changes.filter { it.pressed }
-              val isMultiTouch = pressed.size >= 2
-              val canPan = scale > 1.01f && dragEnabled && pressed.size == 1
-              if (!isMultiTouch && !canPan) {
-                continue
-              }
-
-              if (isMultiTouch) {
-                val zoomChange = event.calculateZoom()
-                val panChange = event.calculatePan()
-                val nextScale = (scale * zoomChange).coerceIn(1f, 5f)
-                scale = nextScale
-                if (nextScale <= 1.01f) {
-                  offset = Offset.Zero
-                  dragEnabled = false
-                } else {
-                  offset =
-                    coercePreviewPanOffset(
-                      offset = offset + panChange,
-                      viewportSize = viewportSize,
-                      scale = nextScale,
-                      imageAspectRatio = imageAspectRatio,
+          coroutineScope {
+            launch {
+              detectTapGestures(
+                onTap = { onToggleHeader() },
+                onDoubleTap = {
+                  val transform =
+                    togglePreviewScaleOnDoubleTap(
+                      scale = scale,
+                      offset = offset,
+                      dragEnabled = dragEnabled,
                     )
+                  scale = transform.scale
+                  offset = transform.offset
+                  dragEnabled = transform.dragEnabled
+                },
+                onLongPress = { dragEnabled = true },
+              )
+            }
+            launch {
+              awaitPointerEventScope {
+                while (true) {
+                  val event = awaitPointerEvent()
+                  val pressed = event.changes.filter { it.pressed }
+                  val isMultiTouch = pressed.size >= 2
+                  val panChange = if (pressed.size == 1) pressed.first().positionChange() else Offset.Zero
+                  val canPan = shouldConsumePreviewPanChange(scale, dragEnabled, panChange)
+                  if (!isMultiTouch && !canPan) {
+                    continue
+                  }
+
+                  if (isMultiTouch) {
+                    val zoomChange = event.calculateZoom()
+                    val zoomPanChange = event.calculatePan()
+                    val nextScale = (scale * zoomChange).coerceIn(1f, 5f)
+                    scale = nextScale
+                    if (nextScale <= 1.01f) {
+                      offset = Offset.Zero
+                      dragEnabled = false
+                    } else {
+                      offset =
+                        coercePreviewPanOffset(
+                          offset = offset + zoomPanChange,
+                          viewportSize = viewportSize,
+                          scale = nextScale,
+                          imageAspectRatio = imageAspectRatio,
+                        )
+                    }
+                    event.changes.forEach { it.consume() }
+                  } else if (canPan) {
+                    offset =
+                      coercePreviewPanOffset(
+                        offset = offset + panChange,
+                        viewportSize = viewportSize,
+                        scale = scale,
+                        imageAspectRatio = imageAspectRatio,
+                      )
+                    pressed.first().consume()
+                  }
                 }
-                event.changes.forEach { it.consume() }
-              } else if (canPan) {
-                val panChange = pressed.first().positionChange()
-                offset =
-                  coercePreviewPanOffset(
-                    offset = offset + panChange,
-                    viewportSize = viewportSize,
-                    scale = scale,
-                    imageAspectRatio = imageAspectRatio,
-                  )
-                pressed.first().consume()
               }
             }
           }
@@ -697,6 +737,40 @@ private fun ImagePreviewPage(
     )
   }
 }
+
+internal data class ImagePreviewTransform(
+  val scale: Float,
+  val offset: Offset,
+  val dragEnabled: Boolean,
+)
+
+internal fun togglePreviewScaleOnDoubleTap(
+  scale: Float,
+  offset: Offset,
+  dragEnabled: Boolean,
+): ImagePreviewTransform =
+  if (scale <= 1.01f) {
+    ImagePreviewTransform(
+      scale = 2.5f,
+      offset = Offset.Zero,
+      dragEnabled = true,
+    )
+  } else {
+    ImagePreviewTransform(
+      scale = 1f,
+      offset = Offset.Zero,
+      dragEnabled = false,
+    )
+  }
+
+internal fun shouldConsumePreviewPanChange(
+  scale: Float,
+  dragEnabled: Boolean,
+  panChange: Offset,
+): Boolean =
+  scale > 1.01f &&
+    dragEnabled &&
+    panChange != Offset.Zero
 
 internal fun coercePreviewPanOffset(
   offset: Offset,
