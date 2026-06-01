@@ -129,6 +129,62 @@ class BoardContentViewModel(
     reloadTopics(page = 1, syncSelectionToServer = false, preserveCurrentTopics = hasContent)
   }
 
+  fun loadNextPage() {
+    val boardId = loadingBoardId ?: return
+    val current = _state.value ?: return
+    if (!current.hasNextTopicPage || current.isLoadingNextTopicPage) return
+    val currentTopics = (current.topics as? LoadableUiState.Content)?.value ?: return
+    val page = current.currentTopicPage + 1
+    val generation = reloadGeneration
+    val selectedIds = current.selectedSubBoardIds
+    val knownSubBoards = current.knownSubBoardModels()
+    val fidGroup =
+      if (activeSession?.cookie.isNullOrBlank()) {
+        SubBoardFilterLogic.selectedFidGroup(selectedIds, knownSubBoards)
+      } else {
+        null
+      }
+
+    _state.update { state ->
+      if (loadingBoardId != boardId || state == null || generation != reloadGeneration) {
+        state
+      } else {
+        state.copy(isLoadingNextTopicPage = true)
+      }
+    }
+
+    viewModelScope.launch {
+      val result =
+        repository.loadBoardTopics(
+          session = activeSession,
+          fid = boardId,
+          page = page,
+          fidGroup = fidGroup,
+          recommend = current.selectedTopicFilter == BoardTopicFilter.Recommend,
+        )
+
+      _state.update { state ->
+        if (loadingBoardId != boardId || state == null || generation != reloadGeneration) {
+          return@update state
+        }
+        result.fold(
+          onSuccess = { data ->
+            val nextTopics = data.topics.map { it.toPreview() }
+            state.copy(
+              topics = LoadableUiState.Content(currentTopics + nextTopics),
+              currentTopicPage = data.page,
+              hasNextTopicPage = data.hasNextPage,
+              isLoadingNextTopicPage = false,
+            )
+          },
+          onFailure = {
+            state.copy(isLoadingNextTopicPage = false)
+          },
+        )
+      }
+    }
+  }
+
   fun backFromBoard() {
     reloadJob?.cancel()
     loadingBoardId = null
@@ -191,6 +247,9 @@ class BoardContentViewModel(
       current?.copy(
         topics = if (preserveCurrentTopics) current.topics else LoadableUiState.Loading,
         isRefreshing = preserveCurrentTopics,
+        currentTopicPage = 1,
+        hasNextTopicPage = false,
+        isLoadingNextTopicPage = false,
       )
     }
     viewModelScope.launch {
@@ -310,6 +369,9 @@ class BoardContentViewModel(
             LoadableUiState.Content(topics)
           },
         isRefreshing = false,
+        currentTopicPage = data.page,
+        hasNextTopicPage = data.hasNextPage,
+        isLoadingNextTopicPage = false,
       )
     }
   }

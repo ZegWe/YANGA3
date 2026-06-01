@@ -69,6 +69,7 @@ class BoardTopicListActivity : YangaComposeActivity() {
       onOpenSubBoard = { subBoard -> openSubBoard(context, subBoard, boardState) },
       onTopicFilterChange = boardContentViewModel::setTopicFilter,
       onRefresh = boardContentViewModel::refresh,
+      onLoadNextPage = boardContentViewModel::loadNextPage,
       modifier = Modifier.fillMaxSize(),
     )
   }

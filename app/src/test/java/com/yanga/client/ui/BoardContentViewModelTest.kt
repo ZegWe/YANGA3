@@ -21,6 +21,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
 
@@ -86,7 +87,56 @@ class BoardContentViewModelTest {
     )
   }
 
-  private class FakeRepository : NgaReadOnlyRepository {
+  @Test
+  fun loadNextPageAppendsTopicsAndTracksPagination() = runTest(dispatcher) {
+    val repository = FakeRepository(hasNextPageByPage = mapOf(1 to true, 2 to false))
+    val viewModel = BoardContentViewModel(repository)
+
+    viewModel.openBoard(
+      session = null,
+      destination = BoardDestination(id = "7", name = "议事厅"),
+    )
+    advanceUntilIdle()
+
+    viewModel.loadNextPage()
+    advanceUntilIdle()
+
+    assertEquals(
+      listOf(
+        BoardTopicRequest(fid = "7", page = 1, recommend = false),
+        BoardTopicRequest(fid = "7", page = 2, recommend = false),
+      ),
+      repository.loadBoardTopicRequests,
+    )
+    val topics = viewModel.state.value?.topics as LoadableUiState.Content
+    assertEquals(listOf("全部主题 1", "全部主题 2"), topics.value.map { it.title })
+    assertFalse(viewModel.state.value?.hasNextTopicPage ?: true)
+    assertFalse(viewModel.state.value?.isLoadingNextTopicPage ?: true)
+  }
+
+  @Test
+  fun loadNextPageDoesNothingWhenThereIsNoNextPage() = runTest(dispatcher) {
+    val repository = FakeRepository(hasNextPageByPage = mapOf(1 to false))
+    val viewModel = BoardContentViewModel(repository)
+
+    viewModel.openBoard(
+      session = null,
+      destination = BoardDestination(id = "7", name = "议事厅"),
+    )
+    advanceUntilIdle()
+
+    viewModel.loadNextPage()
+    advanceUntilIdle()
+
+    assertEquals(
+      listOf(BoardTopicRequest(fid = "7", page = 1, recommend = false)),
+      repository.loadBoardTopicRequests,
+    )
+  }
+
+  private class FakeRepository(
+    private val hasNextPageByPage: Map<Int, Boolean> = emptyMap(),
+  ) : NgaReadOnlyRepository {
     val loadBoardTopicRequests = mutableListOf<BoardTopicRequest>()
 
     override suspend fun loadHome(): Result<HomeReadData> =
@@ -108,7 +158,7 @@ class BoardContentViewModelTest {
       fidGroup: String?,
       recommend: Boolean,
     ): Result<NgaTopicList> {
-      loadBoardTopicRequests += BoardTopicRequest(fid = fid, recommend = recommend)
+      loadBoardTopicRequests += BoardTopicRequest(fid = fid, page = page, recommend = recommend)
       return Result.success(
         NgaTopicList(
           topics =
@@ -117,11 +167,11 @@ class BoardContentViewModelTest {
                 topicId = if (recommend) "2002" else "1001",
                 boardId = fid,
                 boardName = "议事厅",
-                title = if (recommend) "精华主题" else "全部主题",
+                title = "${if (recommend) "精华主题" else "全部主题"} $page",
               ),
             ),
           page = page,
-          hasNextPage = false,
+          hasNextPage = hasNextPageByPage[page] ?: false,
         ),
       )
     }
@@ -155,6 +205,7 @@ class BoardContentViewModelTest {
 
   private data class BoardTopicRequest(
     val fid: String,
+    val page: Int = 1,
     val recommend: Boolean,
   )
 }

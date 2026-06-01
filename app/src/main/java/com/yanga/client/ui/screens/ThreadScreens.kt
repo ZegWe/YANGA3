@@ -65,6 +65,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
@@ -110,6 +111,7 @@ import com.yanga.client.ui.content.PostContentParser
 import com.yanga.client.ui.content.PostTextStyleRange
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -125,11 +127,27 @@ internal fun BoardTopicListScreen(
   onOpenSubBoard: (SubBoardOption) -> Unit = {},
   onTopicFilterChange: (BoardTopicFilter) -> Unit = {},
   onRefresh: () -> Unit = {},
+  onLoadNextPage: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   var showSubBoardSheet by remember { mutableStateOf(false) }
   val subBoardOptions = (state.subBoards as? LoadableUiState.Content)?.value.orEmpty()
   val hasSubBoards = subBoardOptions.isNotEmpty()
+  val topicListState = rememberLazyListState()
+  LaunchedEffect(topicListState, state.hasNextTopicPage, state.isLoadingNextTopicPage, state.topics) {
+    if (!state.hasNextTopicPage || state.isLoadingNextTopicPage || state.topics !is LoadableUiState.Content) {
+      return@LaunchedEffect
+    }
+    snapshotFlow {
+      val layoutInfo = topicListState.layoutInfo
+      val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+      lastVisibleIndex >= layoutInfo.totalItemsCount - 3
+    }
+      .distinctUntilChanged()
+      .collect { shouldLoad ->
+        if (shouldLoad) onLoadNextPage()
+      }
+  }
   Scaffold(
     modifier = modifier.fillMaxSize(),
     topBar = {
@@ -228,6 +246,7 @@ internal fun BoardTopicListScreen(
           }
           else -> {
             LazyColumn(
+              state = topicListState,
               modifier = Modifier.fillMaxSize(),
               contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
               verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -256,15 +275,35 @@ internal fun BoardTopicListScreen(
                       }
                     }
                   } else {
-                    item(key = "topics-card") {
-                      TonalCard {
-                        Column {
-                          topics.value.forEachIndexed { index, topic ->
-                            TopicListItem(topic = topic, onClick = { onTopicClick(topic) })
-                            if (index < topics.value.lastIndex) {
-                              HorizontalDivider()
-                            }
-                          }
+                    itemsIndexed(
+                      items = topics.value,
+                      key = { _, topic -> topic.id },
+                    ) { _, topic ->
+                      Card(
+                        onClick = { onTopicClick(topic) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                          containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        ),
+                        shape = MaterialTheme.shapes.large,
+                      ) {
+                        TopicListItem(
+                          topic = topic,
+                          onClick = { onTopicClick(topic) },
+                          modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                          isClickable = false,
+                        )
+                      }
+                    }
+                    if (state.isLoadingNextTopicPage) {
+                      item(key = "topics-loading-next") {
+                        Box(
+                          modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                          contentAlignment = Alignment.Center,
+                        ) {
+                          LoadingIndicator(modifier = Modifier.size(36.dp))
                         }
                       }
                     }

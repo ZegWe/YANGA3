@@ -23,6 +23,9 @@ data class BoardTopicListUiState(
   val selectedSubBoardIds: Set<String> = emptySet(),
   val topics: LoadableUiState<List<TopicPreview>> = LoadableUiState.Loading,
   val isRefreshing: Boolean = false,
+  val currentTopicPage: Int = 1,
+  val hasNextTopicPage: Boolean = false,
+  val isLoadingNextTopicPage: Boolean = false,
 )
 
 data class BoardDestination(

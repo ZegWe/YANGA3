@@ -26,12 +26,18 @@ internal fun TopicListItem(
   topic: TopicPreview,
   onClick: () -> Unit,
   modifier: Modifier = Modifier,
+  isClickable: Boolean = true,
 ) {
+  val itemModifier =
+    if (isClickable) {
+      modifier.clickable(onClick = onClick)
+    } else {
+      modifier
+    }
   Column(
     modifier =
-      modifier
+      itemModifier
         .fillMaxWidth()
-        .clickable(onClick = onClick)
         .padding(vertical = 6.dp),
     verticalArrangement = Arrangement.spacedBy(7.dp),
   ) {
