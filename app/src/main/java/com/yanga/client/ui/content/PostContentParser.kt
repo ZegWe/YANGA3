@@ -49,6 +49,7 @@ object PostContentParser {
     )
   private val layoutTagRegex =
     Regex("""[\[{]/?(align)(?:=[^\]}]+)?[\]}]""", RegexOption.IGNORE_CASE)
+  private val standaloneUrlRegex = Regex("""https?://[^\s\]"'<>]+""", RegexOption.IGNORE_CASE)
   private val tokenRegex =
     Regex(
       "\\[quote\\][\\s\\S]*?\\[/quote\\]|\\[img(?:\\s+[^\\]]*)?\\][\\s\\S]*?\\[/img\\]|\\[img\\s+[^\\]]*\\]|<img\\s+[^>]*src\\s*=\\s*[\"'][^\"']+[\"'][^>]*>|\\.\\/mon_[^\\s\\]\"'<>]+|\\[s:[^:\\]]+:[^\\]]+]",
@@ -121,7 +122,7 @@ object PostContentParser {
       val tag = match.groupValues[2].lowercase()
       val arg = match.groupValues.getOrNull(3).orEmpty()
       if (isClosing) {
-        closeStyle(tag, output.length, stack, styles)
+        closeStyle(tag, output.length, stack, styles, output)
       } else {
         openStyle(tag, arg, output.length, stack)
       }
@@ -132,8 +133,10 @@ object PostContentParser {
       output.append(value.substring(cursor))
     }
     while (stack.isNotEmpty()) {
-      closeStyle(stack.last().tag, output.length, stack, styles)
+      closeStyle(stack.last().tag, output.length, stack, styles, output)
     }
+
+    addStandaloneUrlStyles(output, styles)
 
     val normalizedText = normalizeWhitespace(output.toString())
     if (normalizedText.leadingTrim == 0 && normalizedText.trailingTrim == 0) {
@@ -173,6 +176,7 @@ object PostContentParser {
     end: Int,
     stack: MutableList<OpenStyle>,
     styles: MutableList<PostTextStyleRange>,
+    output: StringBuilder,
   ) {
     val index = stack.indexOfLast { it.tag == tag }
     if (index == -1) return
@@ -180,10 +184,10 @@ object PostContentParser {
     val open = stack.removeAt(index)
     if (open.start >= end) return
     val linkUrl =
-      if (open.tag == "url" && open.style.linkUrl == null) {
-        null
-      } else {
-        open.style.linkUrl
+      when {
+        open.style.linkUrl != null -> open.style.linkUrl
+        open.tag == "url" -> output.substring(open.start, end).trim().ifBlank { null }
+        else -> null
       }
     styles +=
       PostTextStyleRange(
@@ -244,6 +248,22 @@ object PostContentParser {
       .replace("&lt;", "<")
       .replace("&gt;", ">")
       .replace("&amp;", "&")
+
+  private fun addStandaloneUrlStyles(text: StringBuilder, styles: MutableList<PostTextStyleRange>) {
+    for (match in standaloneUrlRegex.findAll(text)) {
+      val start = match.range.first
+      var end = match.range.last + 1
+      while (end > start && text[end - 1] in ".,;:!?)]}") {
+        end -= 1
+      }
+      if (styles.none { rangesOverlap(start, end, it.start, it.end) }) {
+        styles += PostTextStyleRange(start = start, end = end, linkUrl = text.substring(start, end))
+      }
+    }
+  }
+
+  private fun rangesOverlap(start: Int, end: Int, otherStart: Int, otherEnd: Int): Boolean =
+    start < otherEnd && otherStart < end
 
   private fun normalizeWhitespace(value: String): NormalizedText {
     val normalized = value.replace(Regex("[ \\t\\x0B\\f\\r]+"), " ")

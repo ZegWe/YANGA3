@@ -19,4 +19,5 @@ data class ThreadUiState(
 data class ThreadDestination(
   val id: String,
   val title: String,
+  val page: Int = 1,
 )

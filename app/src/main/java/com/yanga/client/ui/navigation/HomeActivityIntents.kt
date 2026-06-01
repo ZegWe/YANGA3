@@ -46,6 +46,7 @@ object HomeActivityIntents {
     Intent(context, ThreadActivity::class.java).apply {
       putExtra(ThreadActivity.EXTRA_THREAD_ID, destination.id)
       putExtra(ThreadActivity.EXTRA_THREAD_TITLE, destination.title)
+      putExtra(ThreadActivity.EXTRA_THREAD_PAGE, destination.page)
     }
 
   fun webView(
@@ -69,9 +70,14 @@ object HomeActivityIntents {
       isFavorite = intent.getBooleanExtra(BoardTopicListActivity.EXTRA_BOARD_IS_FAVORITE, false),
     )
 
-  fun threadDestination(intent: Intent): ThreadDestination =
-    ThreadDestination(
-      id = intent.getStringExtra(ThreadActivity.EXTRA_THREAD_ID).orEmpty(),
+  fun threadDestination(intent: Intent): ThreadDestination {
+    val deepLinkDestination = NgaForumLinkParser.threadDestination(intent.dataString)
+    return ThreadDestination(
+      id = intent.getStringExtra(ThreadActivity.EXTRA_THREAD_ID).orEmpty().ifBlank {
+        deepLinkDestination?.tid.orEmpty()
+      },
       title = intent.getStringExtra(ThreadActivity.EXTRA_THREAD_TITLE).orEmpty(),
+      page = intent.getIntExtra(ThreadActivity.EXTRA_THREAD_PAGE, deepLinkDestination?.page ?: 1),
     )
+  }
 }

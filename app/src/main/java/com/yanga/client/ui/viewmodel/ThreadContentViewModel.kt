@@ -26,9 +26,15 @@ class ThreadContentViewModel(
 
   fun openThread(session: LoginSessionData?, destination: ThreadDestination) {
     val threadId = destination.id
+    val page = destination.page
     val fallbackTitle = destination.title
     val cached = _state.value
-    if (activeThreadId == threadId && cached?.posts is LoadableUiState.Content) {
+    if (
+      activeThreadId == threadId &&
+        cached != null &&
+        cached.page.toIntOrNull() == page &&
+        cached.posts is LoadableUiState.Content
+    ) {
       loadingThreadId = threadId
       return
     }
@@ -36,7 +42,7 @@ class ThreadContentViewModel(
     activeThreadId = threadId
     _state.value = ThreadUiState(title = fallbackTitle)
     viewModelScope.launch {
-      val result = repository.loadThread(session, threadId)
+      val result = repository.loadThread(session, threadId, page)
       _state.update { current ->
         if (loadingThreadId == threadId && current != null) {
           result.fold(

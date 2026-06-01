@@ -25,7 +25,32 @@
             android:exported="false" />
         <activity
             android:name=".ThreadActivity"
-            android:exported="false" />
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+                <data android:host="bbs.nga.cn" />
+                <data android:host="nga.178.com" />
+                <data android:host="ngabbs.com" />
+                <data android:host="bbs.ngacn.cc" />
+                <data android:path="/read.php" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="thread"
+                    android:scheme="nga" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".WebViewActivity"
             android:exported="false" />

@@ -73,6 +73,7 @@ import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -310,6 +311,7 @@ internal fun ThreadReadingScreen(
   state: ThreadUiState,
   onBack: () -> Unit,
   onOpenInBrowser: () -> Unit = {},
+  onLinkClick: (String) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   var menuExpanded by remember { mutableStateOf(false) }
@@ -397,6 +399,7 @@ internal fun ThreadReadingScreen(
                 previewImageUrls = postImageUrls
                 previewImageIndex = postImageUrls.indexOf(url).takeIf { it >= 0 } ?: 0
               },
+              onLinkClick = onLinkClick,
             )
           }
         }
@@ -449,6 +452,7 @@ private fun PostItem(
   post: PostPreview,
   modifier: Modifier = Modifier,
   onImageClick: (String) -> Unit = {},
+  onLinkClick: (String) -> Unit = {},
 ) {
   val contentParts = remember(post.content) { PostContentParser.parse(post.content) }
   val contentBlocks = remember(contentParts) { groupPostContentParts(contentParts) }
@@ -489,7 +493,7 @@ private fun PostItem(
       for (block in contentBlocks) {
         when (block) {
           is PostContentBlock.Inline -> {
-            PostInlineRichText(items = block.items)
+            PostInlineRichText(items = block.items, onLinkClick = onLinkClick)
           }
           is PostContentBlock.Quote -> {
             Surface(
@@ -505,6 +509,7 @@ private fun PostItem(
               PostRichText(
                 text = block.part.text,
                 styles = block.part.styles,
+                onLinkClick = onLinkClick,
                 modifier = Modifier.padding(12.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -753,9 +758,12 @@ private fun PostInlineRichText(
   modifier: Modifier = Modifier,
   style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge,
   color: Color = MaterialTheme.colorScheme.onSurface,
+  onLinkClick: (String) -> Unit = {},
 ) {
   val linkColor = MaterialTheme.colorScheme.primary
   val inlineContent = mutableMapOf<String, InlineTextContent>()
+  var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+  val hasLinks = items.any { item -> item is PostInlineItem.Text && item.styles.any { it.linkUrl != null } }
   val semanticText =
     items.joinToString(separator = "") { item ->
       when (item) {
@@ -775,11 +783,16 @@ private fun PostInlineRichText(
             val textStart = length
             append(item.text)
             item.styles.forEach { range ->
+              val start = (textStart + range.start).coerceIn(textStart, textStart + item.text.length)
+              val end = (textStart + range.end).coerceIn(textStart, textStart + item.text.length)
               addStyle(
                 range.toSpanStyle(linkColor, MaterialTheme.typography.bodyLarge.fontSize),
-                (textStart + range.start).coerceIn(textStart, textStart + item.text.length),
-                (textStart + range.end).coerceIn(textStart, textStart + item.text.length),
+                start,
+                end,
               )
+              range.linkUrl?.let { url ->
+                addStringAnnotation(LinkAnnotationTag, url, start, end)
+              }
             }
           }
           is PostInlineItem.Emoticon -> {
@@ -818,11 +831,28 @@ private fun PostInlineRichText(
       }
     }
 
+  val linkModifier =
+    if (hasLinks) {
+      Modifier.pointerInput(text, onLinkClick) {
+        detectTapGestures { position ->
+          val offset = textLayoutResult?.getOffsetForPosition(position) ?: return@detectTapGestures
+          text
+            .getStringAnnotations(LinkAnnotationTag, offset, offset)
+            .firstOrNull()
+            ?.let { onLinkClick(it.item) }
+        }
+      }
+    } else {
+      Modifier
+    }
+
   Text(
     text = text,
     inlineContent = inlineContent,
     modifier =
-      modifier.clearAndSetSemantics {
+      modifier
+        .then(linkModifier)
+        .clearAndSetSemantics {
         this.text = AnnotatedString(semanticText)
         if (emoticonDescription.isNotEmpty()) {
           contentDescription = emoticonDescription
@@ -831,6 +861,7 @@ private fun PostInlineRichText(
     style = style,
     color = color,
     lineHeight = style.lineHeight * 1.35f,
+    onTextLayout = { textLayoutResult = it },
   )
 }
 
@@ -842,10 +873,13 @@ private fun PostRichText(
   style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge,
   color: Color = MaterialTheme.colorScheme.onSurface,
   baseItalic: Boolean = false,
+  onLinkClick: (String) -> Unit = {},
 ) {
   val linkColor = MaterialTheme.colorScheme.primary
-  Text(
-    text =
+  var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+  val baseFontSize = style.fontSize
+  val annotatedText =
+    remember(text, styles, linkColor, baseItalic, baseFontSize) {
       buildAnnotatedString {
         if (baseItalic) {
           withStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) {
@@ -855,19 +889,47 @@ private fun PostRichText(
           append(text)
         }
         styles.forEach { range ->
-          addStyle(
-            range.toSpanStyle(linkColor, MaterialTheme.typography.bodyLarge.fontSize),
-            range.start.coerceIn(0, text.length),
-            range.end.coerceIn(0, text.length),
-          )
+          val start = range.start.coerceIn(0, text.length)
+          val end = range.end.coerceIn(0, text.length)
+          if (start < end) {
+            addStyle(
+              range.toSpanStyle(linkColor, baseFontSize),
+              start,
+              end,
+            )
+            range.linkUrl?.let { url ->
+              addStringAnnotation(LinkAnnotationTag, url, start, end)
+            }
+          }
         }
-      },
-    modifier = modifier,
+      }
+    }
+  val linkModifier =
+    if (styles.any { it.linkUrl != null }) {
+      Modifier.pointerInput(annotatedText, onLinkClick) {
+        detectTapGestures { position ->
+          val offset = textLayoutResult?.getOffsetForPosition(position) ?: return@detectTapGestures
+          annotatedText
+            .getStringAnnotations(LinkAnnotationTag, offset, offset)
+            .firstOrNull()
+            ?.let { onLinkClick(it.item) }
+        }
+      }
+    } else {
+      Modifier
+    }
+
+  Text(
+    text = annotatedText,
+    modifier = modifier.then(linkModifier),
     style = style,
     color = color,
     lineHeight = style.lineHeight * 1.3f,
+    onTextLayout = { textLayoutResult = it },
   )
 }
+
+private const val LinkAnnotationTag = "url"
 
 private fun PostTextStyleRange.toSpanStyle(linkColor: Color, baseFontSize: TextUnit): SpanStyle {
   val decorations =

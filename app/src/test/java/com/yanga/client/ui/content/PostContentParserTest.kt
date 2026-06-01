@@ -121,4 +121,38 @@ class PostContentParserTest {
 
     assertEquals(PostContentPart.Text("centered"), parts.single())
   }
+
+  @Test
+  fun parsePreservesBbCodeLinkTarget() {
+    val parts = PostContentParser.parse("see [url=https://bbs.nga.cn/read.php?tid=6406100]thread[/url]")
+
+    assertEquals(1, parts.size)
+    val text = parts.single() as PostContentPart.Text
+    assertEquals("see thread", text.text)
+    assertEquals(
+      PostTextStyleRange(
+        start = 4,
+        end = 10,
+        linkUrl = "https://bbs.nga.cn/read.php?tid=6406100",
+      ),
+      text.styles.single(),
+    )
+  }
+
+  @Test
+  fun parsePreservesStandaloneUrlAsLink() {
+    val parts = PostContentParser.parse("open https://example.com/a?b=1 now")
+
+    assertEquals(1, parts.size)
+    val text = parts.single() as PostContentPart.Text
+    assertEquals("open https://example.com/a?b=1 now", text.text)
+    assertEquals(
+      PostTextStyleRange(
+        start = 5,
+        end = 30,
+        linkUrl = "https://example.com/a?b=1",
+      ),
+      text.styles.single(),
+    )
+  }
 }
