@@ -196,6 +196,7 @@ class NgaApiTest {
     val request = api.articleRead(pid = 987, page = 5)
 
     assertEquals("987", request.query["pid"])
+    assertEquals("1", request.query["searchpost"])
     assertEquals("5", request.query["page"])
     assertFalse(request.query.containsKey("tid"))
   }

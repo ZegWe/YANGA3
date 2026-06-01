@@ -267,6 +267,45 @@ class NgaReadOnlyRepositoryTest {
     assertSame(failure, result.exceptionOrNull())
   }
 
+  @Test
+  fun loadThreadPostFetchesPostByPid() = runTest {
+    val transport =
+      FakeTransport(
+        responses =
+          mapOf(
+            RequestKey("read.php", mapOf("pid" to "987", "searchpost" to "1")) to
+              """
+                {
+                  "data":{
+                    "__T":{"tid":123,"fid":7,"subject":"主题","replies":41},
+                    "__R":{
+                      "0":{
+                        "pid":987,
+                        "tid":123,
+                        "fid":7,
+                        "authorid":42,
+                        "author":"作者",
+                        "content":"目标回复",
+                        "lou":40,
+                        "postdatetimestamp":1770000000
+                      }
+                    },
+                    "__PAGE":1,
+                    "__ROWS":42
+                  }
+                }
+              """.trimIndent(),
+          ),
+      )
+    val repository = DefaultNgaReadOnlyRepository(transport)
+
+    val post = repository.loadThreadPost(session = null, pid = "987").getOrThrow()
+
+    assertEquals("987", post.pid)
+    assertEquals(40, post.lou)
+    assertEquals("123", post.tid)
+  }
+
   private fun session(): LoginSessionData =
     LoginSessionData(
       username = "测试",

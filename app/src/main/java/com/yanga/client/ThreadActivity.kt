@@ -23,6 +23,7 @@ import com.yanga.client.api.NgaStaticUrls
 import com.yanga.client.data.image.ImageUrlResolver
 import com.yanga.client.ui.navigation.HomeActivityIntents
 import com.yanga.client.ui.toData
+import java.net.URI
 
 class ThreadActivity : YangaComposeActivity() {
   @Composable
@@ -42,6 +43,12 @@ class ThreadActivity : YangaComposeActivity() {
     ThreadReadingScreen(
       state = threadState,
       onBack = { backDispatcher?.onBackPressed() },
+      onPageChange = { page ->
+        threadContentViewModel.openPage(loginSession?.toData(), page)
+      },
+      onFloorJump = { floor ->
+        threadContentViewModel.openFloor(loginSession?.toData(), floor)
+      },
       onOpenInBrowser = {
         val page = threadState.page.toIntOrNull() ?: 1
         val baseUrl = app.repository.currentBaseUrl()
@@ -60,7 +67,14 @@ class ThreadActivity : YangaComposeActivity() {
           ),
         )
       },
-      onLinkClick = { url -> openPostLink(url) },
+      onLinkClick = { url ->
+        val postId = postIdFromThreadLink(url)
+        if (postId != null) {
+          threadContentViewModel.openPost(loginSession?.toData(), postId)
+        } else {
+          openPostLink(url)
+        }
+      },
       onAttachmentDownload = ::downloadAttachment,
       modifier = Modifier.fillMaxSize(),
     )
@@ -102,6 +116,22 @@ class ThreadActivity : YangaComposeActivity() {
     } catch (_: ActivityNotFoundException) {
       // No external handler is available for this link.
     }
+  }
+
+  private fun postIdFromThreadLink(url: String): String? {
+    if (url.startsWith("nga://post/", ignoreCase = true)) {
+      return url.substringAfterLast('/').takeIf { it.all(Char::isDigit) }
+    }
+    val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return null
+    if (!uri.path.orEmpty().endsWith("/read.php", ignoreCase = true)) return null
+    return uri.rawQuery
+      ?.split('&')
+      ?.mapNotNull { pair ->
+        val parts = pair.split('=', limit = 2)
+        parts.getOrNull(0) to parts.getOrNull(1).orEmpty()
+      }
+      ?.firstOrNull { (key, value) -> key.equals("pid", ignoreCase = true) && value.all(Char::isDigit) }
+      ?.second
   }
 
   companion object {

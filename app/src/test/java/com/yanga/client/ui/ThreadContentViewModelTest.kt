@@ -1,8 +1,8 @@
 package com.yanga.client.ui
 
+import com.yanga.client.api.NgaThreadPost
 import com.yanga.client.api.NgaThreadRead
 import com.yanga.client.api.NgaTopicList
-import com.yanga.client.api.NgaTopicSummary
 import com.yanga.client.data.BoardsReadData
 import com.yanga.client.data.HomeReadData
 import com.yanga.client.data.LoginSessionData
@@ -14,7 +14,6 @@ import com.yanga.client.data.SubBoardVisibilityChange
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -25,7 +24,7 @@ import org.junit.Before
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class BoardContentViewModelTest {
+class ThreadContentViewModelTest {
   private val dispatcher = StandardTestDispatcher()
 
   @Before
@@ -39,55 +38,24 @@ class BoardContentViewModelTest {
   }
 
   @Test
-  fun topicFilterReloadsBoardTopicsWithRecommendFlag() = runTest(dispatcher) {
+  fun openPageUsesCachedThreadPageWhenAlreadyLoaded() = runTest(dispatcher) {
     val repository = FakeRepository()
-    val viewModel = BoardContentViewModel(repository)
+    val viewModel = ThreadContentViewModel(repository)
 
-    viewModel.openBoard(
-      session = null,
-      destination = BoardDestination(id = "7", name = "议事厅"),
-    )
+    viewModel.openThread(session = null, destination = ThreadDestination(id = "123", title = "Thread", page = 1))
+    advanceUntilIdle()
+    viewModel.openPage(session = null, page = 2)
+    advanceUntilIdle()
+    viewModel.openPage(session = null, page = 1)
     advanceUntilIdle()
 
-    viewModel.setTopicFilter(BoardTopicFilter.Recommend)
-    advanceTimeBy(300)
-    advanceUntilIdle()
-
-    assertEquals(
-      listOf(
-        BoardTopicRequest(fid = "7", recommend = false),
-        BoardTopicRequest(fid = "7", recommend = true),
-      ),
-      repository.loadBoardTopicRequests,
-    )
-    assertEquals(BoardTopicFilter.Recommend, viewModel.state.value?.selectedTopicFilter)
-  }
-
-  @Test
-  fun refreshReloadsCurrentBoardTopics() = runTest(dispatcher) {
-    val repository = FakeRepository()
-    val viewModel = BoardContentViewModel(repository)
-
-    viewModel.openBoard(
-      session = null,
-      destination = BoardDestination(id = "7", name = "议事厅"),
-    )
-    advanceUntilIdle()
-
-    viewModel.refresh()
-    advanceUntilIdle()
-
-    assertEquals(
-      listOf(
-        BoardTopicRequest(fid = "7", recommend = false),
-        BoardTopicRequest(fid = "7", recommend = false),
-      ),
-      repository.loadBoardTopicRequests,
-    )
+    assertEquals(listOf(1, 2), repository.loadedPages)
+    assertEquals("1", viewModel.state.value?.page)
+    assertEquals("page 1", (viewModel.state.value?.posts as LoadableUiState.Content).value.single().content)
   }
 
   private class FakeRepository : NgaReadOnlyRepository {
-    val loadBoardTopicRequests = mutableListOf<BoardTopicRequest>()
+    val loadedPages = mutableListOf<Int>()
 
     override suspend fun loadHome(): Result<HomeReadData> =
       Result.failure(UnsupportedOperationException())
@@ -107,30 +75,39 @@ class BoardContentViewModelTest {
       page: Int,
       fidGroup: String?,
       recommend: Boolean,
-    ): Result<NgaTopicList> {
-      loadBoardTopicRequests += BoardTopicRequest(fid = fid, recommend = recommend)
+    ): Result<NgaTopicList> =
+      Result.failure(UnsupportedOperationException())
+
+    override suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int): Result<NgaThreadRead> {
+      loadedPages += page
       return Result.success(
-        NgaTopicList(
-          topics =
+        NgaThreadRead(
+          tid = tid,
+          subject = "Thread",
+          fid = "7",
+          page = page,
+          replyCount = 39,
+          maxPage = 2,
+          posts =
             listOf(
-              NgaTopicSummary(
-                topicId = if (recommend) "2002" else "1001",
-                boardId = fid,
-                boardName = "议事厅",
-                title = if (recommend) "精华主题" else "全部主题",
+              NgaThreadPost(
+                pid = "p$page",
+                tid = tid,
+                fid = "7",
+                authorId = "42",
+                author = "author",
+                subject = "Thread",
+                content = "page $page",
+                lou = (page - 1) * 20,
+                postDate = 0L,
               ),
             ),
-          page = page,
-          hasNextPage = false,
         ),
       )
     }
 
-    override suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int): Result<NgaThreadRead> =
+    override suspend fun loadThreadPost(session: LoginSessionData?, pid: String): Result<NgaThreadPost> =
       Result.failure(UnsupportedOperationException())
-
-    override suspend fun loadThreadPost(session: LoginSessionData?, pid: String) =
-      Result.failure<com.yanga.client.api.NgaThreadPost>(UnsupportedOperationException())
 
     override suspend fun listLocalFavoriteBoards(): Result<List<LocalFavoriteBoard>> =
       Result.success(emptyList())
@@ -150,11 +127,7 @@ class BoardContentViewModelTest {
       session: LoginSessionData?,
       parentFid: String,
       changes: List<SubBoardVisibilityChange>,
-    ): Result<Unit> = Result.success(Unit)
+    ): Result<Unit> =
+      Result.success(Unit)
   }
-
-  private data class BoardTopicRequest(
-    val fid: String,
-    val recommend: Boolean,
-  )
 }

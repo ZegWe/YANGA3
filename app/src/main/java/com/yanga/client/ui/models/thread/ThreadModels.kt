@@ -7,6 +7,8 @@ data class PostEmbeddedReplyPreview(
 )
 
 data class PostPreview(
+  val pid: String = "",
+  val floorNumber: Int = 0,
   val author: String,
   val authorAvatarUrl: String? = null,
   val floor: String,
@@ -26,7 +28,11 @@ data class PostAttachmentPreview(
 data class ThreadUiState(
   val title: String = "",
   val page: String = "1",
+  val maxPage: String = "1",
   val replyCount: String = "0",
+  val targetPostId: String? = null,
+  val targetFloorNumber: Int? = null,
+  val cachedPostsByPage: Map<Int, List<PostPreview>> = emptyMap(),
   val posts: LoadableUiState<List<PostPreview>> = LoadableUiState.Loading,
 )
 
@@ -34,4 +40,6 @@ data class ThreadDestination(
   val id: String,
   val title: String,
   val page: Int = 1,
+  val targetPostId: String? = null,
+  val targetFloorNumber: Int? = null,
 )

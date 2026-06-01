@@ -8,6 +8,8 @@ data class NgaThreadRead(
   val subject: String,
   val fid: String,
   val page: Int,
+  val replyCount: Int = 0,
+  val maxPage: Int = 1,
   val posts: List<NgaThreadPost>,
 )
 
@@ -60,11 +62,15 @@ object NgaThreadParser {
       .mapNotNull { key -> replies.optJSONObject(key)?.toPost(topic, users, commentContentByPid) }
       .toList()
 
+    val replyCount = topic.intValue("replies").coerceAtLeast(0)
+    val rowCount = data.intValue("__ROWS").takeIf { it > 0 } ?: (replyCount + 1)
     return NgaThreadRead(
       tid = topic.stringValue("tid").ifBlank { posts.firstOrNull()?.tid.orEmpty() },
       subject = topic.stringValue("subject").ifBlank { posts.firstOrNull()?.subject.orEmpty() },
       fid = topic.stringValue("fid").ifBlank { posts.firstOrNull()?.fid.orEmpty() },
-      page = data.intValue("__PAGE"),
+      page = data.intValue("__PAGE").takeIf { it > 0 } ?: 1,
+      replyCount = replyCount,
+      maxPage = ((rowCount + POSTS_PER_PAGE - 1) / POSTS_PER_PAGE).coerceAtLeast(1),
       posts = posts,
     )
   }
@@ -225,4 +231,6 @@ object NgaThreadParser {
       is String -> value.toLongOrNull() ?: 0L
       else -> 0L
     }
+
+  private const val POSTS_PER_PAGE = 20
 }

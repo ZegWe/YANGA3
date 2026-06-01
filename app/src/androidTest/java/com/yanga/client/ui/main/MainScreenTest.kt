@@ -493,6 +493,9 @@ class MainScreenTest {
       override suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int): Result<NgaThreadRead> =
         Result.success(NgaThreadRead(tid = tid, subject = "", fid = "", page = page, posts = emptyList()))
 
+      override suspend fun loadThreadPost(session: LoginSessionData?, pid: String) =
+        Result.failure<com.yanga.client.api.NgaThreadPost>(UnsupportedOperationException())
+
       override suspend fun listLocalFavoriteBoards(): Result<List<LocalFavoriteBoard>> =
         Result.success(emptyList())
 

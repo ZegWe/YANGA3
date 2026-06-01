@@ -107,6 +107,10 @@ class PostContentParserTest {
     val quoteText = quote.parts.filterIsInstance<PostContentPart.Text>().single()
     assertEquals("Reply Post by reader (2026-06-01):\nquoted", quoteText.text)
     assertTrue(quoteText.styles.any { it.bold })
+    assertEquals(
+      PostTextStyleRange(start = 0, end = 5, linkUrl = "nga://post/253176649"),
+      quoteText.styles.first { it.linkUrl != null },
+    )
   }
 
   @Test

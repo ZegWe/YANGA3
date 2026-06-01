@@ -153,7 +153,8 @@ class MainContentViewModel(
                 ThreadUiState(
                   title = data.subject.ifBlank { fallbackTitle },
                   page = data.page.toString(),
-                  replyCount = data.posts.size.toString(),
+                  maxPage = data.maxPage.toString(),
+                  replyCount = data.replyCount.toString(),
                   posts = LoadableUiState.Content(data.posts.map { p -> p.toPreview() }),
                 )
               },

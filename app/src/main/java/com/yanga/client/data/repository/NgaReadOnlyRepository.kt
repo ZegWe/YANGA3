@@ -12,6 +12,7 @@ import com.yanga.client.api.NgaMessageParser
 import com.yanga.client.api.NgaRequest
 import com.yanga.client.api.NgaSession
 import com.yanga.client.api.NgaThreadParser
+import com.yanga.client.api.NgaThreadPost
 import com.yanga.client.api.NgaThreadRead
 import com.yanga.client.api.NgaSubBoardFilterParser
 import com.yanga.client.api.NgaTopicListParser
@@ -43,6 +44,8 @@ interface NgaReadOnlyRepository {
   ): Result<NgaTopicList>
 
   suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int = 1): Result<NgaThreadRead>
+
+  suspend fun loadThreadPost(session: LoginSessionData?, pid: String): Result<NgaThreadPost>
 
   suspend fun listLocalFavoriteBoards(): Result<List<LocalFavoriteBoard>>
 
@@ -237,6 +240,15 @@ class DefaultNgaReadOnlyRepository(
 
   override suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int): Result<NgaThreadRead> = withContext(Dispatchers.IO) {
     execute(api(session).articleRead(tid = tid.toIntOrNull(), page = page), NgaThreadParser::parseRead)
+  }
+
+  override suspend fun loadThreadPost(session: LoginSessionData?, pid: String): Result<NgaThreadPost> = withContext(Dispatchers.IO) {
+    execute(api(session).articleRead(pid = pid.toIntOrNull())) { raw ->
+      val thread = NgaThreadParser.parseRead(raw)
+      thread.posts.firstOrNull { it.pid == pid }
+        ?: thread.posts.firstOrNull()
+        ?: throw IllegalStateException("Post $pid not found")
+    }
   }
 
   override suspend fun loadBlockedSubBoards(session: LoginSessionData?, parentFid: String): Result<Set<String>> =

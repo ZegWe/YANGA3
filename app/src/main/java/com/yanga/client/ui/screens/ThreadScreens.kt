@@ -10,19 +10,24 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -40,10 +45,13 @@ import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -81,6 +89,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.IntSize
@@ -317,16 +326,39 @@ internal fun ThreadReadingScreen(
   state: ThreadUiState,
   onBack: () -> Unit,
   onOpenInBrowser: () -> Unit = {},
+  onPageChange: (Int) -> Unit = {},
+  onFloorJump: (Int) -> Unit = {},
+  onReplyClick: () -> Unit = {},
   onLinkClick: (String) -> Unit = {},
   onAttachmentDownload: (PostAttachmentPreview) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   var menuExpanded by remember { mutableStateOf(false) }
   var isFavorited by remember { mutableStateOf(false) }
-  var showJumpFloorDialog by remember { mutableStateOf(false) }
+  var showQuickJumpSheet by remember { mutableStateOf(false) }
   var pendingAttachment by remember { mutableStateOf<PostAttachmentPreview?>(null) }
   var previewImageUrls by remember { mutableStateOf(emptyList<String>()) }
   var previewImageIndex by remember { mutableStateOf<Int?>(null) }
+  val currentPage = state.page.toIntOrNull()?.coerceAtLeast(1) ?: 1
+  val maxPage = (state.maxPage.toIntOrNull() ?: currentPage).coerceAtLeast(currentPage)
+  val pagerState =
+    rememberPagerState(initialPage = currentPage - 1) {
+      maxPage
+    }
+
+  LaunchedEffect(currentPage, maxPage) {
+    val targetPage = (currentPage - 1).coerceIn(0, maxPage - 1)
+    if (pagerState.currentPage != targetPage) {
+      pagerState.scrollToPage(targetPage)
+    }
+  }
+
+  LaunchedEffect(pagerState.currentPage, currentPage) {
+    val selectedPage = pagerState.currentPage + 1
+    if (selectedPage != currentPage) {
+      onPageChange(selectedPage)
+    }
+  }
 
   Scaffold(
     modifier = modifier.fillMaxSize(),
@@ -341,7 +373,7 @@ internal fun ThreadReadingScreen(
               overflow = TextOverflow.Ellipsis
             )
             Text(
-              text = "Page ${state.page} · ${state.replyCount} replies",
+              text = "第 $currentPage / $maxPage 页 · 左右滑动翻页",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -365,10 +397,6 @@ internal fun ThreadReadingScreen(
                 isFavorited = !isFavorited
                 menuExpanded = false
               },
-              onJumpFloor = {
-                menuExpanded = false
-                showJumpFloorDialog = true
-              },
               onOpenInBrowser = {
                 menuExpanded = false
                 onOpenInBrowser()
@@ -377,54 +405,73 @@ internal fun ThreadReadingScreen(
           }
         }
       )
-    },
-    floatingActionButton = {
-      FloatingActionButton(onClick = {}) {
-        Icon(Icons.Filled.Edit, contentDescription = "Reply")
-      }
     }
   ) { paddingValues ->
-    Column(
-      modifier = Modifier
-        .padding(paddingValues)
-        .fillMaxSize()
-        .verticalScroll(rememberScrollState())
-        .padding(16.dp),
-      verticalArrangement = Arrangement.spacedBy(16.dp)
+    Box(
+      modifier =
+        Modifier
+          .padding(paddingValues)
+          .fillMaxSize(),
     ) {
-      ThreadTitleCard(title = state.title)
-      FilterChipRow(labels = listOf("All", "Author only", "Images only"))
-
-      when (state.posts) {
-        is LoadableUiState.Content -> {
-          val posts = state.posts.value
-          val postImageUrls = remember(posts) { posts.flatMap(::postContentImageUrls) }
-          PrefetchPostImages(posts = posts)
-          for (post in posts) {
-            PostItem(
-              post = post,
-              onImageClick = { url ->
-                previewImageUrls = postImageUrls
-                previewImageIndex = postImageUrls.indexOf(url).takeIf { it >= 0 } ?: 0
-              },
-              onLinkClick = onLinkClick,
-              onAttachmentClick = { attachment -> pendingAttachment = attachment },
-            )
-          }
+      HorizontalPager(
+        state = pagerState,
+        beyondViewportPageCount = 0,
+        key = { page -> page },
+        modifier = Modifier.fillMaxSize(),
+      ) { page ->
+        ThreadPageContent(
+          state = state,
+          pageNumber = page + 1,
+          onImageUrlsChange = { urls, index ->
+            previewImageUrls = urls
+            previewImageIndex = index
+          },
+          onLinkClick = onLinkClick,
+          onAttachmentClick = { attachment -> pendingAttachment = attachment },
+        )
+      }
+      Column(
+        modifier =
+          Modifier
+            .align(Alignment.BottomEnd)
+            .navigationBarsPadding()
+            .padding(end = 16.dp, bottom = 16.dp),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+      ) {
+        FloatingActionButton(
+          onClick = { showQuickJumpSheet = true },
+          containerColor = MaterialTheme.colorScheme.secondaryContainer,
+          contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ) {
+          Text(
+            text = "$currentPage/$maxPage",
+            modifier = Modifier.padding(horizontal = 12.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+          )
         }
-        else -> {
-          TonalCard {
-            Text("Loading posts...", style = MaterialTheme.typography.bodyMedium)
-          }
+        FloatingActionButton(onClick = onReplyClick) {
+          Icon(Icons.Filled.Edit, contentDescription = "Reply")
         }
       }
     }
   }
 
-  if (showJumpFloorDialog) {
-    JumpFloorDialog(
-      onDismiss = { showJumpFloorDialog = false },
-      onConfirm = { showJumpFloorDialog = false },
+  if (showQuickJumpSheet) {
+    ThreadQuickJumpSheet(
+      currentPage = currentPage,
+      maxPage = maxPage,
+      maxFloor = state.replyCount.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+      onDismiss = { showQuickJumpSheet = false },
+      onPageJump = { page ->
+        showQuickJumpSheet = false
+        onPageChange(page)
+      },
+      onFloorJump = { floor ->
+        showQuickJumpSheet = false
+        onFloorJump(floor)
+      },
     )
   }
 
@@ -451,6 +498,81 @@ internal fun ThreadReadingScreen(
 }
 
 @Composable
+private fun ThreadPageContent(
+  state: ThreadUiState,
+  pageNumber: Int,
+  onImageUrlsChange: (List<String>, Int) -> Unit,
+  onLinkClick: (String) -> Unit,
+  onAttachmentClick: (PostAttachmentPreview) -> Unit,
+) {
+  val currentPage = state.page.toIntOrNull()
+  val posts =
+    when {
+      pageNumber == currentPage && state.posts is LoadableUiState.Content -> state.posts.value
+      else -> state.cachedPostsByPage[pageNumber]
+    }
+
+  if (posts != null) {
+      val postImageUrls = remember(posts) { posts.flatMap(::postContentImageUrls) }
+      val listState = rememberLazyListState()
+      PrefetchPostImages(posts = posts)
+
+      LaunchedEffect(state.targetPostId, state.targetFloorNumber, posts, pageNumber, currentPage) {
+        if (pageNumber != currentPage) return@LaunchedEffect
+        val targetIndex =
+          when {
+            state.targetPostId != null -> posts.indexOfFirst { it.pid == state.targetPostId }
+            state.targetFloorNumber != null -> posts.indexOfFirst { it.floorNumber == state.targetFloorNumber }
+            else -> -1
+          }
+        if (targetIndex >= 0) {
+          listState.animateScrollToItem(index = targetIndex + THREAD_HEADER_ITEM_COUNT)
+        }
+      }
+
+      LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 104.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+      ) {
+        itemsIndexed(
+          items = posts,
+          key = { index, post -> post.pid.ifBlank { "post-$index-${post.floor}" } },
+        ) { _, post ->
+            PostItem(
+              post = post,
+              title = state.title.takeIf { post.floorNumber == 0 },
+              onImageClick = { url ->
+                onImageUrlsChange(
+                  postImageUrls,
+                  postImageUrls.indexOf(url).takeIf { it >= 0 } ?: 0,
+                )
+              },
+              onLinkClick = onLinkClick,
+              onAttachmentClick = onAttachmentClick,
+            )
+        }
+      }
+  } else {
+    ThreadPageLoadingIndicator()
+  }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ThreadPageLoadingIndicator() {
+  Box(
+    modifier = Modifier.fillMaxSize(),
+    contentAlignment = Alignment.Center,
+  ) {
+    LoadingIndicator(modifier = Modifier.size(64.dp))
+  }
+}
+
+private const val THREAD_HEADER_ITEM_COUNT = 0
+
+@Composable
 private fun ThreadTitleCard(title: String, modifier: Modifier = Modifier) {
   Card(
     modifier = modifier.fillMaxWidth(),
@@ -470,6 +592,7 @@ private fun ThreadTitleCard(title: String, modifier: Modifier = Modifier) {
 @Composable
 private fun PostItem(
   post: PostPreview,
+  title: String? = null,
   modifier: Modifier = Modifier,
   onImageClick: (String) -> Unit = {},
   onLinkClick: (String) -> Unit = {},
@@ -509,6 +632,15 @@ private fun PostItem(
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
         }
+      }
+
+      if (!title.isNullOrBlank()) {
+        Text(
+          text = title,
+          style = MaterialTheme.typography.titleLarge,
+          fontWeight = FontWeight.Bold,
+          color = MaterialTheme.colorScheme.onSurface,
+        )
       }
 
       for (block in contentBlocks) {
@@ -1359,7 +1491,6 @@ private fun ThreadOverflowMenu(
   isFavorited: Boolean,
   onDismiss: () -> Unit,
   onToggleFavorite: () -> Unit,
-  onJumpFloor: () -> Unit,
   onOpenInBrowser: () -> Unit,
 ) {
   DropdownMenu(
@@ -1386,10 +1517,149 @@ private fun ThreadOverflowMenu(
         )
       },
     )
-    DropdownMenuItem(
-      text = { Text("跳楼") },
-      onClick = onJumpFloor,
-    )
+  }
+}
+
+private enum class ThreadJumpMode {
+  Page,
+  Floor,
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ThreadQuickJumpSheet(
+  currentPage: Int,
+  maxPage: Int,
+  maxFloor: Int,
+  onDismiss: () -> Unit,
+  onPageJump: (Int) -> Unit,
+  onFloorJump: (Int) -> Unit,
+) {
+  var mode by remember { mutableStateOf(ThreadJumpMode.Page) }
+  var input by remember { mutableStateOf("") }
+  val target = input.toIntOrNull()
+  val isPageMode = mode == ThreadJumpMode.Page
+  val isValid =
+    when (mode) {
+      ThreadJumpMode.Page -> target != null && target in 1..maxPage
+      ThreadJumpMode.Floor -> target != null && target in 0..maxFloor
+    }
+
+  ModalBottomSheet(onDismissRequest = onDismiss) {
+    Column(
+      modifier =
+        Modifier
+          .fillMaxWidth()
+          .navigationBarsPadding()
+          .imePadding()
+          .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+      verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("快速跳转", style = MaterialTheme.typography.titleLarge)
+        Text(
+          text = "当前第 $currentPage / $maxPage 页",
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+
+      Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+      ) {
+        Row(modifier = Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+          ThreadJumpModeButton(
+            text = "页码",
+            selected = mode == ThreadJumpMode.Page,
+            modifier = Modifier.weight(1f),
+            onClick = {
+              mode = ThreadJumpMode.Page
+              input = ""
+            },
+          )
+          ThreadJumpModeButton(
+            text = "楼层",
+            selected = mode == ThreadJumpMode.Floor,
+            modifier = Modifier.weight(1f),
+            onClick = {
+              mode = ThreadJumpMode.Floor
+              input = ""
+            },
+          )
+        }
+      }
+
+      OutlinedTextField(
+        value = input,
+        onValueChange = { value -> input = value.filter(Char::isDigit) },
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text(if (isPageMode) "页码" else "楼层") },
+        supportingText = {
+          Text(
+            if (isPageMode) {
+              "输入 1 到 $maxPage 之间的页码"
+            } else {
+              "当前帖子共 $maxFloor 楼，输入 0 到 $maxFloor 之间的楼层号"
+            },
+          )
+        },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+      )
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+      ) {
+        FilledTonalButton(
+          onClick = onDismiss,
+          modifier = Modifier.weight(1f),
+        ) {
+          Text("取消")
+        }
+        Button(
+          onClick = {
+            val value = target ?: return@Button
+            if (isPageMode) {
+              onPageJump(value)
+            } else {
+              onFloorJump(value)
+            }
+          },
+          enabled = isValid,
+          modifier = Modifier.weight(1f),
+        ) {
+          Text("跳转")
+        }
+      }
+
+      Spacer(modifier = Modifier.height(2.dp))
+    }
+  }
+}
+
+@Composable
+private fun ThreadJumpModeButton(
+  text: String,
+  selected: Boolean,
+  modifier: Modifier = Modifier,
+  onClick: () -> Unit,
+) {
+  Surface(
+    modifier = modifier.clickable(onClick = onClick),
+    shape = RoundedCornerShape(24.dp),
+    color = if (selected) MaterialTheme.colorScheme.surface else Color.Transparent,
+    contentColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+    tonalElevation = if (selected) 2.dp else 0.dp,
+  ) {
+    Box(
+      modifier = Modifier.padding(vertical = 10.dp),
+      contentAlignment = Alignment.Center,
+    ) {
+      Text(text = text, style = MaterialTheme.typography.labelLarge)
+    }
   }
 }
 

@@ -59,6 +59,7 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
       put("v2", "")
       tid?.let { put("tid", it.toString()) }
       pid?.let { put("pid", it.toString()) }
+      pid?.let { put("searchpost", "1") }
       authorId?.let { put("authorid", it.toString()) }
     },
   )

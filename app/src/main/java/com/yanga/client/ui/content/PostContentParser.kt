@@ -392,7 +392,7 @@ private class InlineTextParser(private val source: String) {
         "url" -> ActiveStyle(linkUrl = arg.ifBlank { null })
         "uid" -> ActiveStyle(linkUrl = arg.ifBlank { null }?.let { "nga://user/$it" })
         "tid" -> ActiveStyle(linkUrl = arg.ifBlank { null }?.let { "nga://thread/$it" })
-        "pid" -> ActiveStyle(linkUrl = arg.ifBlank { null }?.let { "nga://post/$it" })
+        "pid" -> ActiveStyle(linkUrl = arg.ifBlank { null }?.substringBefore(',')?.let { "nga://post/$it" })
         else -> ActiveStyle()
       }
     stack += OpenStyle(tag, output.length, style)
