@@ -46,4 +46,9 @@ class NgaAvatarUrlsTest {
     assertNull(NgaAvatarUrls.resolve(null))
     assertNull(NgaAvatarUrls.resolve(""))
   }
+
+  @Test
+  fun resolveUserAvatarDoesNotUseMemberIdEmoticonAsFallback() {
+    assertNull(NgaAvatarUrls.resolveUserAvatar(raw = null, memberId = "21"))
+  }
 }

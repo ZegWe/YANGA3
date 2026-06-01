@@ -13,7 +13,7 @@ object NgaStaticUrls {
 
   fun expandRelativeImage(url: String): String =
     if (url.startsWith("./mon_")) {
-      url.replace("./mon_", "http://img6.nga.178.com/attachments/mon_")
+      url.replace("./mon_", "https://img.nga.178.com/attachments/mon_")
     } else {
       url
     }

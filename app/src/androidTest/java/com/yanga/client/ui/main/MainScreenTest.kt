@@ -1,4 +1,4 @@
-package com.yanga.client.ui.main
+package com.yanga.client.ui
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
@@ -486,6 +486,7 @@ class MainScreenTest {
         fid: String,
         page: Int,
         fidGroup: String?,
+        recommend: Boolean,
       ): Result<NgaTopicList> =
         Result.success(NgaTopicList(topics = emptyList(), page = page, hasNextPage = false))
 

@@ -12,13 +12,7 @@ object NgaAvatarUrls {
     userId: String = "",
     memberId: String? = null,
   ): String? =
-    resolve(raw, userId) ?: defaultMemberAvatar(memberId)
-
-  fun defaultMemberAvatar(memberId: String?): String? {
-    val id = memberId?.trim()?.toIntOrNull() ?: return null
-    if (id <= 0) return null
-    return "${NgaStaticUrls.emoticonBaseUrl}ac$id.png"
-  }
+    resolve(raw, userId)
 
   fun resolve(raw: String?, authorId: String = ""): String? {
     val value = raw?.trim().orEmpty()

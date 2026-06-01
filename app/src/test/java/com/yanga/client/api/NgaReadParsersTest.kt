@@ -42,9 +42,9 @@ class NgaReadParsersTest {
     assertEquals(3, topics.subBoards.size)
     assertEquals(
       listOf(
-        NgaSubBoard(id = "448", name = "同人作品", valueId = "448", subscribeId = "4654"),
-        NgaSubBoard(id = "t7348283", name = "招募 求职 师徒", valueId = "7348283", subscribeId = "542"),
-        NgaSubBoard(id = "517", name = "衍生讨论", valueId = "517", subscribeId = "40"),
+        NgaSubBoard(id = "448", name = "同人作品", valueId = "448", subscribeId = "21812723"),
+        NgaSubBoard(id = "t7348283", name = "招募 求职 师徒", valueId = "7348283", subscribeId = "7348283"),
+        NgaSubBoard(id = "517", name = "衍生讨论", valueId = "517", subscribeId = "14904011"),
       ),
       topics.subBoards,
     )

@@ -1,0 +1,83 @@
+package com.yanga.client.ui
+
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.pinch
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.geometry.Offset
+import org.junit.Rule
+import org.junit.Test
+
+class ThreadReadingScreenTest {
+  @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
+
+  @Test
+  fun threadReadingScreenRendersParsedRichContent() {
+    composeTestRule.setContent {
+      ThreadReadingScreen(
+        state =
+          ThreadUiState(
+            title = "Rich thread",
+            page = "1",
+            replyCount = "1",
+            posts =
+              LoadableUiState.Content(
+                listOf(
+                  PostPreview(
+                    author = "reader",
+                    floor = "楼主",
+                    time = "now",
+                    avatarInitial = "R",
+                    content =
+                      "[quote][b]quoted[/b][/quote]{align=center]plain [b]bold[/b][/align] [s:ac:囧] [img]./mon_test.jpg[/img] [img]./mon_second.jpg[/img]",
+                  ),
+                ),
+              ),
+          ),
+        onBack = {},
+      )
+    }
+
+    composeTestRule.onAllNodesWithText("Rich thread").assertCountEquals(2)
+    composeTestRule.onNodeWithText("quoted").assertExists()
+    composeTestRule
+      .onNodeWithText("plain bold", substring = true, useUnmergedTree = true)
+      .assertExists()
+    composeTestRule.onAllNodesWithText("align", substring = true).assertCountEquals(0)
+    composeTestRule.onAllNodesWithContentDescription("囧").assertCountEquals(1)
+    composeTestRule.onAllNodesWithContentDescription("Post image").assertCountEquals(2)
+    composeTestRule.onAllNodesWithContentDescription("Post card 楼主").assertCountEquals(1)
+
+    composeTestRule.onAllNodesWithContentDescription("Post image")[0].performClick()
+    composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").assertExists()
+    composeTestRule.onNodeWithContentDescription("Image preview page 1").assertExists()
+    composeTestRule.onNodeWithContentDescription("Image preview page 2").assertExists()
+
+    composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithContentDescription("Image preview 2 of 2").assertExists()
+
+    composeTestRule.onNodeWithContentDescription("Image preview 2 of 2").performClick()
+    composeTestRule.onAllNodesWithContentDescription("Post image")[0].performClick()
+    composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").performTouchInput {
+      val middle = center
+      pinch(
+        start0 = middle + Offset(-24f, 0f),
+        end0 = middle + Offset(-180f, 0f),
+        start1 = middle + Offset(24f, 0f),
+        end1 = middle + Offset(180f, 0f),
+      )
+      swipeLeft()
+    }
+    composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").assertExists()
+
+    composeTestRule.onNodeWithContentDescription("Image preview 1 of 2").performClick()
+    composeTestRule.onAllNodesWithContentDescription("Image preview", substring = true).assertCountEquals(0)
+  }
+}

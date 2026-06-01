@@ -1,5 +1,6 @@
 package com.yanga.client.data.image
 
+import android.util.Log
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -49,13 +50,18 @@ internal class ContentImageRawCache(
         setRequestProperty("User-Agent", userAgent)
       }
       try {
-        if (connection.responseCode !in SUCCESS_STATUS_RANGE) return null
+        if (connection.responseCode !in SUCCESS_STATUS_RANGE) {
+          Log.w(LOG_TAG, "download failed code=${connection.responseCode} url=$url")
+          return null
+        }
         connection.inputStream.use { input ->
           store(url, input.readBytes())
         }
       } finally {
         connection.disconnect()
       }
+    }.onFailure { error ->
+      Log.w(LOG_TAG, "download failed url=$url", error)
     }.getOrNull()
   }
 
@@ -85,6 +91,7 @@ internal class ContentImageRawCache(
     const val READ_TIMEOUT_MS = 30_000
     const val DEFAULT_EXTENSION = "jpg"
     const val DEFAULT_USER_AGENT = "Yanga Android"
+    const val LOG_TAG = "YangaImageCache"
     val SUCCESS_STATUS_RANGE = 200..299
   }
 }

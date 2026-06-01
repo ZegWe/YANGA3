@@ -1,5 +1,9 @@
 package com.yanga.client.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,7 +14,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -47,13 +55,37 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.yanga.client.data.image.imageCacheManager
 import androidx.compose.material3.HorizontalDivider
+import com.yanga.client.ui.components.CachedAsyncImage
 import com.yanga.client.ui.components.CachedPostImage
 import com.yanga.client.ui.components.PrefetchUserAvatars
 import com.yanga.client.ui.components.SubBoardDirectorySheet
@@ -61,6 +93,7 @@ import com.yanga.client.ui.components.TopicListItem
 import com.yanga.client.ui.components.UserAvatar
 import com.yanga.client.ui.content.PostContentPart
 import com.yanga.client.ui.content.PostContentParser
+import com.yanga.client.ui.content.PostTextStyleRange
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -282,6 +315,8 @@ internal fun ThreadReadingScreen(
   var menuExpanded by remember { mutableStateOf(false) }
   var isFavorited by remember { mutableStateOf(false) }
   var showJumpFloorDialog by remember { mutableStateOf(false) }
+  var previewImageUrls by remember { mutableStateOf(emptyList<String>()) }
+  var previewImageIndex by remember { mutableStateOf<Int?>(null) }
 
   Scaffold(
     modifier = modifier.fillMaxSize(),
@@ -352,9 +387,17 @@ internal fun ThreadReadingScreen(
 
       when (state.posts) {
         is LoadableUiState.Content -> {
-          PrefetchPostImages(posts = state.posts.value)
-          for (post in state.posts.value) {
-            PostItem(post = post)
+          val posts = state.posts.value
+          val postImageUrls = remember(posts) { posts.flatMap(::postContentImageUrls) }
+          PrefetchPostImages(posts = posts)
+          for (post in posts) {
+            PostItem(
+              post = post,
+              onImageClick = { url ->
+                previewImageUrls = postImageUrls
+                previewImageIndex = postImageUrls.indexOf(url).takeIf { it >= 0 } ?: 0
+              },
+            )
           }
         }
         else -> {
@@ -370,6 +413,16 @@ internal fun ThreadReadingScreen(
     JumpFloorDialog(
       onDismiss = { showJumpFloorDialog = false },
       onConfirm = { showJumpFloorDialog = false },
+    )
+  }
+
+  val activePreviewIndex = previewImageIndex
+  if (activePreviewIndex != null && previewImageUrls.isNotEmpty()) {
+    ImagePreviewDialog(
+      imageUrls = previewImageUrls,
+      currentIndex = activePreviewIndex.coerceIn(0, previewImageUrls.lastIndex),
+      onIndexChange = { previewImageIndex = it.coerceIn(0, previewImageUrls.lastIndex) },
+      onDismiss = { previewImageIndex = null },
     )
   }
 }
@@ -392,72 +445,457 @@ private fun ThreadTitleCard(title: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun PostItem(post: PostPreview, modifier: Modifier = Modifier) {
+private fun PostItem(
+  post: PostPreview,
+  modifier: Modifier = Modifier,
+  onImageClick: (String) -> Unit = {},
+) {
   val contentParts = remember(post.content) { PostContentParser.parse(post.content) }
+  val contentBlocks = remember(contentParts) { groupPostContentParts(contentParts) }
 
-  Column(
-    modifier = modifier
-      .fillMaxWidth()
-      .padding(vertical = 8.dp),
-    verticalArrangement = Arrangement.spacedBy(8.dp)
+  Card(
+    modifier =
+      modifier
+        .fillMaxWidth()
+        .semantics { contentDescription = "Post card ${post.floor}" },
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    shape = MaterialTheme.shapes.medium,
   ) {
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.spacedBy(12.dp),
-      verticalAlignment = Alignment.CenterVertically
+    Column(
+      modifier = Modifier.padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-      UserAvatar(
-        name = post.author,
-        avatarUrl = post.authorAvatarUrl,
-        modifier = Modifier.size(40.dp),
-        size = 40.dp,
-      )
-      Column(modifier = Modifier.weight(1f)) {
-        Text(text = post.author, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        Text(
-          text = "${post.floor} · ${post.time}",
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        UserAvatar(
+          name = post.author,
+          avatarUrl = post.authorAvatarUrl,
+          modifier = Modifier.size(40.dp),
+          size = 40.dp,
         )
-      }
-    }
-
-    for (part in contentParts) {
-      when (part) {
-        is PostContentPart.Text -> {
+        Column(modifier = Modifier.weight(1f)) {
+          Text(text = post.author, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
           Text(
-            text = part.text,
-            style = MaterialTheme.typography.bodyLarge,
-            lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.3f
+            text = "${post.floor} · ${post.time}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
           )
         }
-        is PostContentPart.Quote -> {
-          Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = MaterialTheme.shapes.small,
-            border =
-              androidx.compose.foundation.BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant,
-              ),
-          ) {
-            Text(
-              text = part.text,
-              modifier = Modifier.padding(12.dp),
-              style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+      }
+
+      for (block in contentBlocks) {
+        when (block) {
+          is PostContentBlock.Inline -> {
+            PostInlineRichText(items = block.items)
+          }
+          is PostContentBlock.Quote -> {
+            Surface(
+              modifier = Modifier.fillMaxWidth(),
+              color = MaterialTheme.colorScheme.surfaceContainer,
+              shape = MaterialTheme.shapes.small,
+              border =
+                androidx.compose.foundation.BorderStroke(
+                  1.dp,
+                  MaterialTheme.colorScheme.outlineVariant,
+                ),
+            ) {
+              PostRichText(
+                text = block.part.text,
+                styles = block.part.styles,
+                modifier = Modifier.padding(12.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                baseItalic = true,
+              )
+            }
+          }
+          is PostContentBlock.Image -> {
+            CachedPostImage(
+              url = block.part.url,
+              onClick = { onImageClick(block.part.url) },
             )
           }
-        }
-        is PostContentPart.Image -> {
-          CachedPostImage(url = part.url)
         }
       }
     }
   }
 }
+
+@Composable
+private fun ImagePreviewDialog(
+  imageUrls: List<String>,
+  currentIndex: Int,
+  onIndexChange: (Int) -> Unit,
+  onDismiss: () -> Unit,
+) {
+  val initialPage = currentIndex.coerceIn(0, imageUrls.lastIndex)
+  val pagerState =
+    rememberPagerState(initialPage = initialPage) {
+      imageUrls.size
+    }
+  var currentPageScale by remember { mutableStateOf(1f) }
+
+  LaunchedEffect(currentIndex, imageUrls.size) {
+    val targetPage = currentIndex.coerceIn(0, imageUrls.lastIndex)
+    if (pagerState.currentPage != targetPage) {
+      pagerState.scrollToPage(targetPage)
+    }
+  }
+
+  LaunchedEffect(pagerState.currentPage) {
+    onIndexChange(pagerState.currentPage)
+    currentPageScale = 1f
+  }
+
+  Dialog(
+    onDismissRequest = onDismiss,
+    properties =
+      DialogProperties(
+        usePlatformDefaultWidth = false,
+        decorFitsSystemWindows = false,
+      ),
+  ) {
+    Box(
+      modifier =
+        Modifier
+          .fillMaxSize()
+          .background(Color.Black)
+          .semantics { contentDescription = "Image preview ${pagerState.currentPage + 1} of ${imageUrls.size}" },
+      contentAlignment = Alignment.Center,
+    ) {
+      HorizontalPager(
+        state = pagerState,
+        beyondViewportPageCount = 1,
+        userScrollEnabled = currentPageScale <= 1.01f,
+        key = { page -> imageUrls[page] },
+        modifier = Modifier.fillMaxSize(),
+      ) { page ->
+        ImagePreviewPage(
+          url = imageUrls[page],
+          page = page,
+          isCurrentPage = page == pagerState.currentPage,
+          onCurrentPageScaleChange = { scale ->
+            if (page == pagerState.currentPage) {
+              currentPageScale = scale
+            }
+          },
+          onDismiss = onDismiss,
+        )
+      }
+    }
+  }
+}
+
+@Composable
+private fun ImagePreviewPage(
+  url: String,
+  page: Int,
+  isCurrentPage: Boolean,
+  onCurrentPageScaleChange: (Float) -> Unit,
+  onDismiss: () -> Unit,
+) {
+  var scale by remember(url) { mutableStateOf(1f) }
+  var offset by remember(url) { mutableStateOf(Offset.Zero) }
+  var dragEnabled by remember(url) { mutableStateOf(false) }
+  var viewportSize by remember(url) { mutableStateOf(IntSize.Zero) }
+  var imageAspectRatio by remember(url) { mutableStateOf<Float?>(null) }
+
+  LaunchedEffect(isCurrentPage, scale) {
+    if (isCurrentPage) {
+      onCurrentPageScaleChange(scale)
+    }
+  }
+  LaunchedEffect(viewportSize, scale, imageAspectRatio) {
+    offset = coercePreviewPanOffset(offset, viewportSize, scale, imageAspectRatio)
+  }
+
+  Box(
+    modifier =
+      Modifier
+        .fillMaxSize()
+        .onSizeChanged { viewportSize = it }
+        .semantics { contentDescription = "Image preview page ${page + 1}" }
+        .pointerInput(url) {
+          detectTapGestures(
+            onTap = { onDismiss() },
+            onLongPress = { dragEnabled = true },
+          )
+        }
+        .pointerInput(url, scale, dragEnabled) {
+          awaitPointerEventScope {
+            while (true) {
+              val event = awaitPointerEvent()
+              val pressed = event.changes.filter { it.pressed }
+              val isMultiTouch = pressed.size >= 2
+              val canPan = scale > 1.01f && dragEnabled && pressed.size == 1
+              if (!isMultiTouch && !canPan) {
+                continue
+              }
+
+              if (isMultiTouch) {
+                val zoomChange = event.calculateZoom()
+                val panChange = event.calculatePan()
+                val nextScale = (scale * zoomChange).coerceIn(1f, 5f)
+                scale = nextScale
+                if (nextScale <= 1.01f) {
+                  offset = Offset.Zero
+                  dragEnabled = false
+                } else {
+                  offset =
+                    coercePreviewPanOffset(
+                      offset = offset + panChange,
+                      viewportSize = viewportSize,
+                      scale = nextScale,
+                      imageAspectRatio = imageAspectRatio,
+                    )
+                }
+                event.changes.forEach { it.consume() }
+              } else if (canPan) {
+                val panChange = pressed.first().positionChange()
+                offset =
+                  coercePreviewPanOffset(
+                    offset = offset + panChange,
+                    viewportSize = viewportSize,
+                    scale = scale,
+                    imageAspectRatio = imageAspectRatio,
+                  )
+                pressed.first().consume()
+              }
+            }
+          }
+        },
+    contentAlignment = Alignment.Center,
+  ) {
+    CachedAsyncImage(
+      url = url,
+      contentDescription = null,
+      modifier =
+        Modifier
+          .fillMaxSize()
+          .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+            translationX = offset.x
+            translationY = offset.y
+          },
+      contentScale = ContentScale.Fit,
+      crossfade = false,
+      onSuccess = { state ->
+        imageAspectRatio = state.result.drawable.intrinsicAspectRatio()
+      },
+      onError = {
+        imageAspectRatio = null
+      },
+    )
+  }
+}
+
+internal fun coercePreviewPanOffset(
+  offset: Offset,
+  viewportSize: IntSize,
+  scale: Float,
+  imageAspectRatio: Float?,
+): Offset {
+  if (scale <= 1.01f || viewportSize.width <= 0 || viewportSize.height <= 0) {
+    return Offset.Zero
+  }
+  val fittedSize = previewFittedImageSize(viewportSize, imageAspectRatio)
+  val maxX = ((fittedSize.width * scale) - viewportSize.width).coerceAtLeast(0f) / 2f
+  val maxY = ((fittedSize.height * scale) - viewportSize.height).coerceAtLeast(0f) / 2f
+  return Offset(
+    x = offset.x.coerceIn(-maxX, maxX),
+    y = offset.y.coerceIn(-maxY, maxY),
+  )
+}
+
+private data class PreviewImageSize(
+  val width: Float,
+  val height: Float,
+)
+
+private fun previewFittedImageSize(
+  viewportSize: IntSize,
+  imageAspectRatio: Float?,
+): PreviewImageSize {
+  val viewportWidth = viewportSize.width.toFloat()
+  val viewportHeight = viewportSize.height.toFloat()
+  val ratio = imageAspectRatio?.takeIf { it > 0f }
+    ?: return PreviewImageSize(width = viewportWidth, height = viewportHeight)
+  val viewportRatio = viewportWidth / viewportHeight
+  return if (viewportRatio > ratio) {
+    PreviewImageSize(width = viewportHeight * ratio, height = viewportHeight)
+  } else {
+    PreviewImageSize(width = viewportWidth, height = viewportWidth / ratio)
+  }
+}
+
+private fun android.graphics.drawable.Drawable.intrinsicAspectRatio(): Float? {
+  val width = intrinsicWidth
+  val height = intrinsicHeight
+  return if (width > 0 && height > 0) {
+    width.toFloat() / height.toFloat()
+  } else {
+    null
+  }
+}
+
+private fun postContentImageUrls(post: PostPreview): List<String> =
+  PostContentParser.parse(post.content).mapNotNull { part ->
+    (part as? PostContentPart.Image)?.url
+  }
+
+@Composable
+private fun PostInlineRichText(
+  items: List<PostInlineItem>,
+  modifier: Modifier = Modifier,
+  style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge,
+  color: Color = MaterialTheme.colorScheme.onSurface,
+) {
+  val linkColor = MaterialTheme.colorScheme.primary
+  val inlineContent = mutableMapOf<String, InlineTextContent>()
+  val semanticText =
+    items.joinToString(separator = "") { item ->
+      when (item) {
+        is PostInlineItem.Text -> item.text
+        is PostInlineItem.Emoticon -> item.part.alt
+      }
+    }
+  val emoticonDescription =
+    items
+      .mapNotNull { item -> (item as? PostInlineItem.Emoticon)?.part?.alt }
+      .joinToString(separator = "")
+  val text =
+    buildAnnotatedString {
+      items.forEachIndexed { index, item ->
+        when (item) {
+          is PostInlineItem.Text -> {
+            val textStart = length
+            append(item.text)
+            item.styles.forEach { range ->
+              addStyle(
+                range.toSpanStyle(linkColor, MaterialTheme.typography.bodyLarge.fontSize),
+                (textStart + range.start).coerceIn(textStart, textStart + item.text.length),
+                (textStart + range.end).coerceIn(textStart, textStart + item.text.length),
+              )
+            }
+          }
+          is PostInlineItem.Emoticon -> {
+            val inlineId = "post-emoticon-$index"
+            appendInlineContent(inlineId, item.part.alt)
+            inlineContent[inlineId] =
+              InlineTextContent(
+                placeholder =
+                  Placeholder(
+                    width = 1.5.em,
+                    height = 1.5.em,
+                    placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                  ),
+              ) {
+                CachedAsyncImage(
+                  url = item.part.url,
+                  contentDescription = item.part.alt,
+                  modifier = Modifier.size(28.dp),
+                  contentScale = ContentScale.Fit,
+                  sizeDp = 28.dp,
+                  colorFilter =
+                    if (
+                      shouldInvertEmoticonForBackground(
+                        MaterialTheme.colorScheme.background,
+                        item.part.code,
+                      )
+                    ) {
+                      invertedEmoticonColorFilter()
+                    } else {
+                      null
+                    },
+                )
+              }
+          }
+        }
+      }
+    }
+
+  Text(
+    text = text,
+    inlineContent = inlineContent,
+    modifier =
+      modifier.clearAndSetSemantics {
+        this.text = AnnotatedString(semanticText)
+        if (emoticonDescription.isNotEmpty()) {
+          contentDescription = emoticonDescription
+        }
+      },
+    style = style,
+    color = color,
+    lineHeight = style.lineHeight * 1.35f,
+  )
+}
+
+@Composable
+private fun PostRichText(
+  text: String,
+  styles: List<PostTextStyleRange>,
+  modifier: Modifier = Modifier,
+  style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge,
+  color: Color = MaterialTheme.colorScheme.onSurface,
+  baseItalic: Boolean = false,
+) {
+  val linkColor = MaterialTheme.colorScheme.primary
+  Text(
+    text =
+      buildAnnotatedString {
+        if (baseItalic) {
+          withStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) {
+            append(text)
+          }
+        } else {
+          append(text)
+        }
+        styles.forEach { range ->
+          addStyle(
+            range.toSpanStyle(linkColor, MaterialTheme.typography.bodyLarge.fontSize),
+            range.start.coerceIn(0, text.length),
+            range.end.coerceIn(0, text.length),
+          )
+        }
+      },
+    modifier = modifier,
+    style = style,
+    color = color,
+    lineHeight = style.lineHeight * 1.3f,
+  )
+}
+
+private fun PostTextStyleRange.toSpanStyle(linkColor: Color, baseFontSize: TextUnit): SpanStyle {
+  val decorations =
+    buildList {
+      if (underline || linkUrl != null) add(TextDecoration.Underline)
+      if (strikeThrough) add(TextDecoration.LineThrough)
+    }
+  return SpanStyle(
+    brush = null,
+    fontSize = sizePercent?.let { baseFontSize * (it / 100f) } ?: TextUnit.Unspecified,
+    fontWeight = if (bold) FontWeight.Bold else null,
+    fontStyle = if (italic) androidx.compose.ui.text.font.FontStyle.Italic else null,
+    textDecoration = if (decorations.isNotEmpty()) TextDecoration.combine(decorations) else null,
+  ).copy(color = color?.toComposeColor() ?: if (linkUrl != null) linkColor else Color.Unspecified)
+}
+
+private fun String.toComposeColor(): Color =
+  when (lowercase()) {
+    "red", "crimson", "firebrick", "darkred" -> Color(0xFFB3261E)
+    "blue", "royalblue", "darkblue", "skyblue" -> Color(0xFF315EAD)
+    "green", "limegreen", "seagreen", "teal" -> Color(0xFF2E7D32)
+    "orange", "orangered", "coral", "tomato" -> Color(0xFFB75E00)
+    "purple", "indigo" -> Color(0xFF6D3CC7)
+    "silver", "gray", "grey" -> Color(0xFF73777F)
+    "deeppink" -> Color(0xFFC2185B)
+    "burlywood", "sandybrown", "sienna", "chocolate" -> Color(0xFF8B5A2B)
+    else -> Color.Unspecified
+  }
 
 @Composable
 private fun PrefetchPostImages(posts: List<PostPreview>) {
@@ -466,9 +904,16 @@ private fun PrefetchPostImages(posts: List<PostPreview>) {
   val context = LocalContext.current
   val imageUrls =
     remember(posts) {
-      posts.flatMap { post ->
-        PostContentParser.parse(post.content).filterIsInstance<PostContentPart.Image>().map { it.url }
-      }.distinct()
+      posts
+        .flatMap { post -> PostContentParser.parse(post.content) }
+        .mapNotNull { part ->
+          when (part) {
+            is PostContentPart.Image -> part.url
+            is PostContentPart.Emoticon -> part.url
+            else -> null
+          }
+        }
+        .distinct()
     }
 
   LaunchedEffect(imageUrls) {

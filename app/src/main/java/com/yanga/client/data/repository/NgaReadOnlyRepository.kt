@@ -228,7 +228,7 @@ class DefaultNgaReadOnlyRepository(
   ): Result<NgaTopicList> = withContext(Dispatchers.IO) {
     val stid = fid.removePrefix("t").toIntOrNull().takeIf { fid.startsWith("t") }
     val numericFid = if (fid.startsWith("t")) null else fid.toIntOrNull()
-    Log.d(logTag, "loadBoardTopics fid=$fid stid=$stid page=$page fidGroup=$fidGroup recommend=$recommend hasCookie=${!session?.cookie.isNullOrBlank()}")
+    logDebug("loadBoardTopics fid=$fid stid=$stid page=$page fidGroup=$fidGroup recommend=$recommend hasCookie=${!session?.cookie.isNullOrBlank()}")
     execute(
       api(session).topicList(fid = numericFid, stid = stid, page = page, fidGroup = fidGroup, recommend = recommend),
       NgaTopicListParser::parse,
@@ -243,7 +243,7 @@ class DefaultNgaReadOnlyRepository(
     withContext(Dispatchers.IO) {
       val loginSession = session.requireLogin() ?: return@withContext Result.success(emptySet())
       val result = execute(api(loginSession).subBoardFilterGet(parentFid), NgaSubBoardFilterParser::parseBlockedIds)
-      Log.d(logTag, "subBoardFilterGet fid=$parentFid result=${result.getOrNull()} error=${result.exceptionOrNull()?.message}")
+      logDebug("subBoardFilterGet fid=$parentFid result=${result.getOrNull()} error=${result.exceptionOrNull()?.message}")
       result
     }
 
@@ -258,7 +258,7 @@ class DefaultNgaReadOnlyRepository(
       val ngaApi = api(loginSession)
       changes.forEach { change ->
         val blockId = change.board.subscribeId ?: return@forEach
-        Log.d(logTag, "subBoardFilterSet fid=$parentFid blockId=$blockId visible=${change.visible}")
+        logDebug("subBoardFilterSet fid=$parentFid blockId=$blockId visible=${change.visible}")
         val responseText =
           executeText(
             ngaApi.subBoardFilterSet(
@@ -267,7 +267,7 @@ class DefaultNgaReadOnlyRepository(
               visible = change.visible,
             ),
           ).getOrThrow()
-        Log.d(logTag, "subBoardFilterSetResponse fid=$parentFid blockId=$blockId body=${responseText.take(200)}")
+        logDebug("subBoardFilterSetResponse fid=$parentFid blockId=$blockId body=${responseText.take(200)}")
         if (!responseText.contains("成功")) {
           throw IllegalStateException("subBoardFilterSet failed for blockId=$blockId")
         }
@@ -302,11 +302,11 @@ class DefaultNgaReadOnlyRepository(
   private fun <T> execute(request: NgaRequest, parser: (String) -> T): Result<T> =
     runCatching {
       if (request.url.contains("thread.php") || request.url.contains("nuke.php")) {
-        Log.d(logTag, "request ${request.method} ${requestDebugUrl(request)}")
+        logDebug("request ${request.method} ${requestDebugUrl(request)}")
       }
       val response = transport.execute(request).getOrThrow()
       if (!response.isSuccessful) {
-        Log.e(logTag, "http failed code=${response.code} url=${requestDebugUrl(request)}")
+        logError("http failed code=${response.code} url=${requestDebugUrl(request)}")
         throw response.toException(request)
       }
       parser(response.text)
@@ -323,11 +323,11 @@ class DefaultNgaReadOnlyRepository(
   private fun executeText(request: NgaRequest): Result<String> =
     runCatching {
       if (request.url.contains("thread.php") || request.url.contains("nuke.php")) {
-        Log.d(logTag, "request ${request.method} ${requestDebugUrl(request)}")
+        logDebug("request ${request.method} ${requestDebugUrl(request)}")
       }
       val response = transport.execute(request).getOrThrow()
       if (!response.isSuccessful) {
-        Log.e(logTag, "http failed code=${response.code} url=${requestDebugUrl(request)}")
+        logError("http failed code=${response.code} url=${requestDebugUrl(request)}")
         throw response.toException(request)
       }
       response.text
@@ -347,5 +347,13 @@ class DefaultNgaReadOnlyRepository(
         if (value.isEmpty()) key else "$key=$value"
       }
     return "${request.url}?$query"
+  }
+
+  private fun logDebug(message: String) {
+    runCatching { Log.d(logTag, message) }
+  }
+
+  private fun logError(message: String) {
+    runCatching { Log.e(logTag, message) }
   }
 }
