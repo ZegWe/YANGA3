@@ -27,6 +27,9 @@
             android:name=".ThreadActivity"
             android:exported="false" />
         <activity
+            android:name=".WebViewActivity"
+            android:exported="false" />
+        <activity
             android:name=".LoginActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />

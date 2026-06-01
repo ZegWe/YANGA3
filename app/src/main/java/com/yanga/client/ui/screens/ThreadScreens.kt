@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AlertDialog
@@ -275,6 +276,7 @@ internal fun BoardTopicListScreen(
 internal fun ThreadReadingScreen(
   state: ThreadUiState,
   onBack: () -> Unit,
+  onOpenInBrowser: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   var menuExpanded by remember { mutableStateOf(false) }
@@ -321,6 +323,10 @@ internal fun ThreadReadingScreen(
               onJumpFloor = {
                 menuExpanded = false
                 showJumpFloorDialog = true
+              },
+              onOpenInBrowser = {
+                menuExpanded = false
+                onOpenInBrowser()
               },
             )
           }
@@ -480,6 +486,7 @@ private fun ThreadOverflowMenu(
   onDismiss: () -> Unit,
   onToggleFavorite: () -> Unit,
   onJumpFloor: () -> Unit,
+  onOpenInBrowser: () -> Unit,
 ) {
   DropdownMenu(
     expanded = expanded,
@@ -491,6 +498,16 @@ private fun ThreadOverflowMenu(
       leadingIcon = {
         Icon(
           imageVector = if (isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
+          contentDescription = null,
+        )
+      },
+    )
+    DropdownMenuItem(
+      text = { Text("用浏览器打开") },
+      onClick = onOpenInBrowser,
+      leadingIcon = {
+        Icon(
+          imageVector = Icons.Outlined.OpenInBrowser,
           contentDescription = null,
         )
       },

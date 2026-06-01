@@ -158,6 +158,14 @@ class NgaApiTest {
     assertEquals("https://img4.nga.178.com/proxy/cache_attach/ficon/123v.png", NgaStaticUrls.boardIconByStid(123))
     assertEquals("http://img6.nga.178.com/attachments/mon_a.jpg", NgaStaticUrls.expandRelativeImage("./mon_a.jpg"))
     assertFalse(NgaStaticUrls.expandRelativeImage("https://example.com/a.jpg").contains("img6.nga"))
+    assertEquals(
+      "https://bbs.nga.cn/read.php?tid=46634352",
+      NgaStaticUrls.threadReadUrl("https://bbs.nga.cn/", "46634352"),
+    )
+    assertEquals(
+      "https://bbs.nga.cn/read.php?tid=46634352&page=3",
+      NgaStaticUrls.threadReadUrl("https://bbs.nga.cn", "46634352", page = 3),
+    )
   }
 
   @Test

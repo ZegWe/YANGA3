@@ -5,6 +5,7 @@ import android.content.Intent
 import com.yanga.client.BoardTopicListActivity
 import com.yanga.client.LoginActivity
 import com.yanga.client.ThreadActivity
+import com.yanga.client.WebViewActivity
 import com.yanga.client.ui.BoardDestination
 import com.yanga.client.ui.BoardPreview
 import com.yanga.client.ui.ThreadDestination
@@ -45,6 +46,18 @@ object HomeActivityIntents {
     Intent(context, ThreadActivity::class.java).apply {
       putExtra(ThreadActivity.EXTRA_THREAD_ID, destination.id)
       putExtra(ThreadActivity.EXTRA_THREAD_TITLE, destination.title)
+    }
+
+  fun webView(
+    context: Context,
+    url: String,
+    title: String = "",
+    baseUrl: String,
+  ): Intent =
+    Intent(context, WebViewActivity::class.java).apply {
+      putExtra(WebViewActivity.EXTRA_URL, url)
+      putExtra(WebViewActivity.EXTRA_TITLE, title)
+      putExtra(WebViewActivity.EXTRA_BASE_URL, baseUrl)
     }
 
   fun boardDestination(intent: Intent): BoardDestination =

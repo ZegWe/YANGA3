@@ -1,6 +1,12 @@
 package com.yanga.client.api
 
 object NgaStaticUrls {
+  fun threadReadUrl(baseUrl: String, tid: String, page: Int = 1): String {
+    val normalized = baseUrl.trimEnd('/')
+    val pageQuery = if (page > 1) "&page=$page" else ""
+    return "$normalized/read.php?tid=$tid$pageQuery"
+  }
+
   fun boardIcon(fid: Int): String = "https://img4.nga.178.com/ngabbs/nga_classic/f/app/$fid.png"
 
   fun boardIconByStid(stid: Int): String = "https://img4.nga.178.com/proxy/cache_attach/ficon/${stid}v.png"

@@ -36,7 +36,10 @@ abstract class YangaComposeActivity : ComponentActivity() {
 
   override fun onResume() {
     super.onResume()
-    loginSession = LoginSessionStore.load(this)
+    val latest = LoginSessionStore.load(this)
+    if (latest != loginSession) {
+      loginSession = latest
+    }
   }
 
   @Composable
