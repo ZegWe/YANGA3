@@ -216,6 +216,22 @@ class PostContentParserTest {
   }
 
   @Test
+  fun parseDecodesHtmlNumericEntities() {
+    val parts = PostContentParser.parse("支持&#9994;")
+
+    val text = parts.single() as PostContentPart.Text
+    assertEquals("支持✊", text.text)
+  }
+
+  @Test
+  fun parseDecodesDoubleEscapedHtmlNumericEntities() {
+    val parts = PostContentParser.parse("支持&amp;#9994;")
+
+    val text = parts.single() as PostContentPart.Text
+    assertEquals("支持✊", text.text)
+  }
+
+  @Test
   fun parsePreservesStandaloneUrlAsLink() {
     val parts = PostContentParser.parse("open https://example.com/a?b=1 now")
 

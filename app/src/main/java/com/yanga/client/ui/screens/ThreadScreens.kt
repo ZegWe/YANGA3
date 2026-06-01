@@ -1,6 +1,7 @@
 package com.yanga.client.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -536,13 +538,158 @@ private fun PostItem(
         }
       }
 
+      if (post.embeddedComments.isNotEmpty()) {
+        PostSectionDivider()
+        PostBodySection(title = "评论") {
+          Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            post.embeddedComments.forEach { reply ->
+              PostEmbeddedReplyItem(
+                reply = reply,
+                onLinkClick = onLinkClick,
+                onImageClick = onImageClick,
+              )
+            }
+          }
+        }
+      }
+
+      if (post.hotReplies.isNotEmpty()) {
+        PostSectionDivider()
+        PostBodySection(title = "热点回复") {
+          Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            post.hotReplies.forEach { reply ->
+              PostEmbeddedReplyItem(
+                reply = reply,
+                onLinkClick = onLinkClick,
+                onImageClick = onImageClick,
+              )
+            }
+          }
+        }
+      }
+
       if (post.attachments.isNotEmpty()) {
+        PostSectionDivider()
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
           post.attachments.forEach { attachment ->
             AttachmentRow(
               attachment = attachment,
               onClick = { onAttachmentClick(attachment) },
             )
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun PostSectionDivider(modifier: Modifier = Modifier) {
+  HorizontalDivider(
+    modifier = modifier.padding(vertical = 4.dp),
+    color = MaterialTheme.colorScheme.outlineVariant,
+  )
+}
+
+@Composable
+private fun PostBodySection(
+  title: String,
+  modifier: Modifier = Modifier,
+  content: @Composable () -> Unit,
+) {
+  Column(
+    modifier = modifier.fillMaxWidth(),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+  ) {
+    Text(
+      text = title,
+      style = MaterialTheme.typography.titleSmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    content()
+  }
+}
+
+@Composable
+private fun PostEmbeddedReplyItem(
+  reply: PostEmbeddedReplyPreview,
+  onLinkClick: (String) -> Unit,
+  onImageClick: (String) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val contentParts = remember(reply.content) { PostContentParser.parse(reply.content) }
+  val contentBlocks = remember(contentParts) { groupPostContentParts(contentParts) }
+
+  Row(
+    modifier = modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.spacedBy(10.dp),
+    verticalAlignment = Alignment.Top,
+  ) {
+    Column(
+      modifier = Modifier.width(56.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+      UserAvatar(
+        name = reply.author,
+        avatarUrl = reply.authorAvatarUrl,
+        modifier = Modifier.size(36.dp),
+        size = 36.dp,
+      )
+      Text(
+        text = reply.author,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+      )
+    }
+
+    Surface(
+      modifier = Modifier.weight(1f),
+      color = MaterialTheme.colorScheme.surfaceContainer,
+      shape =
+        RoundedCornerShape(
+          topStart = 0.dp,
+          topEnd = 8.dp,
+          bottomEnd = 8.dp,
+          bottomStart = 8.dp,
+        ),
+      border =
+        androidx.compose.foundation.BorderStroke(
+          width = 1.dp,
+          color = MaterialTheme.colorScheme.outlineVariant,
+        ),
+    ) {
+      Column(
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        for (block in contentBlocks) {
+          when (block) {
+            is PostContentBlock.Inline -> {
+              PostInlineRichText(items = block.items, onLinkClick = onLinkClick)
+            }
+            is PostContentBlock.Quote -> {
+              PostQuoteBlock(
+                parts = block.part.parts,
+                onLinkClick = onLinkClick,
+                onImageClick = onImageClick,
+                nested = true,
+              )
+            }
+            is PostContentBlock.Image -> {
+              CachedPostImage(
+                url = block.part.url,
+                onClick = { onImageClick(block.part.url) },
+              )
+            }
+            is PostContentBlock.Audio -> {
+              PostAudioPlayer(
+                url = block.part.url,
+                label = block.part.label,
+              )
+            }
           }
         }
       }

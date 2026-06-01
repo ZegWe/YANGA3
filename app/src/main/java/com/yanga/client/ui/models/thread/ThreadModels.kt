@@ -1,5 +1,11 @@
 package com.yanga.client.ui
 
+data class PostEmbeddedReplyPreview(
+  val author: String,
+  val authorAvatarUrl: String? = null,
+  val content: String,
+)
+
 data class PostPreview(
   val author: String,
   val authorAvatarUrl: String? = null,
@@ -7,6 +13,8 @@ data class PostPreview(
   val time: String,
   val content: String,
   val avatarInitial: String,
+  val embeddedComments: List<PostEmbeddedReplyPreview> = emptyList(),
+  val hotReplies: List<PostEmbeddedReplyPreview> = emptyList(),
   val attachments: List<PostAttachmentPreview> = emptyList(),
 )
 

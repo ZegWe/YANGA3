@@ -73,13 +73,19 @@ object PostContentParser {
 }
 
 private object ContentNormalizer {
-  fun prepare(content: String): String =
-    content
+  fun prepare(content: String): String {
+    val decodedEntities =
+      content
+        .replace("&nbsp;", " ")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+    return decodedEntities
       .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
-      .replace("&nbsp;", " ")
-      .replace("&lt;", "<")
-      .replace("&gt;", ">")
-      .replace("&amp;", "&")
+      .replace(Regex("&#(\\d+);")) { match ->
+        match.groupValues[1].toIntOrNull()?.toChar()?.toString() ?: match.value
+      }
+  }
 }
 
 /**

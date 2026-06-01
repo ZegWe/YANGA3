@@ -11,6 +11,18 @@ data class NgaThreadRead(
   val posts: List<NgaThreadPost>,
 )
 
+data class NgaThreadEmbeddedReply(
+  val pid: String,
+  val tid: String,
+  val authorId: String,
+  val author: String,
+  val authorAvatarUrl: String? = null,
+  val content: String,
+  val postDate: Long,
+  val score: Int = 0,
+  val lou: Int = 0,
+)
+
 data class NgaThreadPost(
   val pid: String,
   val tid: String,
@@ -22,6 +34,9 @@ data class NgaThreadPost(
   val content: String,
   val lou: Int,
   val postDate: Long,
+  val editDate: Long? = null,
+  val embeddedComments: List<NgaThreadEmbeddedReply> = emptyList(),
+  val hotReplies: List<NgaThreadEmbeddedReply> = emptyList(),
   val attachments: List<NgaThreadAttachment> = emptyList(),
 )
 
@@ -38,9 +53,11 @@ object NgaThreadParser {
     val replies = data.optJSONObject("__R") ?: JSONObject()
     val users = data.optJSONObject("__U") ?: JSONObject()
 
+    val commentContentByPid = buildCommentContentIndex(replies.optJSONObject("0"), topic, users)
+
     val posts = replies.keys().asSequence()
       .sortedWith(compareBy { it.toIntOrNull() ?: Int.MAX_VALUE })
-      .mapNotNull { key -> replies.optJSONObject(key)?.toPost(topic, users) }
+      .mapNotNull { key -> replies.optJSONObject(key)?.toPost(topic, users, commentContentByPid) }
       .toList()
 
     return NgaThreadRead(
@@ -52,25 +69,106 @@ object NgaThreadParser {
     )
   }
 
-  private fun JSONObject.toPost(topic: JSONObject, users: JSONObject): NgaThreadPost {
+  private fun buildCommentContentIndex(
+    opPost: JSONObject?,
+    topic: JSONObject,
+    users: JSONObject,
+  ): Map<String, NgaThreadEmbeddedReply> {
+    if (opPost == null) return emptyMap()
+    val comments = opPost.optJSONObject("comment") ?: return emptyMap()
+    return comments.keys().asSequence()
+      .mapNotNull { key -> comments.optJSONObject(key)?.toEmbeddedReply(topic, users) }
+      .associateBy { it.pid }
+  }
+
+  private fun JSONObject.toPost(
+    topic: JSONObject,
+    users: JSONObject,
+    commentContentByPid: Map<String, NgaThreadEmbeddedReply>,
+  ): NgaThreadPost {
     val authorId = stringValue("authorid")
     val user = lookupUser(users, authorId)
     val author = resolveAuthorName(user)
     val avatarRaw = user?.nullableStringValue("avatar") ?: nullableStringValue("avatar")
     val memberId = user?.nullableStringValue("memberid", "gid", "groupid")
+    val tid = stringValue("tid").ifBlank { topic.stringValue("tid") }
+    val pid = stringValue("pid")
+    val commentFallback = commentContentByPid[pid]
+    val content =
+      stringValue("content").ifBlank {
+        commentFallback?.content.orEmpty()
+      }
+    val postDate =
+      longValue("postdatetimestamp").takeIf { it > 0 }
+        ?: longValue("postdate").takeIf { it > 0 }
+        ?: commentFallback?.postDate
+        ?: 0L
+    val embeddedComments =
+      if (intValue("lou") == 0) {
+        parseEmbeddedReplies("comment", topic, users)
+      } else {
+        emptyList()
+      }
+    val hotReplies =
+      if (intValue("lou") == 0) {
+        parseEmbeddedReplies("hotreply", topic, users)
+      } else {
+        emptyList()
+      }
     return NgaThreadPost(
-      pid = stringValue("pid"),
-      tid = stringValue("tid").ifBlank { topic.stringValue("tid") },
+      pid = pid,
+      tid = tid,
       fid = stringValue("fid").ifBlank { topic.stringValue("fid") },
       authorId = authorId,
       author = author,
       authorAvatarUrl = NgaAvatarUrls.resolveUserAvatar(avatarRaw, authorId, memberId),
       subject = stringValue("subject").ifBlank { topic.stringValue("subject") },
-      content = stringValue("content"),
+      content = content,
       lou = intValue("lou"),
-      postDate = longValue("postdatetimestamp").takeIf { it > 0 } ?: longValue("postdate"),
+      postDate = postDate,
+      editDate = parseAlterInfo(nullableStringValue("alterinfo")),
+      embeddedComments = embeddedComments,
+      hotReplies = hotReplies,
       attachments = parseAttachments(),
     )
+  }
+
+  private fun JSONObject.parseEmbeddedReplies(
+    field: String,
+    topic: JSONObject,
+    users: JSONObject,
+  ): List<NgaThreadEmbeddedReply> {
+    val container = optJSONObject(field) ?: return emptyList()
+    return container.keys().asSequence()
+      .sortedWith(compareBy { it.toIntOrNull() ?: Int.MAX_VALUE })
+      .mapNotNull { key -> container.optJSONObject(key)?.toEmbeddedReply(topic, users) }
+      .toList()
+  }
+
+  private fun JSONObject.toEmbeddedReply(topic: JSONObject, users: JSONObject): NgaThreadEmbeddedReply? {
+    val content = stringValue("content")
+    if (content.isBlank()) return null
+    val authorId = stringValue("authorid")
+    val user = lookupUser(users, authorId)
+    val avatarRaw = user?.nullableStringValue("avatar")
+    val memberId = user?.nullableStringValue("memberid", "gid", "groupid")
+    return NgaThreadEmbeddedReply(
+      pid = stringValue("pid"),
+      tid = stringValue("tid").ifBlank { topic.stringValue("tid") },
+      authorId = authorId,
+      author = resolveAuthorName(user),
+      authorAvatarUrl = NgaAvatarUrls.resolveUserAvatar(avatarRaw, authorId, memberId),
+      content = content,
+      postDate = longValue("postdatetimestamp").takeIf { it > 0 } ?: longValue("postdate"),
+      score = intValue("score"),
+      lou = intValue("lou"),
+    )
+  }
+
+  private fun parseAlterInfo(alterinfo: String?): Long? {
+    if (alterinfo.isNullOrBlank()) return null
+    val match = Regex("""\[E(\d+)""").find(alterinfo) ?: return null
+    return match.groupValues[1].toLongOrNull()
   }
 
   private fun JSONObject.parseAttachments(): List<NgaThreadAttachment> {

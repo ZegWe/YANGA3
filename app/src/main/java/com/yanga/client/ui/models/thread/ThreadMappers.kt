@@ -1,5 +1,6 @@
 package com.yanga.client.ui
 
+import com.yanga.client.api.NgaThreadEmbeddedReply
 import com.yanga.client.api.NgaThreadPost
 
 internal fun NgaThreadPost.toPreview(): PostPreview =
@@ -10,10 +11,19 @@ internal fun NgaThreadPost.toPreview(): PostPreview =
     time = postDate.toUiDateTimeString(),
     content = content,
     avatarInitial = author.initialOrFallback(),
+    embeddedComments = embeddedComments.map { it.toPreview() },
+    hotReplies = hotReplies.map { it.toPreview() },
     attachments = attachments.map { attachment ->
       PostAttachmentPreview(
         name = attachment.name,
         url = attachment.url,
       )
     },
+  )
+
+private fun NgaThreadEmbeddedReply.toPreview(): PostEmbeddedReplyPreview =
+  PostEmbeddedReplyPreview(
+    author = author,
+    authorAvatarUrl = authorAvatarUrl,
+    content = content,
   )

@@ -499,4 +499,74 @@ class NgaApiTest {
       thread.posts.first().attachments,
     )
   }
+
+  @Test
+  fun threadParserParsesEmbeddedCommentsHotRepliesAndCommentPostContent() {
+    val raw = """
+      {
+        "data":{
+          "__T":{"tid":46859796,"fid":321,"subject":"[公告]不让发转让购票资格"},
+          "__U":{
+            "33855250":{"uid":33855250,"username":"FBbZ"},
+            "42988763":{"uid":42988763,"username":"评论者"},
+            "34161502":{"uid":34161502,"username":"热点用户"}
+          },
+          "__R":{
+            "0":{
+              "pid":0,
+              "tid":46859796,
+              "fid":321,
+              "authorid":33855250,
+              "subject":"[公告]不让发转让购票资格",
+              "content":"正文[b]闲鱼[/b]",
+              "lou":0,
+              "postdatetimestamp":1779786422,
+              "alterinfo":"[E1779786491 0 0]\t",
+              "comment":{
+                "0":{
+                  "pid":869599169,
+                  "tid":46859796,
+                  "authorid":42988763,
+                  "content":"[b]Reply to [tid=46859796]Topic[/tid] Post by [uid=33855250]FBbZ[/uid] (2026-05-26 17:07)[/b]<br/><br/>不是，才10场都满足不了还有必要去现场吗",
+                  "lou":10,
+                  "score":5,
+                  "postdatetimestamp":1779850050
+                }
+              },
+              "hotreply":{
+                "0":{
+                  "pid":869524613,
+                  "tid":46859796,
+                  "authorid":34161502,
+                  "content":"确实<br/>游戏里有变声器毛妹",
+                  "lou":2,
+                  "score":24,
+                  "postdatetimestamp":1779786640
+                }
+              }
+            },
+            "10":{
+              "pid":869599169,
+              "authorid":42988763,
+              "lou":10,
+              "comment_to_id":-1
+            }
+          },
+          "__PAGE":1
+        }
+      }
+    """.trimIndent()
+
+    val thread = NgaThreadParser.parseRead(raw)
+    val op = thread.posts.first { it.lou == 0 }
+    val commentPost = thread.posts.first { it.lou == 10 }
+
+    assertEquals(1779786491L, op.editDate)
+    assertEquals(1, op.embeddedComments.size)
+    assertEquals("42988763", op.embeddedComments.first().authorId)
+    assertEquals(1, op.hotReplies.size)
+    assertEquals("869524613", op.hotReplies.first().pid)
+    assertTrue(commentPost.content.contains("不是，才10场都满足不了"))
+    assertEquals(1779850050L, commentPost.postDate)
+  }
 }
