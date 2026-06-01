@@ -457,4 +457,46 @@ class NgaApiTest {
     assertEquals("正文<br/>内容", thread.posts.first().content)
     assertEquals(1770000000L, thread.posts.first().postDate)
   }
+
+  @Test
+  fun threadParserParsesPostAttachments() {
+    val raw = """
+      {
+        "data":{
+          "__T":{"tid":46634352,"fid":7,"subject":"附件主题"},
+          "__U":{"42":{"uid":42,"username":"作者A"}},
+          "__R":{
+            "0":{
+              "pid":101,
+              "tid":46634352,
+              "fid":7,
+              "authorid":42,
+              "subject":"",
+              "content":"正文",
+              "lou":0,
+              "postdatetimestamp":1770000000,
+              "attachs":{
+                "0":{
+                  "attachurl":"/mon_202606/01/sample.png"
+                }
+              }
+            }
+          },
+          "__PAGE":1
+        }
+      }
+    """.trimIndent()
+
+    val thread = NgaThreadParser.parseRead(raw)
+
+    assertEquals(
+      listOf(
+        NgaThreadAttachment(
+          name = "sample.png",
+          url = "https://img.nga.178.com/attachments/mon_202606/01/sample.png",
+        ),
+      ),
+      thread.posts.first().attachments,
+    )
+  }
 }

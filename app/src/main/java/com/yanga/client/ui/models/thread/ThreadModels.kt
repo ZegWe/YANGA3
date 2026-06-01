@@ -7,6 +7,12 @@ data class PostPreview(
   val time: String,
   val content: String,
   val avatarInitial: String,
+  val attachments: List<PostAttachmentPreview> = emptyList(),
+)
+
+data class PostAttachmentPreview(
+  val name: String,
+  val url: String,
 )
 
 data class ThreadUiState(

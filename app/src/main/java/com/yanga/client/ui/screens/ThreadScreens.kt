@@ -1,6 +1,7 @@
 package com.yanga.client.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StarBorder
@@ -314,11 +316,13 @@ internal fun ThreadReadingScreen(
   onBack: () -> Unit,
   onOpenInBrowser: () -> Unit = {},
   onLinkClick: (String) -> Unit = {},
+  onAttachmentDownload: (PostAttachmentPreview) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   var menuExpanded by remember { mutableStateOf(false) }
   var isFavorited by remember { mutableStateOf(false) }
   var showJumpFloorDialog by remember { mutableStateOf(false) }
+  var pendingAttachment by remember { mutableStateOf<PostAttachmentPreview?>(null) }
   var previewImageUrls by remember { mutableStateOf(emptyList<String>()) }
   var previewImageIndex by remember { mutableStateOf<Int?>(null) }
 
@@ -402,6 +406,7 @@ internal fun ThreadReadingScreen(
                 previewImageIndex = postImageUrls.indexOf(url).takeIf { it >= 0 } ?: 0
               },
               onLinkClick = onLinkClick,
+              onAttachmentClick = { attachment -> pendingAttachment = attachment },
             )
           }
         }
@@ -418,6 +423,17 @@ internal fun ThreadReadingScreen(
     JumpFloorDialog(
       onDismiss = { showJumpFloorDialog = false },
       onConfirm = { showJumpFloorDialog = false },
+    )
+  }
+
+  pendingAttachment?.let { attachment ->
+    AttachmentDownloadDialog(
+      attachment = attachment,
+      onDismiss = { pendingAttachment = null },
+      onConfirm = {
+        pendingAttachment = null
+        onAttachmentDownload(attachment)
+      },
     )
   }
 
@@ -455,6 +471,7 @@ private fun PostItem(
   modifier: Modifier = Modifier,
   onImageClick: (String) -> Unit = {},
   onLinkClick: (String) -> Unit = {},
+  onAttachmentClick: (PostAttachmentPreview) -> Unit = {},
 ) {
   val contentParts = remember(post.content) { PostContentParser.parse(post.content) }
   val contentBlocks = remember(contentParts) { groupPostContentParts(contentParts) }
@@ -527,8 +544,83 @@ private fun PostItem(
           }
         }
       }
+
+      if (post.attachments.isNotEmpty()) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          post.attachments.forEach { attachment ->
+            AttachmentRow(
+              attachment = attachment,
+              onClick = { onAttachmentClick(attachment) },
+            )
+          }
+        }
+      }
     }
   }
+}
+
+@Composable
+private fun AttachmentRow(
+  attachment: PostAttachmentPreview,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Surface(
+    modifier =
+      modifier
+        .fillMaxWidth()
+        .clickable(onClick = onClick)
+        .semantics { contentDescription = "Attachment ${attachment.name}" },
+    color = MaterialTheme.colorScheme.surfaceContainer,
+    shape = MaterialTheme.shapes.small,
+    border =
+      androidx.compose.foundation.BorderStroke(
+        1.dp,
+        MaterialTheme.colorScheme.outlineVariant,
+      ),
+  ) {
+    Row(
+      modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+      Icon(
+        imageVector = Icons.Outlined.Link,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.primary,
+      )
+      Text(
+        text = attachment.name,
+        modifier = Modifier.weight(1f),
+        style = MaterialTheme.typography.bodyMedium,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+    }
+  }
+}
+
+@Composable
+private fun AttachmentDownloadDialog(
+  attachment: PostAttachmentPreview,
+  onDismiss: () -> Unit,
+  onConfirm: () -> Unit,
+) {
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    title = { Text("下载附件") },
+    text = { Text("保存 ${attachment.name} 到 Downloads？") },
+    confirmButton = {
+      TextButton(onClick = onConfirm) {
+        Text("下载")
+      }
+    },
+    dismissButton = {
+      TextButton(onClick = onDismiss) {
+        Text("取消")
+      }
+    },
+  )
 }
 
 @Composable

@@ -10,4 +10,10 @@ internal fun NgaThreadPost.toPreview(): PostPreview =
     time = postDate.toUiDateTimeString(),
     content = content,
     avatarInitial = author.initialOrFallback(),
+    attachments = attachments.map { attachment ->
+      PostAttachmentPreview(
+        name = attachment.name,
+        url = attachment.url,
+      )
+    },
   )

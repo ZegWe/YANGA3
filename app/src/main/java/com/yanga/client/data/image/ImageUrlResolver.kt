@@ -9,6 +9,8 @@ object ImageUrlResolver {
 
     return when {
       trimmed.startsWith("./") -> NgaStaticUrls.expandRelativeImage(trimmed)
+      trimmed.startsWith("/mon_") -> "https://img.nga.178.com/attachments${trimmed}"
+      trimmed.startsWith("mon_") -> "https://img.nga.178.com/attachments/$trimmed"
       trimmed.startsWith("//img6.nga.178.com/attachments/") ->
         "https://img.nga.178.com/attachments/${trimmed.substringAfter("/attachments/")}"
       trimmed.startsWith("//") -> "https:$trimmed"

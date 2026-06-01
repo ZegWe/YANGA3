@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.geometry.Offset
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -158,5 +159,49 @@ class ThreadReadingScreenTest {
     }
     composeTestRule.onNodeWithContentDescription("Close image preview").performClick()
     composeTestRule.onAllNodesWithContentDescription("Image preview", substring = true).assertCountEquals(0)
+  }
+
+  @Test
+  fun threadReadingScreenConfirmsAttachmentDownload() {
+    var downloadUrl = ""
+    composeTestRule.setContent {
+      ThreadReadingScreen(
+        state =
+          ThreadUiState(
+            title = "Attachment thread",
+            page = "1",
+            replyCount = "1",
+            posts =
+              LoadableUiState.Content(
+                listOf(
+                  PostPreview(
+                    author = "reader",
+                    floor = "楼主",
+                    time = "now",
+                    avatarInitial = "R",
+                    content = "正文",
+                    attachments =
+                      listOf(
+                        PostAttachmentPreview(
+                          name = "sample image.png",
+                          url = "https://img.nga.178.com/attachments/mon_202606/01/sample.png",
+                        ),
+                      ),
+                  ),
+                ),
+              ),
+          ),
+        onBack = {},
+        onAttachmentDownload = { attachment -> downloadUrl = attachment.url },
+      )
+    }
+
+    composeTestRule.onNodeWithContentDescription("Attachment sample image.png").performClick()
+    composeTestRule.onNodeWithText("下载附件").assertExists()
+    composeTestRule.onNodeWithText("保存 sample image.png 到 Downloads？").assertExists()
+
+    composeTestRule.onNodeWithText("下载").performClick()
+
+    assertEquals("https://img.nga.178.com/attachments/mon_202606/01/sample.png", downloadUrl)
   }
 }

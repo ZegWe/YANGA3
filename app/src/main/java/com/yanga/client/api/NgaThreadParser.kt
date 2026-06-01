@@ -1,5 +1,6 @@
 package com.yanga.client.api
 
+import com.yanga.client.data.image.ImageUrlResolver
 import org.json.JSONObject
 
 data class NgaThreadRead(
@@ -21,6 +22,12 @@ data class NgaThreadPost(
   val content: String,
   val lou: Int,
   val postDate: Long,
+  val attachments: List<NgaThreadAttachment> = emptyList(),
+)
+
+data class NgaThreadAttachment(
+  val name: String,
+  val url: String,
 )
 
 object NgaThreadParser {
@@ -62,8 +69,37 @@ object NgaThreadParser {
       content = stringValue("content"),
       lou = intValue("lou"),
       postDate = longValue("postdatetimestamp").takeIf { it > 0 } ?: longValue("postdate"),
+      attachments = parseAttachments(),
     )
   }
+
+  private fun JSONObject.parseAttachments(): List<NgaThreadAttachment> {
+    val container = optJSONObject("attachs") ?: optJSONObject("attachments") ?: return emptyList()
+    return container.keys().asSequence()
+      .sortedWith(compareBy { it.toIntOrNull() ?: Int.MAX_VALUE })
+      .mapNotNull { key -> container.opt(key).toAttachment(fallbackName = key) }
+      .toList()
+  }
+
+  private fun Any?.toAttachment(fallbackName: String): NgaThreadAttachment? =
+    when (this) {
+      is JSONObject -> {
+        val url = nullableStringValue("url", "attachurl", "path", "src", "href")
+          ?.let(ImageUrlResolver::resolve)
+          ?.takeIf { it.isNotBlank() }
+          ?: return null
+        val name = nullableStringValue("name", "filename", "file", "dscp", "desc")
+          ?: ImageUrlResolver.fileName(url)
+            .takeIf { it.isNotBlank() }
+          ?: fallbackName
+        NgaThreadAttachment(name = name, url = url)
+      }
+      is String -> {
+        val url = ImageUrlResolver.resolve(this).takeIf { it.isNotBlank() } ?: return null
+        NgaThreadAttachment(name = ImageUrlResolver.fileName(url), url = url)
+      }
+      else -> null
+    }
 
   private fun JSONObject.resolveAuthorName(user: JSONObject?): String =
     stringValue("author")
