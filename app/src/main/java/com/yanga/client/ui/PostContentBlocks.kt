@@ -9,6 +9,8 @@ internal sealed class PostContentBlock {
   data class Quote(val part: PostContentPart.Quote) : PostContentBlock()
 
   data class Image(val part: PostContentPart.Image) : PostContentBlock()
+
+  data class Audio(val part: PostContentPart.Audio) : PostContentBlock()
 }
 
 internal sealed class PostInlineItem {
@@ -48,6 +50,10 @@ internal fun groupPostContentParts(parts: List<PostContentPart>): List<PostConte
       is PostContentPart.Image -> {
         flushInlineItems()
         blocks += PostContentBlock.Image(part)
+      }
+      is PostContentPart.Audio -> {
+        flushInlineItems()
+        blocks += PostContentBlock.Audio(part)
       }
     }
   }

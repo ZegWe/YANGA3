@@ -34,7 +34,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StarBorder
@@ -90,6 +89,7 @@ import com.yanga.client.data.image.imageCacheManager
 import androidx.compose.material3.HorizontalDivider
 import com.yanga.client.ui.components.CachedAsyncImage
 import com.yanga.client.ui.components.CachedPostImage
+import com.yanga.client.ui.components.PostAudioPlayer
 import com.yanga.client.ui.components.PrefetchUserAvatars
 import com.yanga.client.ui.components.SubBoardDirectorySheet
 import com.yanga.client.ui.components.TopicListItem
@@ -515,31 +515,22 @@ private fun PostItem(
             PostInlineRichText(items = block.items, onLinkClick = onLinkClick)
           }
           is PostContentBlock.Quote -> {
-            Surface(
-              modifier = Modifier.fillMaxWidth(),
-              color = MaterialTheme.colorScheme.surfaceContainer,
-              shape = MaterialTheme.shapes.small,
-              border =
-                androidx.compose.foundation.BorderStroke(
-                  1.dp,
-                  MaterialTheme.colorScheme.outlineVariant,
-                ),
-            ) {
-              PostRichText(
-                text = block.part.text,
-                styles = block.part.styles,
-                onLinkClick = onLinkClick,
-                modifier = Modifier.padding(12.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                baseItalic = true,
-              )
-            }
+            PostQuoteBlock(
+              parts = block.part.parts,
+              onLinkClick = onLinkClick,
+              onImageClick = onImageClick,
+            )
           }
           is PostContentBlock.Image -> {
             CachedPostImage(
               url = block.part.url,
               onClick = { onImageClick(block.part.url) },
+            )
+          }
+          is PostContentBlock.Audio -> {
+            PostAudioPlayer(
+              url = block.part.url,
+              label = block.part.label,
             )
           }
         }
@@ -560,11 +551,79 @@ private fun PostItem(
 }
 
 @Composable
+private fun PostQuoteBlock(
+  parts: List<PostContentPart>,
+  onLinkClick: (String) -> Unit,
+  onImageClick: (String) -> Unit,
+  modifier: Modifier = Modifier,
+  nested: Boolean = false,
+) {
+  val blocks = remember(parts) { groupPostContentParts(parts) }
+  Surface(
+    modifier = modifier.fillMaxWidth(),
+    color =
+      if (nested) {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+      } else {
+        MaterialTheme.colorScheme.surfaceContainer
+      },
+    shape = MaterialTheme.shapes.small,
+    border =
+      androidx.compose.foundation.BorderStroke(
+        1.dp,
+        MaterialTheme.colorScheme.outlineVariant,
+      ),
+  ) {
+    Column(
+      modifier = Modifier.padding(12.dp),
+      verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      for (block in blocks) {
+        when (block) {
+          is PostContentBlock.Inline -> {
+            PostInlineRichText(
+              items = block.items,
+              onLinkClick = onLinkClick,
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          is PostContentBlock.Image -> {
+            CachedPostImage(
+              url = block.part.url,
+              onClick = { onImageClick(block.part.url) },
+            )
+          }
+          is PostContentBlock.Audio -> {
+            PostAudioPlayer(
+              url = block.part.url,
+              label = block.part.label,
+            )
+          }
+          is PostContentBlock.Quote -> {
+            PostQuoteBlock(
+              parts = block.part.parts,
+              onLinkClick = onLinkClick,
+              onImageClick = onImageClick,
+              nested = true,
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
 private fun AttachmentRow(
   attachment: PostAttachmentPreview,
   onClick: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
+  val fileCategory =
+    remember(attachment.name, attachment.url) {
+      AttachmentFileType.category(attachment.name, attachment.url)
+    }
   Surface(
     modifier =
       modifier
@@ -585,7 +644,7 @@ private fun AttachmentRow(
       horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
       Icon(
-        imageVector = Icons.Outlined.Link,
+        imageVector = AttachmentFileType.icon(fileCategory),
         contentDescription = null,
         tint = MaterialTheme.colorScheme.primary,
       )
@@ -914,9 +973,7 @@ private fun android.graphics.drawable.Drawable.intrinsicAspectRatio(): Float? {
 }
 
 private fun postContentImageUrls(post: PostPreview): List<String> =
-  PostContentParser.parse(post.content).mapNotNull { part ->
-    (part as? PostContentPart.Image)?.url
-  }
+  PostContentParser.collectImageUrls(PostContentParser.parse(post.content))
 
 @Composable
 private fun PostInlineRichText(
@@ -1133,13 +1190,10 @@ private fun PrefetchPostImages(posts: List<PostPreview>) {
   val imageUrls =
     remember(posts) {
       posts
-        .flatMap { post -> PostContentParser.parse(post.content) }
-        .mapNotNull { part ->
-          when (part) {
-            is PostContentPart.Image -> part.url
-            is PostContentPart.Emoticon -> part.url
-            else -> null
-          }
+        .flatMap { post ->
+          val parts = PostContentParser.parse(post.content)
+          PostContentParser.collectImageUrls(parts) +
+            parts.mapNotNull { (it as? PostContentPart.Emoticon)?.url }
         }
         .distinct()
     }

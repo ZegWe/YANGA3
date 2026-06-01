@@ -162,6 +162,38 @@ class ThreadReadingScreenTest {
   }
 
   @Test
+  fun threadReadingScreenOpensPreviewForNestedQuoteImage() {
+    composeTestRule.setContent {
+      ThreadReadingScreen(
+        state =
+          ThreadUiState(
+            title = "Nested quote thread",
+            page = "1",
+            replyCount = "1",
+            posts =
+              LoadableUiState.Content(
+                listOf(
+                  PostPreview(
+                    author = "reader",
+                    floor = "楼主",
+                    time = "now",
+                    avatarInitial = "R",
+                    content =
+                      "[quote][quote]intro[/quote][quote]TOP [img]./mon_nested.jpg[/img][/quote][/quote]",
+                  ),
+                ),
+              ),
+          ),
+        onBack = {},
+      )
+    }
+
+    composeTestRule.onAllNodesWithContentDescription("Post image").assertCountEquals(1)
+    composeTestRule.onAllNodesWithContentDescription("Post image")[0].performClick()
+    composeTestRule.onNodeWithContentDescription("Image preview 1 of 1").assertExists()
+  }
+
+  @Test
   fun threadReadingScreenConfirmsAttachmentDownload() {
     var downloadUrl = ""
     composeTestRule.setContent {

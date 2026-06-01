@@ -104,8 +104,9 @@ class PostContentParserTest {
       )
 
     val quote = parts.single() as PostContentPart.Quote
-    assertEquals("Reply Post by reader (2026-06-01):\nquoted", quote.text)
-    assertTrue(quote.styles.any { it.bold })
+    val quoteText = quote.parts.filterIsInstance<PostContentPart.Text>().single()
+    assertEquals("Reply Post by reader (2026-06-01):\nquoted", quoteText.text)
+    assertTrue(quoteText.styles.any { it.bold })
   }
 
   @Test
@@ -136,6 +137,81 @@ class PostContentParserTest {
         linkUrl = "https://bbs.nga.cn/read.php?tid=6406100",
       ),
       text.styles.single(),
+    )
+  }
+
+  @Test
+  fun parseExtractsImageInsideQuote() {
+    val parts = PostContentParser.parse("[quote]see [img]./mon_a.jpg[/img] after[/quote]")
+
+    val quote = parts.single() as PostContentPart.Quote
+    assertEquals(3, quote.parts.size)
+    assertEquals(PostContentPart.Text("see"), quote.parts[0])
+    assertEquals(
+      PostContentPart.Image("https://img.nga.178.com/attachments/mon_a.jpg"),
+      quote.parts[1],
+    )
+    assertEquals(PostContentPart.Text("after"), quote.parts[2])
+  }
+
+  @Test
+  fun parseHandlesNestedQuotesWithImages() {
+    val parts =
+      PostContentParser.parse(
+        "[quote][quote]intro[/quote][quote]TOP [img]./mon_202606/01/test.webp[/img][/quote][/quote]",
+      )
+
+    val outer = parts.single() as PostContentPart.Quote
+    assertEquals(2, outer.parts.size)
+    val intro = outer.parts[0] as PostContentPart.Quote
+    assertEquals("intro", (intro.parts.single() as PostContentPart.Text).text)
+    val top = outer.parts[1] as PostContentPart.Quote
+    assertTrue(top.parts.any { it is PostContentPart.Image })
+  }
+
+  @Test
+  fun parseExtractsFlashAudioTag() {
+    val parts =
+      PostContentParser.parse(
+        "[flash=audio]./mon_202606/01/8xQ6-kcb3Kf.mp3?duration=4″[/flash]",
+      )
+
+    assertEquals(
+      PostContentPart.Audio(
+        url = "https://img.nga.178.com/attachments/mon_202606/01/8xQ6-kcb3Kf.mp3?duration=4",
+        label = "8xQ6-kcb3Kf.mp3",
+      ),
+      parts.single(),
+    )
+  }
+
+  @Test
+  fun parseExtractsFlashAudioInsideQuote() {
+    val parts =
+      PostContentParser.parse(
+        "[quote][flash=audio]./mon_a.mp3[/flash][/quote]",
+      )
+
+    val quote = parts.single() as PostContentPart.Quote
+    assertEquals(
+      PostContentPart.Audio(
+        url = "https://img.nga.178.com/attachments/mon_a.mp3",
+        label = "mon_a.mp3",
+      ),
+      quote.parts.single(),
+    )
+  }
+
+  @Test
+  fun collectImageUrlsIncludesNestedQuoteImages() {
+    val parts =
+      PostContentParser.parse(
+        "[quote][quote]intro[/quote][quote]a [img]./mon_a.jpg[/img] b[/quote][/quote]",
+      )
+
+    assertEquals(
+      listOf("https://img.nga.178.com/attachments/mon_a.jpg"),
+      PostContentParser.collectImageUrls(parts),
     )
   }
 

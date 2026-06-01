@@ -22,9 +22,20 @@ sealed class PostContentPart {
   ) : PostContentPart()
 
   data class Quote(
-    val text: String,
-    val styles: List<PostTextStyleRange> = emptyList(),
-  ) : PostContentPart()
+    val parts: List<PostContentPart>,
+  ) : PostContentPart() {
+    constructor(
+      text: String,
+      styles: List<PostTextStyleRange> = emptyList(),
+    ) : this(
+      parts =
+        if (text.isEmpty()) {
+          emptyList()
+        } else {
+          listOf(PostContentPart.Text(text, styles))
+        },
+    )
+  }
 
   data class Image(val url: String) : PostContentPart()
 
@@ -33,155 +44,359 @@ sealed class PostContentPart {
     val url: String,
     val alt: String,
   ) : PostContentPart()
+
+  data class Audio(
+    val url: String,
+    val label: String,
+  ) : PostContentPart()
 }
 
 object PostContentParser {
-  private val quoteRegex = Regex("\\[quote\\]([\\s\\S]*?)\\[/quote\\]", RegexOption.IGNORE_CASE)
-  private val bbCodeImageRegex = Regex("\\[img(?:\\s+[^\\]]*)?\\]([\\s\\S]*?)\\[/img\\]", RegexOption.IGNORE_CASE)
-  private val bbCodeImageAttrRegex = Regex("\\[img\\s+[^\\]]*src\\s*=\\s*[\"']?([^\"'\\]]+)[\"']?[^\\]]*\\]", RegexOption.IGNORE_CASE)
-  private val htmlImageRegex = Regex("<img\\s+[^>]*src\\s*=\\s*[\"']([^\"']+)[\"'][^>]*>", RegexOption.IGNORE_CASE)
-  private val relativeImageRegex = Regex("(\\.\\/mon_[^\\s\\]\"'<>]+)")
-  private val emoticonRegex = Regex("\\[s:([^:\\]]+):([^\\]]+)]", RegexOption.IGNORE_CASE)
-  private val tagRegex =
-    Regex(
-      "\\[(/?)(b|i|u|del|color|size|url|uid|tid|pid)(?:=([^\\]]+))?\\]",
-      RegexOption.IGNORE_CASE,
-    )
-  private val layoutTagRegex =
-    Regex("""[\[{]/?(align)(?:=[^\]}]+)?[\]}]""", RegexOption.IGNORE_CASE)
-  private val standaloneUrlRegex = Regex("""https?://[^\s\]"'<>]+""", RegexOption.IGNORE_CASE)
-  private val tokenRegex =
-    Regex(
-      "\\[quote\\][\\s\\S]*?\\[/quote\\]|\\[img(?:\\s+[^\\]]*)?\\][\\s\\S]*?\\[/img\\]|\\[img\\s+[^\\]]*\\]|<img\\s+[^>]*src\\s*=\\s*[\"'][^\"']+[\"'][^>]*>|\\.\\/mon_[^\\s\\]\"'<>]+|\\[s:[^:\\]]+:[^\\]]+]",
-      RegexOption.IGNORE_CASE,
-    )
-
   fun parse(content: String): List<PostContentPart> {
-    val normalized = decodeBasicEntities(content)
+    val normalized = ContentNormalizer.prepare(content)
     if (normalized.isBlank()) return emptyList()
 
-    val parts = mutableListOf<PostContentPart>()
-    var cursor = 0
-    for (match in tokenRegex.findAll(normalized)) {
-      if (match.range.first > cursor) {
-        appendText(parts, normalized.substring(cursor, match.range.first))
-      }
-      appendToken(parts, match.value)
-      cursor = match.range.last + 1
-    }
-
-    if (cursor < normalized.length) {
-      appendText(parts, normalized.substring(cursor))
-    }
-
-    return if (parts.isEmpty()) listOf(PostContentPart.Text(normalized.trim())) else parts
+    val parts = BbContentParser(normalized).parseDocument()
+    return parts.ifEmpty { listOf(PostContentPart.Text(normalized.trim())) }
   }
 
-  private fun appendToken(parts: MutableList<PostContentPart>, token: String) {
-    quoteRegex.matchEntire(token)?.let { match ->
-      val richText = parseRichText(match.groupValues[1])
-      if (richText.text.isNotEmpty()) {
-        parts += PostContentPart.Quote(richText.text, richText.styles)
-      }
-      return
-    }
-
-    extractImageUrl(token)?.let { url ->
-      parts += PostContentPart.Image(normalizeContentImageUrl(url))
-      return
-    }
-
-    emoticonRegex.matchEntire(token)?.let { match ->
-      resolveEmoticon(match.groupValues[1], match.groupValues[2])?.let { parts += it }
-      return
-    }
-
-    appendText(parts, token)
-  }
-
-  private fun appendText(parts: MutableList<PostContentPart>, raw: String) {
-    val richText = parseRichText(raw)
-    if (richText.text.isNotEmpty()) {
-      parts += PostContentPart.Text(richText.text, richText.styles)
-    }
-  }
-
-  private fun parseRichText(raw: String): RichText {
-    val value = stripLayoutTags(stripHtml(raw))
-    val output = StringBuilder()
-    val styles = mutableListOf<PostTextStyleRange>()
-    val stack = mutableListOf<OpenStyle>()
-    var cursor = 0
-
-    for (match in tagRegex.findAll(value)) {
-      if (match.range.first > cursor) {
-        output.append(value.substring(cursor, match.range.first))
-      }
-
-      val isClosing = match.groupValues[1] == "/"
-      val tag = match.groupValues[2].lowercase()
-      val arg = match.groupValues.getOrNull(3).orEmpty()
-      if (isClosing) {
-        closeStyle(tag, output.length, stack, styles, output)
-      } else {
-        openStyle(tag, arg, output.length, stack)
-      }
-      cursor = match.range.last + 1
-    }
-
-    if (cursor < value.length) {
-      output.append(value.substring(cursor))
-    }
-    while (stack.isNotEmpty()) {
-      closeStyle(stack.last().tag, output.length, stack, styles, output)
-    }
-
-    addStandaloneUrlStyles(output, styles)
-
-    val normalizedText = normalizeWhitespace(output.toString())
-    if (normalizedText.leadingTrim == 0 && normalizedText.trailingTrim == 0) {
-      return RichText(normalizedText.text, styles.filter { it.start < it.end })
-    }
-
-    val adjustedStyles =
-      styles
-        .mapNotNull { style ->
-          val start = (style.start - normalizedText.leadingTrim).coerceAtLeast(0)
-          val end = (style.end - normalizedText.leadingTrim).coerceAtMost(normalizedText.text.length)
-          if (start < end) style.copy(start = start, end = end) else null
+  fun collectImageUrls(parts: List<PostContentPart>): List<String> =
+    buildList {
+      for (part in parts) {
+        when (part) {
+          is PostContentPart.Image -> add(part.url)
+          is PostContentPart.Quote -> addAll(collectImageUrls(part.parts))
+          else -> Unit
         }
-    return RichText(normalizedText.text, adjustedStyles)
+      }
+    }
+}
+
+private object ContentNormalizer {
+  fun prepare(content: String): String =
+    content
+      .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
+      .replace("&nbsp;", " ")
+      .replace("&lt;", "<")
+      .replace("&gt;", ">")
+      .replace("&amp;", "&")
+}
+
+/**
+ * Block-level recursive descent parser for NGA post bodies.
+ *
+ * Document  ::= ( TextRun | Quote | Image | Emoticon )*
+ * Quote     ::= "[quote]" Document "[/quote]"
+ * Image     ::= ImgTag | HtmlImg | RelativeImgPath
+ * Audio     ::= "[flash=audio]" MediaUrl "[/flash]"
+ */
+private class BbContentParser(private val source: String) {
+  private var pos = 0
+
+  fun parseDocument(): List<PostContentPart> {
+    val parts = mutableListOf<PostContentPart>()
+    val textBuffer = StringBuilder()
+
+    fun flushText() {
+      if (textBuffer.isEmpty()) return
+      val richText = InlineTextParser(textBuffer.toString()).parse()
+      textBuffer.clear()
+      if (richText.text.isNotEmpty()) {
+        parts += PostContentPart.Text(richText.text, richText.styles)
+      }
+    }
+
+    while (!atEnd()) {
+      when {
+        startsWithIgnoreCase("[quote]") -> {
+          flushText()
+          parts += parseQuote()
+        }
+        startsWithIgnoreCase("[img") -> {
+          flushText()
+          parseImageTag()?.let { parts += it }
+        }
+        startsWith("[s:") -> {
+          flushText()
+          parseEmoticon()?.let { parts += it }
+        }
+        startsWithIgnoreCase("<img") -> {
+          flushText()
+          parseHtmlImage()?.let { parts += it }
+        }
+        startsWith("./mon_") -> {
+          flushText()
+          parseRelativeImagePath()?.let { parts += it }
+        }
+        startsWithIgnoreCase("[flash") -> {
+          flushText()
+          parseFlashTag()?.let { parts += it }
+        }
+        else -> {
+          textBuffer.append(source[pos])
+          pos++
+        }
+      }
+    }
+
+    flushText()
+    return parts
   }
 
-  private fun openStyle(tag: String, arg: String, start: Int, stack: MutableList<OpenStyle>) {
+  private fun parseQuote(): PostContentPart.Quote {
+    consume("[quote]")
+    val innerStart = pos
+    var depth = 1
+    while (!atEnd() && depth > 0) {
+      when {
+        startsWithIgnoreCase("[quote]") -> {
+          depth++
+          consume("[quote]")
+        }
+        startsWithIgnoreCase("[/quote]") -> {
+          depth--
+          if (depth == 0) break
+          consume("[/quote]")
+        }
+        else -> pos++
+      }
+    }
+    val inner = source.substring(innerStart, pos)
+    if (depth == 0) consume("[/quote]")
+    val innerParts = BbContentParser(inner).parseDocument()
+    return PostContentPart.Quote(innerParts)
+  }
+
+  private fun parseImageTag(): PostContentPart.Image? {
+    if (!startsWithIgnoreCase("[img")) return null
+    val headerEnd = source.indexOf(']', pos)
+    if (headerEnd == -1) {
+      pos = source.length
+      return null
+    }
+    val header = source.substring(pos, headerEnd + 1)
+    pos = headerEnd + 1
+
+    extractSrcAttribute(header)?.let { src ->
+      return PostContentPart.Image(normalizeContentImageUrl(src))
+    }
+
+    val closeTag = indexOfIgnoreCase("[/img]", pos)
+    if (closeTag == -1) {
+      return null
+    }
+    val url = source.substring(pos, closeTag).trim()
+    pos = closeTag + "[/img]".length
+    if (url.isBlank()) return null
+    return PostContentPart.Image(normalizeContentImageUrl(url))
+  }
+
+  private fun parseEmoticon(): PostContentPart.Emoticon? {
+    if (!startsWith("[s:")) return null
+    val close = source.indexOf(']', pos)
+    if (close == -1) {
+      pos = source.length
+      return null
+    }
+    val token = source.substring(pos, close + 1)
+    pos = close + 1
+    val body = token.substring(3, token.length - 1)
+    val separator = body.indexOf(':')
+    if (separator == -1) return null
+    val category = body.substring(0, separator)
+    val alt = body.substring(separator + 1)
+    return resolveEmoticon(category, alt)
+  }
+
+  private fun parseHtmlImage(): PostContentPart.Image? {
+    if (!startsWithIgnoreCase("<img")) return null
+    val close = source.indexOf('>', pos)
+    if (close == -1) {
+      pos = source.length
+      return null
+    }
+    val tag = source.substring(pos, close + 1)
+    pos = close + 1
+    val src = extractSrcAttribute(tag) ?: return null
+    return PostContentPart.Image(normalizeContentImageUrl(src))
+  }
+
+  private fun parseFlashTag(): PostContentPart? {
+    if (!startsWithIgnoreCase("[flash")) return null
+    val headerEnd = source.indexOf(']', pos)
+    if (headerEnd == -1) {
+      pos = source.length
+      return null
+    }
+    val header = source.substring(pos + 1, headerEnd)
+    pos = headerEnd + 1
+    val flashType =
+      header
+        .substringAfter("flash=", header)
+        .substringBefore(',')
+        .trim()
+        .lowercase()
+    val closeTag = indexOfIgnoreCase("[/flash]", pos)
+    if (closeTag == -1) {
+      return null
+    }
+    val rawUrl = source.substring(pos, closeTag).trim()
+    pos = closeTag + "[/flash]".length
+    if (rawUrl.isBlank()) return null
+
+    return when (flashType) {
+      "audio" -> {
+        val url = normalizeContentMediaUrl(rawUrl)
+        PostContentPart.Audio(
+          url = url,
+          label = ImageUrlResolver.fileName(url),
+        )
+      }
+      else -> null
+    }
+  }
+
+  private fun parseRelativeImagePath(): PostContentPart.Image? {
+    if (!startsWith("./mon_")) return null
+    val start = pos
+    while (pos < source.length) {
+      val ch = source[pos]
+      if (ch.isWhitespace() || ch == '"' || ch == '\'' || ch == '<' || ch == '>' || ch == '[' || ch == ']') break
+      pos++
+    }
+    val path = source.substring(start, pos)
+    if (path.isBlank()) return null
+    return PostContentPart.Image(normalizeContentImageUrl(path))
+  }
+
+  private fun atEnd(): Boolean = pos >= source.length
+
+  private fun startsWith(value: String): Boolean = source.startsWith(value, pos)
+
+  private fun startsWithIgnoreCase(value: String): Boolean =
+    source.regionMatches(pos, value, 0, value.length, ignoreCase = true)
+
+  private fun consume(value: String) {
+    pos += value.length
+  }
+
+  private fun indexOfIgnoreCase(value: String, from: Int = pos): Int {
+    val haystack = source.lowercase()
+    val needle = value.lowercase()
+    return haystack.indexOf(needle, from)
+  }
+}
+
+/**
+ * Inline parser that walks text and BBCode style tags, producing styled plain text.
+ */
+private class InlineTextParser(private val source: String) {
+  private var pos = 0
+  private val output = StringBuilder()
+  private val styles = mutableListOf<PostTextStyleRange>()
+  private val stack = mutableListOf<OpenStyle>()
+
+  fun parse(): RichText {
+    while (!atEnd()) {
+      when {
+        source[pos] == '[' -> {
+          val tag = readBracketTag()
+          if (tag != null) {
+            applyTag(tag)
+          } else {
+            output.append('[')
+            pos++
+          }
+        }
+        source[pos] == '<' -> {
+          if (!consumeHtmlMarkup()) {
+            output.append('<')
+            pos++
+          }
+        }
+        source[pos] == '{' -> {
+          if (!skipLayoutTag()) {
+            output.append(source[pos])
+            pos++
+          }
+        }
+        else -> {
+          output.append(source[pos])
+          pos++
+        }
+      }
+    }
+    closeAllOpenTags()
+    addStandaloneUrlStyles()
+    return finalizeRichText()
+  }
+
+  private fun readBracketTag(): Tag? {
+    if (source[pos] != '[') return null
+    val close = source.indexOf(']', pos)
+    if (close == -1) return null
+    val raw = source.substring(pos + 1, close)
+    pos = close + 1
+    if (raw.isEmpty()) return null
+
+    val closing = raw.startsWith("/")
+    val body = if (closing) raw.substring(1) else raw
+    val equals = body.indexOf('=')
+    val name: String
+    val arg: String?
+    if (equals == -1) {
+      name = body
+      arg = null
+    } else {
+      name = body.substring(0, equals)
+      arg = body.substring(equals + 1)
+    }
+    return Tag(name.lowercase(), arg?.trim()?.ifBlank { null }, closing)
+  }
+
+  private fun applyTag(tag: Tag) {
+    if (tag.name == "align") return
+    if (!isInlineTag(tag.name)) {
+      output.append('[')
+      output.append(if (tag.closing) "/" else "")
+      output.append(tag.name)
+      tag.arg?.let { output.append('=').append(it) }
+      output.append(']')
+      return
+    }
+    if (tag.closing) {
+      closeStyle(tag.name)
+    } else {
+      openStyle(tag.name, tag.arg.orEmpty())
+    }
+  }
+
+  private fun isInlineTag(name: String): Boolean =
+    name in INLINE_TAGS
+
+  private fun openStyle(tag: String, arg: String) {
     val style =
       when (tag) {
         "b" -> ActiveStyle(bold = true)
         "i" -> ActiveStyle(italic = true)
         "u" -> ActiveStyle(underline = true)
         "del" -> ActiveStyle(strikeThrough = true)
-        "color" -> ActiveStyle(color = arg.trim().ifBlank { null })
-        "size" -> ActiveStyle(sizePercent = arg.trim().removeSuffix("%").toIntOrNull())
-        "url" -> ActiveStyle(linkUrl = arg.trim().ifBlank { null })
-        "uid" -> ActiveStyle(linkUrl = arg.trim().ifBlank { null }?.let { "nga://user/$it" })
-        "tid" -> ActiveStyle(linkUrl = arg.trim().ifBlank { null }?.let { "nga://thread/$it" })
-        "pid" -> ActiveStyle(linkUrl = arg.trim().ifBlank { null }?.let { "nga://post/$it" })
+        "color" -> ActiveStyle(color = arg.ifBlank { null })
+        "size" -> ActiveStyle(sizePercent = arg.removeSuffix("%").toIntOrNull())
+        "url" -> ActiveStyle(linkUrl = arg.ifBlank { null })
+        "uid" -> ActiveStyle(linkUrl = arg.ifBlank { null }?.let { "nga://user/$it" })
+        "tid" -> ActiveStyle(linkUrl = arg.ifBlank { null }?.let { "nga://thread/$it" })
+        "pid" -> ActiveStyle(linkUrl = arg.ifBlank { null }?.let { "nga://post/$it" })
         else -> ActiveStyle()
       }
-    stack += OpenStyle(tag, start, style)
+    stack += OpenStyle(tag, output.length, style)
   }
 
-  private fun closeStyle(
-    tag: String,
-    end: Int,
-    stack: MutableList<OpenStyle>,
-    styles: MutableList<PostTextStyleRange>,
-    output: StringBuilder,
-  ) {
+  private fun closeStyle(tag: String) {
     val index = stack.indexOfLast { it.tag == tag }
     if (index == -1) return
-
     val open = stack.removeAt(index)
+    val end = output.length
     if (open.start >= end) return
     val linkUrl =
       when {
@@ -203,105 +418,173 @@ object PostContentParser {
       )
   }
 
-  private fun extractImageUrl(token: String): String? {
-    bbCodeImageRegex.matchEntire(token)?.let { match ->
-      return match.groupValues[1].trim().ifBlank { null }
+  private fun closeAllOpenTags() {
+    while (stack.isNotEmpty()) {
+      closeStyle(stack.last().tag)
     }
-    bbCodeImageAttrRegex.find(token)?.let { match ->
-      return match.groupValues[1].trim().ifBlank { null }
-    }
-    htmlImageRegex.find(token)?.let { match ->
-      return match.groupValues[1].trim().ifBlank { null }
-    }
-    relativeImageRegex.find(token)?.let { match ->
-      return match.groupValues[1].trim().ifBlank { null }
-    }
-    return null
   }
 
-  private fun resolveEmoticon(category: String, alt: String): PostContentPart.Emoticon? {
-    val image = NgaEmoticons.resolve(category, alt) ?: return null
-    val url = NgaStaticUrls.emoticonBaseUrl + image
-    return PostContentPart.Emoticon(code = "[s:$category:$alt]", url = url, alt = alt)
+  private fun consumeHtmlMarkup(): Boolean {
+    if (!source.startsWith("<", pos)) return false
+    val close = source.indexOf('>', pos)
+    if (close == -1) return false
+    val tag = source.substring(pos, close + 1)
+    pos = close + 1
+    if (tag.startsWith("<br", ignoreCase = true)) {
+      output.append('\n')
+    }
+    return true
   }
 
-  private fun normalizeContentImageUrl(url: String): String {
-    val normalized =
-      url
-        .replace(Regex("(http\\S+)\\.gif\\.(thumb_s|medium|thumb|thumb_ss)\\.jpg", RegexOption.IGNORE_CASE), "$1.gif")
-        .replace(Regex("(http\\S+)\\.(png|jpg)\\.(thumb_s|medium|thumb|thumb_ss)\\.jpg", RegexOption.IGNORE_CASE), "$1.$2")
-    return ImageUrlResolver.resolve(normalized)
+  private fun skipLayoutTag(): Boolean {
+    val start = pos
+    if (source[start] != '{' && source[start] != '[') return false
+    val close = source.indexOfAny(charArrayOf(']', '}'), start)
+    if (close == -1) return false
+    val token = source.substring(start, close + 1)
+    if (!token.contains("align", ignoreCase = true)) return false
+    pos = close + 1
+    return true
   }
 
-  private fun stripHtml(value: String): String =
-    value
-      .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
-      .replace(Regex("<[^>]+>"), "")
-
-  private fun stripLayoutTags(value: String): String =
-    value.replace(layoutTagRegex, "")
-
-  private fun decodeBasicEntities(content: String): String =
-    content
-      .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
-      .replace("&nbsp;", " ")
-      .replace("&lt;", "<")
-      .replace("&gt;", ">")
-      .replace("&amp;", "&")
-
-  private fun addStandaloneUrlStyles(text: StringBuilder, styles: MutableList<PostTextStyleRange>) {
-    for (match in standaloneUrlRegex.findAll(text)) {
-      val start = match.range.first
-      var end = match.range.last + 1
+  private fun addStandaloneUrlStyles() {
+    val text = output.toString()
+    var searchFrom = 0
+    while (searchFrom < text.length) {
+      val http = text.indexOf("http://", searchFrom, ignoreCase = true)
+      val https = text.indexOf("https://", searchFrom, ignoreCase = true)
+      val start =
+        when {
+          http == -1 -> https
+          https == -1 -> http
+          else -> minOf(http, https)
+        }
+      if (start == -1) break
+      var end = start
+      while (end < text.length && !text[end].isWhitespace() && text[end] !in "\"'<>[]") {
+        end++
+      }
       while (end > start && text[end - 1] in ".,;:!?)]}") {
-        end -= 1
+        end--
       }
       if (styles.none { rangesOverlap(start, end, it.start, it.end) }) {
         styles += PostTextStyleRange(start = start, end = end, linkUrl = text.substring(start, end))
       }
+      searchFrom = end
     }
   }
 
-  private fun rangesOverlap(start: Int, end: Int, otherStart: Int, otherEnd: Int): Boolean =
-    start < otherEnd && otherStart < end
-
-  private fun normalizeWhitespace(value: String): NormalizedText {
-    val normalized = value.replace(Regex("[ \\t\\x0B\\f\\r]+"), " ")
-    val trimmed = normalized.trim()
-    return NormalizedText(
-      text = trimmed,
-      leadingTrim = normalized.length - normalized.trimStart().length,
-      trailingTrim = normalized.length - normalized.trimEnd().length,
-    )
+  private fun finalizeRichText(): RichText {
+    val normalized = normalizeWhitespace(output.toString())
+    if (normalized.leadingTrim == 0 && normalized.trailingTrim == 0) {
+      return RichText(normalized.text, styles.filter { it.start < it.end })
+    }
+    val adjustedStyles =
+      styles.mapNotNull { style ->
+        val start = (style.start - normalized.leadingTrim).coerceAtLeast(0)
+        val end = (style.end - normalized.leadingTrim).coerceAtMost(normalized.text.length)
+        if (start < end) style.copy(start = start, end = end) else null
+      }
+    return RichText(normalized.text, adjustedStyles)
   }
 
-  private data class RichText(
-    val text: String,
-    val styles: List<PostTextStyleRange>,
+  private fun atEnd(): Boolean = pos >= source.length
+
+  private data class Tag(
+    val name: String,
+    val arg: String?,
+    val closing: Boolean,
   )
 
-  private data class NormalizedText(
-    val text: String,
-    val leadingTrim: Int,
-    val trailingTrim: Int,
-  )
+  private companion object {
+    val INLINE_TAGS = setOf("b", "i", "u", "del", "color", "size", "url", "uid", "tid", "pid")
+  }
+}
 
-  private data class OpenStyle(
-    val tag: String,
-    val start: Int,
-    val style: ActiveStyle,
-  )
+private fun extractSrcAttribute(tag: String): String? {
+  val lower = tag.lowercase()
+  val marker = "src"
+  val index = lower.indexOf(marker)
+  if (index == -1) return null
+  var cursor = index + marker.length
+  while (cursor < tag.length && tag[cursor].isWhitespace()) cursor++
+  if (cursor >= tag.length || tag[cursor] != '=') return null
+  cursor++
+  while (cursor < tag.length && tag[cursor].isWhitespace()) cursor++
+  if (cursor >= tag.length) return null
+  return when (tag[cursor]) {
+    '"', '\'' -> {
+      val quote = tag[cursor]
+      cursor++
+      val end = tag.indexOf(quote, cursor)
+      if (end == -1) null else tag.substring(cursor, end).trim()
+    }
+    else -> {
+      val end = tag.indexOfAny(charArrayOf(' ', '>', ']'), cursor)
+      if (end == -1) tag.substring(cursor).trim() else tag.substring(cursor, end).trim()
+    }
+  }
+}
 
-  private data class ActiveStyle(
-    val bold: Boolean = false,
-    val italic: Boolean = false,
-    val underline: Boolean = false,
-    val strikeThrough: Boolean = false,
-    val color: String? = null,
-    val sizePercent: Int? = null,
-    val linkUrl: String? = null,
+private fun resolveEmoticon(category: String, alt: String): PostContentPart.Emoticon? {
+  val image = NgaEmoticons.resolve(category, alt) ?: return null
+  val url = NgaStaticUrls.emoticonBaseUrl + image
+  return PostContentPart.Emoticon(code = "[s:$category:$alt]", url = url, alt = alt)
+}
+
+private fun normalizeContentMediaUrl(url: String): String =
+  normalizeContentImageUrl(sanitizeMediaUrl(url))
+
+private fun sanitizeMediaUrl(url: String): String =
+  url.trimEnd('″', '"', '\u2033', '\u201d')
+
+private fun normalizeContentImageUrl(url: String): String {
+  val normalized =
+    url
+      .replace(Regex("(http\\S+)\\.gif\\.(thumb_s|medium|thumb|thumb_ss)\\.jpg", RegexOption.IGNORE_CASE), "$1.gif")
+      .replace(Regex("(http\\S+)\\.(png|jpg)\\.(thumb_s|medium|thumb|thumb_ss)\\.jpg", RegexOption.IGNORE_CASE), "$1.$2")
+  return ImageUrlResolver.resolve(normalized)
+}
+
+private fun rangesOverlap(start: Int, end: Int, otherStart: Int, otherEnd: Int): Boolean =
+  start < otherEnd && otherStart < end
+
+private fun normalizeWhitespace(value: String): NormalizedText {
+  val normalized = value.replace(Regex("[ \\t\\x0B\\f\\r]+"), " ")
+  val trimmed = normalized.trim()
+  return NormalizedText(
+    text = trimmed,
+    leadingTrim = normalized.length - normalized.trimStart().length,
+    trailingTrim = normalized.length - normalized.trimEnd().length,
   )
 }
+
+private data class RichText(
+  val text: String,
+  val styles: List<PostTextStyleRange>,
+)
+
+private data class NormalizedText(
+  val text: String,
+  val leadingTrim: Int,
+  val trailingTrim: Int,
+)
+
+private data class OpenStyle(
+  val tag: String,
+  val start: Int,
+  val style: ActiveStyle,
+)
+
+private data class ActiveStyle(
+  val bold: Boolean = false,
+  val italic: Boolean = false,
+  val underline: Boolean = false,
+  val strikeThrough: Boolean = false,
+  val color: String? = null,
+  val sizePercent: Int? = null,
+  val linkUrl: String? = null,
+)
 
 private object NgaEmoticons {
   private val ac =
