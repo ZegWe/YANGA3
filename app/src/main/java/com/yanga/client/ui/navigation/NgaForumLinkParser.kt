@@ -9,6 +9,14 @@ data class ForumThreadDestination(
   val page: Int = 1,
 )
 
+sealed class ThreadLinkRoute {
+  data class Post(val postId: String) : ThreadLinkRoute()
+
+  data class CurrentThreadPage(val page: Int) : ThreadLinkRoute()
+
+  data class OtherThread(val destination: ForumThreadDestination) : ThreadLinkRoute()
+}
+
 object NgaForumLinkParser {
   private val forumHosts =
     setOf(
@@ -35,6 +43,27 @@ object NgaForumLinkParser {
     val tid = params["tid"]?.takeIf { it.all(Char::isDigit) } ?: return null
     val page = params["page"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
     return ForumThreadDestination(tid = tid, page = page)
+  }
+
+  fun threadLinkRoute(rawUrl: String?, currentTid: String): ThreadLinkRoute? {
+    postId(rawUrl)?.let { postId -> return ThreadLinkRoute.Post(postId) }
+    val destination = threadDestination(rawUrl) ?: return null
+    return if (destination.tid == currentTid) {
+      ThreadLinkRoute.CurrentThreadPage(destination.page)
+    } else {
+      ThreadLinkRoute.OtherThread(destination)
+    }
+  }
+
+  fun postId(rawUrl: String?): String? {
+    if (rawUrl.isNullOrBlank()) return null
+    val trimmed = rawUrl.trim()
+    if (trimmed.startsWith("nga://post/", ignoreCase = true)) {
+      return trimmed.substringAfterLast('/').takeIf { it.all(Char::isDigit) }
+    }
+    val uri = runCatching { URI(trimmed) }.getOrNull() ?: return null
+    if (!uri.path.orEmpty().endsWith("/read.php", ignoreCase = true)) return null
+    return parseQuery(uri.rawQuery)["pid"]?.takeIf { it.all(Char::isDigit) }
   }
 
   fun isForumUrl(rawUrl: String?): Boolean {

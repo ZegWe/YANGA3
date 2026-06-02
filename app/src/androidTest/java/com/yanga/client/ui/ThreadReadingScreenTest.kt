@@ -250,6 +250,42 @@ class ThreadReadingScreenTest {
   }
 
   @Test
+  fun threadReadingScreenRoutesOriginalPostLabelToQuotedPostLink() {
+    var clickedUrl = ""
+    composeTestRule.setContent {
+      ThreadReadingScreen(
+        state =
+          ThreadUiState(
+            title = "Quoted reply thread",
+            page = "1",
+            replyCount = "1",
+            posts =
+              LoadableUiState.Content(
+                listOf(
+                  PostPreview(
+                    author = "reader",
+                    floor = "1楼",
+                    time = "now",
+                    avatarInitial = "R",
+                    content =
+                      "[quote][pid=253176649,12937812,2]Reply[/pid] [b]Post by author:[/b]<br/>quoted text[/quote]body",
+                  ),
+                ),
+              ),
+          ),
+        onBack = {},
+        onLinkClick = { clickedUrl = it },
+      )
+    }
+
+    composeTestRule.onNodeWithText("[原帖]").assertExists()
+
+    composeTestRule.onNodeWithText("[原帖]").performClick()
+
+    assertEquals("nga://post/253176649", clickedUrl)
+  }
+
+  @Test
   fun threadReadingScreenConfirmsAttachmentDownload() {
     var downloadUrl = ""
     composeTestRule.setContent {

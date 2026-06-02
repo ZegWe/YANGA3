@@ -31,4 +31,41 @@ class NgaForumLinkParserTest {
   fun parseNonForumUrlReturnsNull() {
     assertNull(NgaForumLinkParser.threadDestination("https://example.com/read.php?tid=1"))
   }
+
+  @Test
+  fun routePostLinkUsesCurrentActivityPostNavigation() {
+    val route = NgaForumLinkParser.threadLinkRoute("nga://post/253176649", currentTid = "12937812")
+
+    assertEquals(ThreadLinkRoute.Post(postId = "253176649"), route)
+  }
+
+  @Test
+  fun routeCurrentThreadReadUrlUsesCurrentActivityPageNavigation() {
+    val route =
+      NgaForumLinkParser.threadLinkRoute(
+        "https://bbs.nga.cn/read.php?tid=12937812&page=3",
+        currentTid = "12937812",
+      )
+
+    assertEquals(ThreadLinkRoute.CurrentThreadPage(page = 3), route)
+  }
+
+  @Test
+  fun routeOtherThreadReadUrlStartsOtherThreadNavigation() {
+    val route =
+      NgaForumLinkParser.threadLinkRoute(
+        "https://bbs.nga.cn/read.php?tid=6406100&page=2",
+        currentTid = "12937812",
+      )
+
+    assertEquals(
+      ThreadLinkRoute.OtherThread(ForumThreadDestination(tid = "6406100", page = 2)),
+      route,
+    )
+  }
+
+  @Test
+  fun routeExternalUrlReturnsNull() {
+    assertNull(NgaForumLinkParser.threadLinkRoute("https://example.com/read.php?tid=12937812", currentTid = "12937812"))
+  }
 }
