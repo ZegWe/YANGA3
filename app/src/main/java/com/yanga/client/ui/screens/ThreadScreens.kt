@@ -552,7 +552,6 @@ private fun ThreadPageContent(
     }
 
   if (posts != null) {
-      val postImageUrls = remember(posts) { posts.flatMap(::postContentImageUrls) }
       val listState = rememberLazyListState()
       PrefetchPostImages(posts = posts)
 
@@ -582,12 +581,7 @@ private fun ThreadPageContent(
             PostItem(
               post = post,
               title = state.title.takeIf { post.floorNumber == 0 },
-              onImageClick = { url ->
-                onImageUrlsChange(
-                  postImageUrls,
-                  postImageUrls.indexOf(url).takeIf { it >= 0 } ?: 0,
-                )
-              },
+              onImageClick = onImageUrlsChange,
               onLinkClick = onLinkClick,
               onAttachmentClick = onAttachmentClick,
             )
@@ -633,12 +627,13 @@ private fun PostItem(
   post: PostPreview,
   title: String? = null,
   modifier: Modifier = Modifier,
-  onImageClick: (String) -> Unit = {},
+  onImageClick: (List<String>, Int) -> Unit = { _, _ -> },
   onLinkClick: (String) -> Unit = {},
   onAttachmentClick: (PostAttachmentPreview) -> Unit = {},
 ) {
   val contentParts = remember(post.content) { PostContentParser.parse(post.content) }
   val contentBlocks = remember(contentParts) { groupPostContentParts(contentParts) }
+  val imageUrls = remember(post) { postPreviewImageUrls(post) }
 
   Card(
     modifier =
@@ -690,6 +685,7 @@ private fun PostItem(
           is PostContentBlock.Quote -> {
             PostQuoteBlock(
               parts = block.part.parts,
+              imageUrls = imageUrls,
               onLinkClick = onLinkClick,
               onImageClick = onImageClick,
             )
@@ -697,7 +693,7 @@ private fun PostItem(
           is PostContentBlock.Image -> {
             CachedPostImage(
               url = block.part.url,
-              onClick = { onImageClick(block.part.url) },
+              onClick = { onImageClick(imageUrls, imageUrls.indexOf(block.part.url).takeIf { it >= 0 } ?: 0) },
             )
           }
           is PostContentBlock.Audio -> {
@@ -785,11 +781,12 @@ private fun PostBodySection(
 private fun PostEmbeddedReplyItem(
   reply: PostEmbeddedReplyPreview,
   onLinkClick: (String) -> Unit,
-  onImageClick: (String) -> Unit,
+  onImageClick: (List<String>, Int) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val contentParts = remember(reply.content) { PostContentParser.parse(reply.content) }
   val contentBlocks = remember(contentParts) { groupPostContentParts(contentParts) }
+  val imageUrls = remember(reply) { embeddedReplyPreviewImageUrls(reply) }
 
   Row(
     modifier = modifier.fillMaxWidth(),
@@ -844,6 +841,7 @@ private fun PostEmbeddedReplyItem(
             is PostContentBlock.Quote -> {
               PostQuoteBlock(
                 parts = block.part.parts,
+                imageUrls = imageUrls,
                 onLinkClick = onLinkClick,
                 onImageClick = onImageClick,
                 nested = true,
@@ -852,7 +850,7 @@ private fun PostEmbeddedReplyItem(
             is PostContentBlock.Image -> {
               CachedPostImage(
                 url = block.part.url,
-                onClick = { onImageClick(block.part.url) },
+                onClick = { onImageClick(imageUrls, imageUrls.indexOf(block.part.url).takeIf { it >= 0 } ?: 0) },
               )
             }
             is PostContentBlock.Audio -> {
@@ -871,8 +869,9 @@ private fun PostEmbeddedReplyItem(
 @Composable
 private fun PostQuoteBlock(
   parts: List<PostContentPart>,
+  imageUrls: List<String>,
   onLinkClick: (String) -> Unit,
-  onImageClick: (String) -> Unit,
+  onImageClick: (List<String>, Int) -> Unit,
   modifier: Modifier = Modifier,
   nested: Boolean = false,
 ) {
@@ -909,7 +908,7 @@ private fun PostQuoteBlock(
           is PostContentBlock.Image -> {
             CachedPostImage(
               url = block.part.url,
-              onClick = { onImageClick(block.part.url) },
+              onClick = { onImageClick(imageUrls, imageUrls.indexOf(block.part.url).takeIf { it >= 0 } ?: 0) },
             )
           }
           is PostContentBlock.Audio -> {
@@ -921,6 +920,7 @@ private fun PostQuoteBlock(
           is PostContentBlock.Quote -> {
             PostQuoteBlock(
               parts = block.part.parts,
+              imageUrls = imageUrls,
               onLinkClick = onLinkClick,
               onImageClick = onImageClick,
               nested = true,
@@ -1047,7 +1047,7 @@ private fun ImagePreviewDialog(
         state = pagerState,
         beyondViewportPageCount = 1,
         userScrollEnabled = currentPageScale <= 1.01f,
-        key = { page -> imageUrls[page] },
+        key = { page -> imagePreviewPageKey(page, imageUrls[page]) },
         modifier = Modifier.fillMaxSize(),
       ) { page ->
         ImagePreviewPage(
@@ -1213,6 +1213,8 @@ internal data class ImagePreviewTransform(
   val dragEnabled: Boolean,
 )
 
+internal fun imagePreviewPageKey(page: Int, url: String): String = "$page:$url"
+
 internal fun togglePreviewScaleOnDoubleTap(
   scale: Float,
   offset: Offset,
@@ -1290,8 +1292,14 @@ private fun android.graphics.drawable.Drawable.intrinsicAspectRatio(): Float? {
   }
 }
 
-private fun postContentImageUrls(post: PostPreview): List<String> =
-  PostContentParser.collectImageUrls(PostContentParser.parse(post.content))
+internal fun postPreviewImageUrls(post: PostPreview): List<String> =
+  postContentImageUrls(post.content)
+
+internal fun embeddedReplyPreviewImageUrls(reply: PostEmbeddedReplyPreview): List<String> =
+  postContentImageUrls(reply.content)
+
+private fun postContentImageUrls(content: String): List<String> =
+  PostContentParser.collectImageUrls(PostContentParser.parse(content)).distinct()
 
 @Composable
 private fun PostInlineRichText(

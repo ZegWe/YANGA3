@@ -48,6 +48,17 @@ When invoking build/compile commands, always set:
   - `sandbox_permissions: "require_escalated"`
   - concise `justification`
 
+## Commit Message Convention
+
+- Use Conventional Commits-style messages based on the repository history.
+- Format commit subjects as `<type>: <summary>`.
+- Common types in this repository:
+  - `feat:` for user-facing features or behavior additions.
+  - `fix:` for bug fixes and regressions.
+  - `chore:` for maintenance, metadata, assets, or non-feature project updates.
+- Keep the summary short, imperative, and in English.
+- Do not add issue references or body text unless the change needs extra context.
+
 ## Collaboration Notes for Agents
 
 - Prefer `docs/api-reference.md` for endpoint contract and parameter coverage.

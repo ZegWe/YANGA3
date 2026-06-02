@@ -7,6 +7,70 @@ import org.junit.Test
 
 class ImagePreviewPanBoundsTest {
   @Test
+  fun postPreviewImageUrlsOnlyIncludesTheCurrentPostBody() {
+    val post =
+      PostPreview(
+        author = "reader",
+        floor = "1楼",
+        time = "now",
+        avatarInitial = "R",
+        content = "[img]./mon_floor_a.jpg[/img] [img]./mon_floor_b.jpg[/img]",
+        embeddedComments =
+          listOf(
+            PostEmbeddedReplyPreview(
+              author = "commenter",
+              content = "[img]./mon_comment.jpg[/img]",
+            ),
+          ),
+        hotReplies =
+          listOf(
+            PostEmbeddedReplyPreview(
+              author = "hot",
+              content = "[img]./mon_hot.jpg[/img]",
+            ),
+          ),
+      )
+
+    assertEquals(
+      listOf(
+        "https://img.nga.178.com/attachments/mon_floor_a.jpg",
+        "https://img.nga.178.com/attachments/mon_floor_b.jpg",
+      ),
+      postPreviewImageUrls(post),
+    )
+  }
+
+  @Test
+  fun embeddedReplyPreviewImageUrlsOnlyIncludesThatReply() {
+    val reply =
+      PostEmbeddedReplyPreview(
+        author = "commenter",
+        content = "[img]./mon_comment_a.jpg[/img] [quote][img]./mon_comment_b.jpg[/img][/quote]",
+      )
+
+    assertEquals(
+      listOf(
+        "https://img.nga.178.com/attachments/mon_comment_a.jpg",
+        "https://img.nga.178.com/attachments/mon_comment_b.jpg",
+      ),
+      embeddedReplyPreviewImageUrls(reply),
+    )
+  }
+
+  @Test
+  fun imagePreviewPageKeysStayUniqueForDuplicateUrls() {
+    val repeatedUrl = "https://img.nga.178.com/attachments/mon_202606/01/sample.jpg"
+
+    assertEquals(
+      2,
+      listOf(
+        imagePreviewPageKey(page = 0, url = repeatedUrl),
+        imagePreviewPageKey(page = 1, url = repeatedUrl),
+      ).toSet().size,
+    )
+  }
+
+  @Test
   fun coercePreviewPanOffsetLimitsHorizontalPanToScaledViewportEdge() {
     assertEquals(
       Offset(500f, 0f),
