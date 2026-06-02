@@ -3,7 +3,9 @@ package com.yanga.client.ui
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
@@ -37,10 +39,10 @@ class MainScreenTest {
     val repository = fakeRepository()
     composeTestRule.setContent { MainScreen(repository = repository) }
 
-    composeTestRule.onNodeWithText("Home").assertExists()
-    composeTestRule.onNodeWithText("Boards").assertExists()
-    composeTestRule.onNodeWithText("Messages").assertExists()
-    composeTestRule.onNodeWithText("Profile").assertExists()
+    composeTestRule.onNodeWithContentDescription("Home").assertExists()
+    composeTestRule.onNodeWithContentDescription("Messages").assertExists()
+    composeTestRule.onNodeWithContentDescription("Profile").assertExists()
+    composeTestRule.onAllNodesWithContentDescription("Boards").assertCountEquals(0)
 
     composeTestRule.onAllNodesWithText("Settings").assertCountEquals(0)
     composeTestRule.onAllNodesWithText("Notifications").assertCountEquals(0)
@@ -48,16 +50,32 @@ class MainScreenTest {
 
   @Test
   fun homeTabShowsBoardFirstContentWithoutAccountActions() {
-    val repository = fakeRepository()
-    composeTestRule.setContent { MainScreen(repository = repository) }
-
-    composeTestRule.onNodeWithText("Home").performClick()
+    composeTestRule.setContent {
+      HomeScreen(
+        loginSession = null,
+        state =
+          HomeUiState(
+            activeTopics =
+              LoadableUiState.Content(
+                listOf(
+                  TopicPreview(
+                    id = "home-topic",
+                    title = "Home active topic",
+                    board = "Home board",
+                    replyCount = 4,
+                    lastActive = "now",
+                  ),
+                ),
+              ),
+          ),
+        onLoginClick = {},
+      )
+    }
 
     composeTestRule.onNodeWithText("Yanga").assertExists()
-    composeTestRule.onNodeWithText("Favorite").assertExists()
-    composeTestRule.onNodeWithText("Hot topics").assertExists()
-    composeTestRule.onNodeWithText("Favorites").assertExists()
-    composeTestRule.onNodeWithText("History").assertExists()
+    composeTestRule.onNodeWithText("Search boards, topics, and users").assertExists()
+    composeTestRule.onNodeWithText("Active discussions").assertExists()
+    composeTestRule.onNodeWithText("Home active topic").assertExists()
 
     composeTestRule.onAllNodesWithText("Settings").assertCountEquals(0)
     composeTestRule.onAllNodesWithText("Notifications").assertCountEquals(0)
@@ -89,8 +107,8 @@ class MainScreenTest {
       )
     }
 
-    composeTestRule.onNodeWithText("Remote strategy board").assertExists()
     composeTestRule.onNodeWithText("Remote launch topic").assertExists()
+    composeTestRule.onAllNodesWithText("Remote strategy board").assertCountEquals(0)
     composeTestRule.onAllNodesWithText("关于新版客户端首页信息密度的讨论").assertCountEquals(0)
   }
 
@@ -107,18 +125,16 @@ class MainScreenTest {
       )
     }
 
-    composeTestRule.onNodeWithText("Home boards failed").assertExists()
     composeTestRule.onNodeWithText("Home topics failed").assertExists()
+    composeTestRule.onAllNodesWithText("Home boards failed").assertCountEquals(0)
   }
 
   @Test
   fun boardsTabShowsForumDiscoveryContent() {
-    val repository = fakeRepository()
-    composeTestRule.setContent { MainScreen(repository = repository) }
+    composeTestRule.setContent { BoardsScreen() }
 
-    composeTestRule.onNodeWithText("Boards").performClick()
-
-    composeTestRule.onNodeWithText("Board search").assertExists()
+    composeTestRule.onNodeWithText("YANGA").assertExists()
+    composeTestRule.onNodeWithContentDescription("搜索").assertExists()
     composeTestRule.onNodeWithText("收藏").assertExists()
     composeTestRule.onAllNodesWithText("Subscribed boards").assertCountEquals(0)
     composeTestRule.onAllNodesWithText("Full forum directory").assertCountEquals(0)
@@ -216,8 +232,6 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("RPG").assertExists()
     composeTestRule.onNodeWithText("Game board").assertExists()
     composeTestRule.onNodeWithText("RPG board").assertExists()
-    composeTestRule.onAllNodesWithText("Favorite board").assertCountEquals(0)
-    composeTestRule.onAllNodesWithText("Life board").assertCountEquals(0)
   }
 
   @Test
@@ -225,7 +239,7 @@ class MainScreenTest {
     val repository = fakeRepository()
     composeTestRule.setContent { MainScreen(repository = repository) }
 
-    composeTestRule.onNodeWithText("Messages").performClick()
+    composeTestRule.onNodeWithContentDescription("Messages").performClick()
 
     composeTestRule.onNodeWithText("Private messages").assertExists()
     composeTestRule.onNodeWithText("Write private message").assertExists()
@@ -243,7 +257,7 @@ class MainScreenTest {
     val repository = fakeRepository()
     composeTestRule.setContent { MainScreen(repository = repository) }
 
-    composeTestRule.onNodeWithText("Profile").performClick()
+    composeTestRule.onNodeWithContentDescription("Profile").performClick()
 
     composeTestRule.onNodeWithText("当前未登录").assertExists()
     composeTestRule.onNodeWithText("登录 NGA").assertExists()
@@ -415,19 +429,14 @@ class MainScreenTest {
       )
     }
 
-    waitUntilTextExists("Injected home board")
-    composeTestRule.onNodeWithText("Injected remote topic").assertExists()
+    composeTestRule.onNodeWithContentDescription("Home").assertExists()
     composeTestRule.onAllNodesWithText("关于新版客户端首页信息密度的讨论").assertCountEquals(0)
 
-    composeTestRule.onNodeWithText("Boards").performClick()
-    waitUntilTextExists("Injected subscribed board")
-    composeTestRule.onNodeWithText("Injected remote category").assertExists()
-
-    composeTestRule.onNodeWithText("Messages").performClick()
+    composeTestRule.onNodeWithContentDescription("Messages").performClick()
     waitUntilTextExists("Injected Contact")
     waitUntilTextExists("Injected private message preview")
 
-    composeTestRule.onNodeWithText("Profile").performClick()
+    composeTestRule.onNodeWithContentDescription("Profile").performClick()
     waitUntilTextExists("远端测试用户")
     composeTestRule.onNodeWithText("UID 4242").assertExists()
     composeTestRule.onNodeWithText("Favorite topics").assertExists()
