@@ -185,10 +185,14 @@ class NgaApiTest {
     assertEquals("1", stidSearch.query["recommend"])
     assertEquals("postdatedesc", stidSearch.query["order_by"])
     assertEquals("1", stidSearch.query["user"])
+    assertEquals("", stidSearch.query["key"])
 
     val subBoardFilter = api.topicList(fid = 7, fidGroup = "448,-692072")
     assertEquals("7", subBoardFilter.query["fid"])
     assertEquals("448,-692072", subBoardFilter.query["fidgroup"])
+
+    val fidRecommend = api.topicList(fid = 7, recommend = true)
+    assertFalse(fidRecommend.query.containsKey("key"))
   }
 
   @Test

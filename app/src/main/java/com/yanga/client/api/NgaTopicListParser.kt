@@ -67,6 +67,7 @@ object NgaTopicListParser {
         ?.opt("2")
         ?.toString()
         ?.takeIf { it.isNotBlank() }
+    val entryTarget = topicEntryTarget(topicId)
     val categoryTopicId = parentCategoryTopicId ?: miscCategoryTopicId
     val subForumFid =
       when {
@@ -90,11 +91,31 @@ object NgaTopicListParser {
       isFavorited = booleanValue("favor", "is_favorited", "isFavorited", "favorited"),
       subForumFid = subForumFid,
       categoryTopicId = categoryTopicId,
+      entryTarget = entryTarget,
     )
+  }
+
+  private fun JSONObject.topicEntryTarget(topicId: String): NgaTopicEntryTarget? {
+    val misc = optJSONObject("topic_misc_var")
+    when (misc?.intValue("1")) {
+      32 -> {
+        val boardId = misc.opt("3")?.toString()?.takeIf { it.isNotBlank() } ?: return null
+        return NgaTopicEntryTarget(id = boardId, type = NgaTopicEntryType.Board)
+      }
+      33 -> return NgaTopicEntryTarget(id = "t$topicId", type = NgaTopicEntryType.Collection)
+    }
+
+    return if ((intValue("type") and COLLECTION_TOPIC_TYPE_MASK) == COLLECTION_TOPIC_TYPE_MASK) {
+      NgaTopicEntryTarget(id = "t$topicId", type = NgaTopicEntryType.Collection)
+    } else {
+      null
+    }
   }
 
   private fun JSONObject.nullableStringValue(vararg keys: String): String? =
     keys.firstNotNullOfOrNull { key ->
       opt(key)?.takeUnless { it == JSONObject.NULL }?.toString()?.takeIf { it.isNotBlank() }
     }
+
+  private const val COLLECTION_TOPIC_TYPE_MASK = 32768
 }

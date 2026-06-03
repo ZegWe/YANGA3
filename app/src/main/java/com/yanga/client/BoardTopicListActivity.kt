@@ -15,6 +15,8 @@ import com.yanga.client.ui.BoardPreview
 import com.yanga.client.ui.SubBoardOption
 import com.yanga.client.ui.BoardTopicListScreen
 import com.yanga.client.ui.BoardTopicListUiState
+import com.yanga.client.ui.TopicNavigationTarget
+import com.yanga.client.ui.TopicPreview
 import com.yanga.client.ui.navigation.HomeActivityIntents
 import com.yanga.client.ui.toData
 
@@ -48,7 +50,7 @@ class BoardTopicListActivity : YangaComposeActivity() {
       state = boardState,
       onBack = { backDispatcher?.onBackPressed() },
       onTopicClick = { topic ->
-        context.startActivity(HomeActivityIntents.thread(context, topic))
+        openTopic(context, topic)
       },
       onToggleFavorite = {
         val board =
@@ -88,6 +90,18 @@ class BoardTopicListActivity : YangaComposeActivity() {
         isFavorite = false,
       )
     context.startActivity(HomeActivityIntents.boardTopics(context, destination))
+  }
+
+  private fun openTopic(
+    context: android.content.Context,
+    topic: TopicPreview,
+  ) {
+    when (val target = topic.navigationTarget) {
+      is TopicNavigationTarget.Board ->
+        context.startActivity(HomeActivityIntents.boardTopics(context, target.destination))
+      TopicNavigationTarget.Thread ->
+        context.startActivity(HomeActivityIntents.thread(context, topic))
+    }
   }
 
   companion object {

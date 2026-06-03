@@ -13,7 +13,18 @@ data class NgaTopicSummary(
   val isFavorited: Boolean = false,
   val subForumFid: String? = null,
   val categoryTopicId: String? = null,
+  val entryTarget: NgaTopicEntryTarget? = null,
 )
+
+data class NgaTopicEntryTarget(
+  val id: String,
+  val type: NgaTopicEntryType,
+)
+
+enum class NgaTopicEntryType {
+  Board,
+  Collection,
+}
 
 data class NgaSubBoard(
   val id: String,

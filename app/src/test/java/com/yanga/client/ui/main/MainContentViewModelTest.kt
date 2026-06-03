@@ -8,6 +8,8 @@ import com.yanga.client.api.NgaMessageSummary
 import com.yanga.client.api.NgaNotificationSummary
 import com.yanga.client.api.NgaProfileCounters
 import com.yanga.client.api.NgaThreadRead
+import com.yanga.client.api.NgaTopicEntryTarget
+import com.yanga.client.api.NgaTopicEntryType
 import com.yanga.client.api.NgaTopicList
 import com.yanga.client.api.NgaTopicSummary
 import com.yanga.client.data.BoardsReadData
@@ -163,6 +165,27 @@ class MainContentViewModelTest {
     assertEquals(messagePreview(), messageSummary().toPreview())
     assertEquals(notificationPreview(), notificationSummary().toPreview())
     assertEquals(counterPreviews(), profileCounters().toPreviews())
+  }
+
+  @Test
+  fun mapperRoutesTopicEntryTargetsToBoardDestinations() {
+    val boardEntry =
+      topicSummary()
+        .copy(title = "入口版面", entryTarget = NgaTopicEntryTarget(id = "510407", type = NgaTopicEntryType.Board))
+        .toPreview()
+    val collectionEntry =
+      topicSummary()
+        .copy(title = "入口合集", entryTarget = NgaTopicEntryTarget(id = "t39011875", type = NgaTopicEntryType.Collection))
+        .toPreview()
+
+    assertEquals(
+      TopicNavigationTarget.Board(BoardDestination(id = "510407", name = "入口版面", category = "开发测试")),
+      boardEntry.navigationTarget,
+    )
+    assertEquals(
+      TopicNavigationTarget.Board(BoardDestination(id = "t39011875", name = "入口合集", category = "开发测试")),
+      collectionEntry.navigationTarget,
+    )
   }
 
   @Test

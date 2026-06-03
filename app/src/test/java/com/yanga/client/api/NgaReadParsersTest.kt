@@ -51,6 +51,48 @@ class NgaReadParsersTest {
   }
 
   @Test
+  fun topicListParserReadsBoardAndCollectionEntryTargets() {
+    val topics =
+      NgaTopicListParser.parse(
+        """
+        {
+          "data": {
+            "__T": {
+              "1": {
+                "tid": 1001,
+                "fid": 7,
+                "subject": "版面入口",
+                "topic_misc_var": {
+                  "1": 32,
+                  "3": 510407
+                }
+              },
+              "2": {
+                "tid": 39011875,
+                "fid": 7,
+                "subject": "合集入口",
+                "topic_misc_var": {
+                  "1": 33
+                }
+              },
+              "3": {
+                "tid": 7348283,
+                "fid": 7,
+                "subject": "type 标记合集入口",
+                "type": 32768
+              }
+            }
+          }
+        }
+        """.trimIndent(),
+      )
+
+    assertEquals(NgaTopicEntryTarget(id = "510407", type = NgaTopicEntryType.Board), topics.topics[0].entryTarget)
+    assertEquals(NgaTopicEntryTarget(id = "t39011875", type = NgaTopicEntryType.Collection), topics.topics[1].entryTarget)
+    assertEquals(NgaTopicEntryTarget(id = "t7348283", type = NgaTopicEntryType.Collection), topics.topics[2].entryTarget)
+  }
+
+  @Test
   fun boardCategoryParserReadsRemoteBoardCategoryFixture() {
     val categories = NgaBoardCategoryParser.parse(fixture("remote_board_categories.json"))
 

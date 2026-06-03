@@ -32,6 +32,9 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
       } else {
         stid?.let { put("stid", it.toString()) } ?: fid?.let { put("fid", it.toString()) }
         key?.takeIf { it.isNotBlank() }?.let { put("key", NgaEncoding.urlEncodeUtf8(it)) }
+        if (recommend && stid != null && key == null) {
+          put("key", "")
+        }
         fidGroup?.takeIf { it.isNotBlank() }?.let { put("fidgroup", it) }
       }
       put("page", page.toString())
