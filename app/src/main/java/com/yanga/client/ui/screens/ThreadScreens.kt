@@ -1,5 +1,8 @@
 package com.yanga.client.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -76,6 +80,7 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -378,6 +383,18 @@ internal fun ThreadReadingScreen(
   var pendingAttachment by remember { mutableStateOf<PostAttachmentPreview?>(null) }
   var previewImageUrls by remember { mutableStateOf(emptyList<String>()) }
   var previewImageIndex by remember { mutableStateOf<Int?>(null) }
+  var fabGroupVisible by remember { mutableStateOf(true) }
+  var fabGroupSize by remember { mutableStateOf(IntSize.Zero) }
+  val density = LocalDensity.current
+  val fabHiddenOffset =
+    with(density) {
+      (fabGroupSize.width + ThreadFabSlideOffscreenPadding.toPx()).toDp()
+    }
+  val fabGroupOffsetX by animateDpAsState(
+    targetValue = if (fabGroupVisible) 0.dp else fabHiddenOffset,
+    animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+    label = "Thread FAB group horizontal offset",
+  )
   val currentPage = state.page.toIntOrNull()?.coerceAtLeast(1) ?: 1
   val maxPage = (state.maxPage.toIntOrNull() ?: currentPage).coerceAtLeast(currentPage)
   val pagerState =
@@ -467,12 +484,15 @@ internal fun ThreadReadingScreen(
           },
           onLinkClick = onLinkClick,
           onAttachmentClick = { attachment -> pendingAttachment = attachment },
+          onFabVisibilityChange = { fabGroupVisible = it },
         )
       }
       Column(
         modifier =
           Modifier
             .align(Alignment.BottomEnd)
+            .offset(x = fabGroupOffsetX)
+            .onSizeChanged { fabGroupSize = it }
             .navigationBarsPadding()
             .padding(end = 16.dp, bottom = 16.dp),
         horizontalAlignment = Alignment.End,
@@ -543,6 +563,7 @@ private fun ThreadPageContent(
   onImageUrlsChange: (List<String>, Int) -> Unit,
   onLinkClick: (String) -> Unit,
   onAttachmentClick: (PostAttachmentPreview) -> Unit,
+  onFabVisibilityChange: (Boolean) -> Unit,
 ) {
   val currentPage = state.page.toIntOrNull()
   val posts =
@@ -553,6 +574,9 @@ private fun ThreadPageContent(
 
   if (posts != null) {
       val listState = rememberLazyListState()
+      val density = LocalDensity.current
+      val hideThresholdPx = with(density) { ThreadFabHideScrollThreshold.toPx() }
+      val showThresholdPx = with(density) { ThreadFabShowScrollThreshold.toPx() }
       PrefetchPostImages(posts = posts)
 
       LaunchedEffect(state.targetScrollRequestId, state.targetPostId, state.targetFloorNumber, posts, pageNumber, currentPage) {
@@ -565,6 +589,51 @@ private fun ThreadPageContent(
           }
         if (targetIndex >= 0) {
           listState.animateScrollToItem(index = targetIndex + THREAD_HEADER_ITEM_COUNT)
+        }
+      }
+
+      LaunchedEffect(listState, pageNumber, currentPage, hideThresholdPx, showThresholdPx) {
+        if (pageNumber != currentPage) return@LaunchedEffect
+        var previousIndex = listState.firstVisibleItemIndex
+        var previousOffset = listState.firstVisibleItemScrollOffset
+        var accumulatedDownScroll = 0f
+        var accumulatedUpScroll = 0f
+
+        snapshotFlow {
+          listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }.collect { (index, offset) ->
+          val isAtTop = index == 0 && offset == 0
+          if (isAtTop) {
+            accumulatedDownScroll = 0f
+            accumulatedUpScroll = 0f
+            onFabVisibilityChange(true)
+          } else {
+            val delta = when {
+              index == previousIndex -> (offset - previousOffset).toFloat()
+              index > previousIndex -> hideThresholdPx
+              else -> -showThresholdPx
+            }
+            when {
+              delta > 0 -> {
+                accumulatedDownScroll += delta
+                accumulatedUpScroll = 0f
+                if (accumulatedDownScroll >= hideThresholdPx) {
+                  onFabVisibilityChange(false)
+                  accumulatedDownScroll = 0f
+                }
+              }
+              delta < 0 -> {
+                accumulatedUpScroll += -delta
+                accumulatedDownScroll = 0f
+                if (accumulatedUpScroll >= showThresholdPx) {
+                  onFabVisibilityChange(true)
+                  accumulatedUpScroll = 0f
+                }
+              }
+            }
+          }
+          previousIndex = index
+          previousOffset = offset
         }
       }
 
@@ -604,6 +673,9 @@ private fun ThreadPageLoadingIndicator() {
 }
 
 private const val THREAD_HEADER_ITEM_COUNT = 0
+private val ThreadFabHideScrollThreshold = 24.dp
+private val ThreadFabShowScrollThreshold = 72.dp
+private val ThreadFabSlideOffscreenPadding = 16.dp
 
 @Composable
 private fun ThreadTitleCard(title: String, modifier: Modifier = Modifier) {
