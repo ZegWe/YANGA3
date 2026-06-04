@@ -108,7 +108,7 @@ class PostContentParserTest {
     assertEquals("Reply Post by reader (2026-06-01):\nquoted", quoteText.text)
     assertTrue(quoteText.styles.any { it.bold })
     assertEquals(
-      PostTextStyleRange(start = 0, end = 5, linkUrl = "nga://post/253176649"),
+      PostTextStyleRange(start = 0, end = 5, linkUrl = "nga://post/253176649?tid=12937812&page=2"),
       quoteText.styles.first { it.linkUrl != null },
     )
   }
@@ -124,7 +124,7 @@ class PostContentParserTest {
     assertEquals("Reply Post by reader (2026-06-01):\nquoted", text.text)
     assertTrue(text.styles.any { it.bold })
     assertEquals(
-      PostTextStyleRange(start = 0, end = 5, linkUrl = "nga://post/253176649"),
+      PostTextStyleRange(start = 0, end = 5, linkUrl = "nga://post/253176649?tid=12937812&page=2"),
       text.styles.first { it.linkUrl != null },
     )
   }

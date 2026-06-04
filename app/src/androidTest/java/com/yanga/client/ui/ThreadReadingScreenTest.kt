@@ -286,7 +286,7 @@ class ThreadReadingScreenTest {
       click(Offset(96f, 50f))
     }
 
-    assertEquals("nga://post/253176649", clickedUrl)
+    assertEquals("nga://post/253176649?tid=12937812&page=2", clickedUrl)
   }
 
   @Test
@@ -324,7 +324,7 @@ class ThreadReadingScreenTest {
       click(Offset(96f, 50f))
     }
 
-    assertEquals("nga://post/253176649", clickedUrl)
+    assertEquals("nga://post/253176649?tid=12937812&page=2", clickedUrl)
   }
 
   @Test

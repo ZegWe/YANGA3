@@ -179,6 +179,19 @@ class ThreadContentViewModel(
     }
   }
 
+  fun openPostOnPage(session: LoginSessionData?, postId: String, page: Int) {
+    val destination = activeDestination ?: return
+    openThread(
+      session = session,
+      destination =
+        destination.copy(
+          page = page.coerceAtLeast(1),
+          targetPostId = postId,
+          targetFloorNumber = null,
+        ),
+    )
+  }
+
   fun backFromThread() {
     loadingThreadId = null
     loadingPage = null

@@ -90,8 +90,25 @@ class ThreadContentViewModelTest {
     assertTrue((viewModel.state.value?.targetScrollRequestId ?: 0) > firstScrollRequestId)
   }
 
+  @Test
+  fun openPostOnKnownPageUsesPageHintWithoutLoadingPostByPid() = runTest(dispatcher) {
+    val repository = FakeRepository()
+    val viewModel = ThreadContentViewModel(repository)
+
+    viewModel.openThread(session = null, destination = ThreadDestination(id = "123", title = "Thread", page = 1))
+    advanceUntilIdle()
+    viewModel.openPostOnPage(session = null, postId = "p21", page = 2)
+    advanceUntilIdle()
+
+    assertEquals(listOf(1, 2), repository.loadedPages)
+    assertEquals(emptyList<String>(), repository.loadedPostIds)
+    assertEquals("2", viewModel.state.value?.page)
+    assertEquals("p21", viewModel.state.value?.targetPostId)
+  }
+
   private class FakeRepository : NgaReadOnlyRepository {
     val loadedPages = mutableListOf<Int>()
+    val loadedPostIds = mutableListOf<String>()
 
     override suspend fun loadHome(): Result<HomeReadData> =
       Result.failure(UnsupportedOperationException())
@@ -142,8 +159,9 @@ class ThreadContentViewModelTest {
       )
     }
 
-    override suspend fun loadThreadPost(session: LoginSessionData?, pid: String): Result<NgaThreadPost> =
-      Result.success(
+    override suspend fun loadThreadPost(session: LoginSessionData?, pid: String): Result<NgaThreadPost> {
+      loadedPostIds += pid
+      return Result.success(
         NgaThreadPost(
           pid = pid,
           tid = "123",
@@ -156,6 +174,7 @@ class ThreadContentViewModelTest {
           postDate = 0L,
         ),
       )
+    }
 
     override suspend fun listLocalFavoriteBoards(): Result<List<LocalFavoriteBoard>> =
       Result.success(emptyList())

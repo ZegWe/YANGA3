@@ -392,7 +392,7 @@ private class InlineTextParser(private val source: String) {
         "url" -> ActiveStyle(linkUrl = arg.ifBlank { null })
         "uid" -> ActiveStyle(linkUrl = arg.ifBlank { null }?.let { "nga://user/$it" })
         "tid" -> ActiveStyle(linkUrl = arg.ifBlank { null }?.let { "nga://thread/$it" })
-        "pid" -> ActiveStyle(linkUrl = arg.ifBlank { null }?.substringBefore(',')?.let { "nga://post/$it" })
+        "pid" -> ActiveStyle(linkUrl = pidLinkUrl(arg))
         else -> ActiveStyle()
       }
     stack += OpenStyle(tag, output.length, style)
@@ -505,6 +505,23 @@ private class InlineTextParser(private val source: String) {
 
   private companion object {
     val INLINE_TAGS = setOf("b", "i", "u", "del", "color", "size", "url", "uid", "tid", "pid")
+  }
+}
+
+private fun pidLinkUrl(arg: String): String? {
+  val parts = arg.split(',')
+  val postId = parts.getOrNull(0)?.trim()?.takeIf { it.all(Char::isDigit) } ?: return null
+  val threadId = parts.getOrNull(1)?.trim()?.takeIf { it.all(Char::isDigit) }
+  val page = parts.getOrNull(2)?.trim()?.toIntOrNull()?.coerceAtLeast(1)
+  val query =
+    buildList {
+      threadId?.let { add("tid=$it") }
+      page?.let { add("page=$it") }
+    }.joinToString("&")
+  return if (query.isBlank()) {
+    "nga://post/$postId"
+  } else {
+    "nga://post/$postId?$query"
   }
 }
 

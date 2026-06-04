@@ -47,6 +47,8 @@ object HomeActivityIntents {
       putExtra(ThreadActivity.EXTRA_THREAD_ID, destination.id)
       putExtra(ThreadActivity.EXTRA_THREAD_TITLE, destination.title)
       putExtra(ThreadActivity.EXTRA_THREAD_PAGE, destination.page)
+      destination.targetPostId?.let { putExtra(ThreadActivity.EXTRA_TARGET_POST_ID, it) }
+      destination.targetFloorNumber?.let { putExtra(ThreadActivity.EXTRA_TARGET_FLOOR_NUMBER, it) }
     }
 
   fun webView(
@@ -72,12 +74,22 @@ object HomeActivityIntents {
 
   fun threadDestination(intent: Intent): ThreadDestination {
     val deepLinkDestination = NgaForumLinkParser.threadDestination(intent.dataString)
+    val deepLinkPostDestination = NgaForumLinkParser.postDestination(intent.dataString)
     return ThreadDestination(
       id = intent.getStringExtra(ThreadActivity.EXTRA_THREAD_ID).orEmpty().ifBlank {
-        deepLinkDestination?.tid.orEmpty()
+        deepLinkDestination?.tid ?: deepLinkPostDestination?.threadId.orEmpty()
       },
       title = intent.getStringExtra(ThreadActivity.EXTRA_THREAD_TITLE).orEmpty(),
-      page = intent.getIntExtra(ThreadActivity.EXTRA_THREAD_PAGE, deepLinkDestination?.page ?: 1),
+      page =
+        intent.getIntExtra(
+          ThreadActivity.EXTRA_THREAD_PAGE,
+          deepLinkDestination?.page ?: deepLinkPostDestination?.page ?: 1,
+        ),
+      targetPostId = intent.getStringExtra(ThreadActivity.EXTRA_TARGET_POST_ID) ?: deepLinkPostDestination?.postId,
+      targetFloorNumber =
+        intent
+          .takeIf { it.hasExtra(ThreadActivity.EXTRA_TARGET_FLOOR_NUMBER) }
+          ?.getIntExtra(ThreadActivity.EXTRA_TARGET_FLOOR_NUMBER, 0),
     )
   }
 }

@@ -9,8 +9,18 @@ data class ForumThreadDestination(
   val page: Int = 1,
 )
 
+data class ForumPostDestination(
+  val postId: String,
+  val threadId: String? = null,
+  val page: Int? = null,
+)
+
 sealed class ThreadLinkRoute {
-  data class Post(val postId: String) : ThreadLinkRoute()
+  data class Post(
+    val postId: String,
+    val threadId: String? = null,
+    val page: Int? = null,
+  ) : ThreadLinkRoute()
 
   data class CurrentThreadPage(val page: Int) : ThreadLinkRoute()
 
@@ -46,7 +56,13 @@ object NgaForumLinkParser {
   }
 
   fun threadLinkRoute(rawUrl: String?, currentTid: String): ThreadLinkRoute? {
-    postId(rawUrl)?.let { postId -> return ThreadLinkRoute.Post(postId) }
+    postDestination(rawUrl)?.let { post ->
+      return ThreadLinkRoute.Post(
+        postId = post.postId,
+        threadId = post.threadId,
+        page = post.page,
+      )
+    }
     val destination = threadDestination(rawUrl) ?: return null
     return if (destination.tid == currentTid) {
       ThreadLinkRoute.CurrentThreadPage(destination.page)
@@ -56,14 +72,29 @@ object NgaForumLinkParser {
   }
 
   fun postId(rawUrl: String?): String? {
+    return postDestination(rawUrl)?.postId
+  }
+
+  fun postDestination(rawUrl: String?): ForumPostDestination? {
     if (rawUrl.isNullOrBlank()) return null
     val trimmed = rawUrl.trim()
-    if (trimmed.startsWith("nga://post/", ignoreCase = true)) {
-      return trimmed.substringAfterLast('/').takeIf { it.all(Char::isDigit) }
-    }
     val uri = runCatching { URI(trimmed) }.getOrNull() ?: return null
+    val params = parseQuery(uri.rawQuery)
+    if (uri.scheme.equals("nga", ignoreCase = true) && uri.host.equals("post", ignoreCase = true)) {
+      val postId = uri.path.trim('/').takeIf { it.all(Char::isDigit) } ?: return null
+      return ForumPostDestination(
+        postId = postId,
+        threadId = params["tid"]?.takeIf { it.all(Char::isDigit) },
+        page = params["page"]?.toIntOrNull()?.coerceAtLeast(1),
+      )
+    }
     if (!uri.path.orEmpty().endsWith("/read.php", ignoreCase = true)) return null
-    return parseQuery(uri.rawQuery)["pid"]?.takeIf { it.all(Char::isDigit) }
+    val postId = params["pid"]?.takeIf { it.all(Char::isDigit) } ?: return null
+    return ForumPostDestination(
+      postId = postId,
+      threadId = params["tid"]?.takeIf { it.all(Char::isDigit) },
+      page = params["page"]?.toIntOrNull()?.coerceAtLeast(1),
+    )
   }
 
   fun isForumUrl(rawUrl: String?): Boolean {

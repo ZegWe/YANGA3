@@ -72,7 +72,24 @@ class ThreadActivity : YangaComposeActivity() {
       onLinkClick = { url ->
         when (val route = NgaForumLinkParser.threadLinkRoute(url, currentTid = destination.id)) {
           is ThreadLinkRoute.Post -> {
-            threadContentViewModel.openPost(loginSession?.toData(), route.postId)
+            if (!route.threadId.isNullOrBlank() && route.threadId != destination.id) {
+              startActivity(
+                HomeActivityIntents.thread(
+                  context = this@ThreadActivity,
+                  destination =
+                    ThreadDestination(
+                      id = route.threadId,
+                      title = "",
+                      page = route.page ?: 1,
+                      targetPostId = route.postId,
+                    ),
+                ),
+              )
+            } else if (route.page != null) {
+              threadContentViewModel.openPostOnPage(loginSession?.toData(), route.postId, route.page)
+            } else {
+              threadContentViewModel.openPost(loginSession?.toData(), route.postId)
+            }
           }
           is ThreadLinkRoute.CurrentThreadPage -> {
             threadContentViewModel.openPage(loginSession?.toData(), route.page)
@@ -142,5 +159,7 @@ class ThreadActivity : YangaComposeActivity() {
     const val EXTRA_THREAD_ID = "thread_id"
     const val EXTRA_THREAD_TITLE = "thread_title"
     const val EXTRA_THREAD_PAGE = "thread_page"
+    const val EXTRA_TARGET_POST_ID = "target_post_id"
+    const val EXTRA_TARGET_FLOOR_NUMBER = "target_floor_number"
   }
 }
