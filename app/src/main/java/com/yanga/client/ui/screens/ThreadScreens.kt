@@ -555,7 +555,7 @@ private fun ThreadPageContent(
       val listState = rememberLazyListState()
       PrefetchPostImages(posts = posts)
 
-      LaunchedEffect(state.targetPostId, state.targetFloorNumber, posts, pageNumber, currentPage) {
+      LaunchedEffect(state.targetScrollRequestId, state.targetPostId, state.targetFloorNumber, posts, pageNumber, currentPage) {
         if (pageNumber != currentPage) return@LaunchedEffect
         val targetIndex =
           when {
@@ -876,7 +876,6 @@ private fun PostQuoteBlock(
   nested: Boolean = false,
 ) {
   val blocks = remember(parts) { groupPostContentParts(parts) }
-  val originalPostUrl = remember(parts) { quotedOriginalPostUrl(parts) }
   Surface(
     modifier = modifier.fillMaxWidth(),
     color =
@@ -896,14 +895,6 @@ private fun PostQuoteBlock(
       modifier = Modifier.padding(12.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-      if (originalPostUrl != null) {
-        TextButton(
-          onClick = { onLinkClick(originalPostUrl) },
-          modifier = Modifier.align(Alignment.End),
-        ) {
-          Text("[原帖]")
-        }
-      }
       for (block in blocks) {
         when (block) {
           is PostContentBlock.Inline -> {
@@ -1306,22 +1297,6 @@ internal fun postPreviewImageUrls(post: PostPreview): List<String> =
 
 internal fun embeddedReplyPreviewImageUrls(reply: PostEmbeddedReplyPreview): List<String> =
   postContentImageUrls(reply.content)
-
-internal fun quotedOriginalPostUrl(parts: List<PostContentPart>): String? {
-  for (part in parts) {
-    when (part) {
-      is PostContentPart.Text ->
-        part.styles
-          .asSequence()
-          .mapNotNull { it.linkUrl }
-          .firstOrNull { it.startsWith("nga://post/", ignoreCase = true) }
-          ?.let { return it }
-      is PostContentPart.Quote -> quotedOriginalPostUrl(part.parts)?.let { return it }
-      else -> Unit
-    }
-  }
-  return null
-}
 
 private fun postContentImageUrls(content: String): List<String> =
   PostContentParser.collectImageUrls(PostContentParser.parse(content)).distinct()

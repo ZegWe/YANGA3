@@ -2,34 +2,10 @@ package com.yanga.client.ui
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntSize
-import com.yanga.client.ui.content.PostContentParser
-import com.yanga.client.ui.content.PostContentPart
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ImagePreviewPanBoundsTest {
-  @Test
-  fun quotedOriginalPostUrlFindsPostLinkInQuoteText() {
-    val parts =
-      PostContentParser.parse(
-        "[quote][pid=253176649,12937812,2]Reply[/pid] [b]Post by reader:[/b]<br/>quoted[/quote]",
-      )
-    val quote = parts.single() as PostContentPart.Quote
-
-    assertEquals(
-      "nga://post/253176649",
-      quotedOriginalPostUrl(quote.parts),
-    )
-  }
-
-  @Test
-  fun quotedOriginalPostUrlReturnsNullWhenQuoteHasNoPostLink() {
-    val parts = PostContentParser.parse("[quote]plain quoted text[/quote]")
-    val quote = parts.single() as PostContentPart.Quote
-
-    assertEquals(null, quotedOriginalPostUrl(quote.parts))
-  }
-
   @Test
   fun postPreviewImageUrlsOnlyIncludesTheCurrentPostBody() {
     val post =

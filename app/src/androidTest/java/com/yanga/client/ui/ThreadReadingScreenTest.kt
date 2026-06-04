@@ -1,6 +1,7 @@
 package com.yanga.client.ui
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasContentDescription
@@ -11,6 +12,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
@@ -250,7 +252,7 @@ class ThreadReadingScreenTest {
   }
 
   @Test
-  fun threadReadingScreenRoutesOriginalPostLabelToQuotedPostLink() {
+  fun threadReadingScreenRoutesReplyTextToQuotedPostLinkWithoutOriginalPostButton() {
     var clickedUrl = ""
     composeTestRule.setContent {
       ThreadReadingScreen(
@@ -278,11 +280,99 @@ class ThreadReadingScreenTest {
       )
     }
 
-    composeTestRule.onNodeWithText("[原帖]").assertExists()
+    composeTestRule.onNodeWithText("[原帖]").assertDoesNotExist()
 
-    composeTestRule.onNodeWithText("[原帖]").performClick()
+    composeTestRule.onNodeWithText("Reply Post by author:\nquoted text").performTouchInput {
+      click(Offset(96f, 50f))
+    }
 
     assertEquals("nga://post/253176649", clickedUrl)
+  }
+
+  @Test
+  fun threadReadingScreenCollapsesReplyToPrefixBeforePostLink() {
+    var clickedUrl = ""
+    composeTestRule.setContent {
+      ThreadReadingScreen(
+        state =
+          ThreadUiState(
+            title = "Inline reply thread",
+            page = "1",
+            replyCount = "1",
+            posts =
+              LoadableUiState.Content(
+                listOf(
+                  PostPreview(
+                    author = "reader",
+                    floor = "1楼",
+                    time = "now",
+                    avatarInitial = "R",
+                    content =
+                      "[b]Reply to [pid=253176649,12937812,2]Reply[/pid] Post by [uid=42]author[/uid] (2026-06-01):[/b]<br/>quoted text",
+                  ),
+                ),
+              ),
+          ),
+        onBack = {},
+        onLinkClick = { clickedUrl = it },
+      )
+    }
+
+    composeTestRule.onNodeWithText("Reply to Reply Post by author (2026-06-01):\nquoted text").assertDoesNotExist()
+
+    composeTestRule.onNodeWithText("Reply Post by author (2026-06-01):\nquoted text").performTouchInput {
+      click(Offset(96f, 50f))
+    }
+
+    assertEquals("nga://post/253176649", clickedUrl)
+  }
+
+  @Test
+  fun threadReadingScreenRepeatsScrollWhenTargetRequestChanges() {
+    val posts =
+      (1..30).map { index ->
+        PostPreview(
+          pid = "p$index",
+          floorNumber = index - 1,
+          author = "reader$index",
+          floor = "${index}楼",
+          time = "now",
+          avatarInitial = "R",
+          content = "正文 $index",
+        )
+      }
+    val screenState =
+      mutableStateOf(
+        ThreadUiState(
+          title = "Repeated target thread",
+          page = "1",
+          replyCount = posts.size.toString(),
+          targetPostId = "p1",
+          targetScrollRequestId = 1,
+          posts = LoadableUiState.Content(posts),
+        ),
+      )
+
+    composeTestRule.setContent {
+      ThreadReadingScreen(
+        state = screenState.value,
+        onBack = {},
+      )
+    }
+
+    composeTestRule
+      .onAllNodes(hasScrollAction())[1]
+      .performScrollToNode(hasContentDescription("Post card 25楼"))
+    composeTestRule.onNodeWithContentDescription("Post card 25楼").assertExists()
+
+    composeTestRule.runOnUiThread {
+      screenState.value = screenState.value.copy(targetScrollRequestId = 2)
+    }
+
+    composeTestRule.waitUntil(timeoutMillis = 2_000) {
+      composeTestRule.onAllNodesWithContentDescription("Post card 1楼").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithContentDescription("Post card 1楼").assertExists()
   }
 
   @Test

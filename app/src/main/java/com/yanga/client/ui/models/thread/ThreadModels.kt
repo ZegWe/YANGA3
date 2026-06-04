@@ -32,6 +32,7 @@ data class ThreadUiState(
   val replyCount: String = "0",
   val targetPostId: String? = null,
   val targetFloorNumber: Int? = null,
+  val targetScrollRequestId: Int = 0,
   val cachedPostsByPage: Map<Int, List<PostPreview>> = emptyMap(),
   val posts: LoadableUiState<List<PostPreview>> = LoadableUiState.Loading,
 )

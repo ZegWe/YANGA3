@@ -19,6 +19,7 @@ class ThreadContentViewModel(
   private var loadingPage: Int? = null
   private var activeThreadId: String? = null
   private var activeDestination: ThreadDestination? = null
+  private var targetScrollRequestId = 0
   private val pageCache = mutableMapOf<Int, ThreadUiState>()
 
   fun matchesThread(threadId: String): Boolean = activeThreadId == threadId
@@ -31,6 +32,12 @@ class ThreadContentViewModel(
     val threadId = destination.id
     val page = destination.page
     val fallbackTitle = destination.title
+    val scrollRequestId =
+      if (destination.hasScrollTarget()) {
+        ++targetScrollRequestId
+      } else {
+        0
+      }
     activeDestination = destination
     val cached = _state.value
     if (activeThreadId != threadId) {
@@ -44,6 +51,12 @@ class ThreadContentViewModel(
     ) {
       loadingThreadId = threadId
       loadingPage = page
+      _state.value =
+        cached.copy(
+          targetPostId = destination.targetPostId,
+          targetFloorNumber = destination.targetFloorNumber,
+          targetScrollRequestId = scrollRequestId,
+        )
       return
     }
     pageCache[page]?.let { cachedPage ->
@@ -55,6 +68,7 @@ class ThreadContentViewModel(
           .copy(
             targetPostId = destination.targetPostId,
             targetFloorNumber = destination.targetFloorNumber,
+            targetScrollRequestId = scrollRequestId,
           )
           .withCachedPosts()
       return
@@ -69,6 +83,7 @@ class ThreadContentViewModel(
           posts = LoadableUiState.Loading,
           targetPostId = destination.targetPostId,
           targetFloorNumber = destination.targetFloorNumber,
+          targetScrollRequestId = scrollRequestId,
         )
         ?.withCachedPosts()
         ?: ThreadUiState(
@@ -76,6 +91,7 @@ class ThreadContentViewModel(
           page = page.toString(),
           targetPostId = destination.targetPostId,
           targetFloorNumber = destination.targetFloorNumber,
+          targetScrollRequestId = scrollRequestId,
         )
     viewModelScope.launch {
       val result = repository.loadThread(session, threadId, page)
@@ -91,12 +107,14 @@ class ThreadContentViewModel(
                   replyCount = data.replyCount.toString(),
                   targetPostId = destination.targetPostId,
                   targetFloorNumber = destination.targetFloorNumber,
+                  targetScrollRequestId = scrollRequestId,
                   posts = LoadableUiState.Content(data.posts.map { p -> p.toPreview() }),
                 )
               pageCache[page] =
                 loadedState.copy(
                   targetPostId = null,
                   targetFloorNumber = null,
+                  targetScrollRequestId = 0,
                   cachedPostsByPage = emptyMap(),
                 )
               loadedState.withCachedPosts()
@@ -109,6 +127,7 @@ class ThreadContentViewModel(
                 replyCount = current.replyCount,
                 targetPostId = destination.targetPostId,
                 targetFloorNumber = destination.targetFloorNumber,
+                targetScrollRequestId = scrollRequestId,
                 cachedPostsByPage = cachedPostsByPage(),
                 posts = it.toLoadableError(),
               )
@@ -188,6 +207,9 @@ class ThreadContentViewModel(
 
 private fun Int.floorPage(): Int =
   (coerceAtLeast(0) / POSTS_PER_PAGE) + 1
+
+private fun ThreadDestination.hasScrollTarget(): Boolean =
+  targetPostId != null || targetFloorNumber != null
 
 private const val POSTS_PER_PAGE = 20
 

@@ -20,6 +20,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -52,6 +53,41 @@ class ThreadContentViewModelTest {
     assertEquals(listOf(1, 2), repository.loadedPages)
     assertEquals("1", viewModel.state.value?.page)
     assertEquals("page 1", (viewModel.state.value?.posts as LoadableUiState.Content).value.single().content)
+  }
+
+  @Test
+  fun openPostOnAlreadyLoadedPageUpdatesTargetWithoutReloadingPage() = runTest(dispatcher) {
+    val repository = FakeRepository()
+    val viewModel = ThreadContentViewModel(repository)
+
+    viewModel.openThread(session = null, destination = ThreadDestination(id = "123", title = "Thread", page = 1))
+    advanceUntilIdle()
+    viewModel.openPost(session = null, postId = "p1")
+    advanceUntilIdle()
+
+    assertEquals(listOf(1), repository.loadedPages)
+    assertEquals("1", viewModel.state.value?.page)
+    assertEquals("p1", viewModel.state.value?.targetPostId)
+    assertEquals(0, viewModel.state.value?.targetFloorNumber)
+  }
+
+  @Test
+  fun openSamePostAgainCreatesNewScrollRequestWithoutReloadingPage() = runTest(dispatcher) {
+    val repository = FakeRepository()
+    val viewModel = ThreadContentViewModel(repository)
+
+    viewModel.openThread(session = null, destination = ThreadDestination(id = "123", title = "Thread", page = 1))
+    advanceUntilIdle()
+    viewModel.openPost(session = null, postId = "p1")
+    advanceUntilIdle()
+    val firstScrollRequestId = viewModel.state.value?.targetScrollRequestId ?: 0
+
+    viewModel.openPost(session = null, postId = "p1")
+    advanceUntilIdle()
+
+    assertEquals(listOf(1), repository.loadedPages)
+    assertEquals("p1", viewModel.state.value?.targetPostId)
+    assertTrue((viewModel.state.value?.targetScrollRequestId ?: 0) > firstScrollRequestId)
   }
 
   private class FakeRepository : NgaReadOnlyRepository {
@@ -107,7 +143,19 @@ class ThreadContentViewModelTest {
     }
 
     override suspend fun loadThreadPost(session: LoginSessionData?, pid: String): Result<NgaThreadPost> =
-      Result.failure(UnsupportedOperationException())
+      Result.success(
+        NgaThreadPost(
+          pid = pid,
+          tid = "123",
+          fid = "7",
+          authorId = "42",
+          author = "author",
+          subject = "Thread",
+          content = "page 1",
+          lou = 0,
+          postDate = 0L,
+        ),
+      )
 
     override suspend fun listLocalFavoriteBoards(): Result<List<LocalFavoriteBoard>> =
       Result.success(emptyList())

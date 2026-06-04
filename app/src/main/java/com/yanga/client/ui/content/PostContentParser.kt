@@ -482,16 +482,17 @@ private class InlineTextParser(private val source: String) {
 
   private fun finalizeRichText(): RichText {
     val normalized = normalizeWhitespace(output.toString())
-    if (normalized.leadingTrim == 0 && normalized.trailingTrim == 0) {
-      return RichText(normalized.text, styles.filter { it.start < it.end })
-    }
     val adjustedStyles =
-      styles.mapNotNull { style ->
-        val start = (style.start - normalized.leadingTrim).coerceAtLeast(0)
-        val end = (style.end - normalized.leadingTrim).coerceAtMost(normalized.text.length)
-        if (start < end) style.copy(start = start, end = end) else null
+      if (normalized.leadingTrim == 0 && normalized.trailingTrim == 0) {
+        styles.filter { it.start < it.end }
+      } else {
+        styles.mapNotNull { style ->
+          val start = (style.start - normalized.leadingTrim).coerceAtLeast(0)
+          val end = (style.end - normalized.leadingTrim).coerceAtMost(normalized.text.length)
+          if (start < end) style.copy(start = start, end = end) else null
+        }
       }
-    return RichText(normalized.text, adjustedStyles)
+    return RichText(normalized.text, adjustedStyles).collapseReplyToPostLinkPrefix()
   }
 
   private fun atEnd(): Boolean = pos >= source.length
@@ -505,6 +506,49 @@ private class InlineTextParser(private val source: String) {
   private companion object {
     val INLINE_TAGS = setOf("b", "i", "u", "del", "color", "size", "url", "uid", "tid", "pid")
   }
+}
+
+private fun RichText.collapseReplyToPostLinkPrefix(): RichText {
+  val prefix = "Reply to "
+  val linkedReply = "Reply"
+  if (!text.startsWith(prefix + linkedReply + " ")) return this
+  val linkStart = prefix.length
+  val linkEnd = linkStart + linkedReply.length
+  val hasPostLink =
+    styles.any { style ->
+      style.start == linkStart &&
+        style.end == linkEnd &&
+        style.linkUrl?.startsWith("nga://post/", ignoreCase = true) == true
+    }
+  if (!hasPostLink) return this
+
+  val collapsedText = text.removeRange(0, prefix.length)
+  val collapsedStyles =
+    styles.mapNotNull { style ->
+      style.shiftAfterRemoving(start = 0, end = prefix.length, textLength = collapsedText.length)
+    }
+  return RichText(collapsedText, collapsedStyles)
+}
+
+private fun PostTextStyleRange.shiftAfterRemoving(
+  start: Int,
+  end: Int,
+  textLength: Int,
+): PostTextStyleRange? {
+  val removedLength = end - start
+  val shiftedStart =
+    when {
+      this.start >= end -> this.start - removedLength
+      this.start >= start -> start
+      else -> this.start
+    }.coerceIn(0, textLength)
+  val shiftedEnd =
+    when {
+      this.end >= end -> this.end - removedLength
+      this.end > start -> start
+      else -> this.end
+    }.coerceIn(0, textLength)
+  return if (shiftedStart < shiftedEnd) copy(start = shiftedStart, end = shiftedEnd) else null
 }
 
 private fun extractSrcAttribute(tag: String): String? {

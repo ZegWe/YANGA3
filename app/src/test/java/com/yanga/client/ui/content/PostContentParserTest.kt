@@ -114,6 +114,22 @@ class PostContentParserTest {
   }
 
   @Test
+  fun parseCleansReplyToPrefixBeforeQuotedPostLink() {
+    val parts =
+      PostContentParser.parse(
+        "[b]Reply to [pid=253176649,12937812,2]Reply[/pid] Post by [uid=42]reader[/uid] (2026-06-01):[/b]<br/>quoted",
+      )
+
+    val text = parts.filterIsInstance<PostContentPart.Text>().single()
+    assertEquals("Reply Post by reader (2026-06-01):\nquoted", text.text)
+    assertTrue(text.styles.any { it.bold })
+    assertEquals(
+      PostTextStyleRange(start = 0, end = 5, linkUrl = "nga://post/253176649"),
+      text.styles.first { it.linkUrl != null },
+    )
+  }
+
+  @Test
   fun parseNormalizesImageThumbnailSuffix() {
     val parts = PostContentParser.parse("[img]https://img.example.com/a.gif.thumb.jpg[/img]")
 
