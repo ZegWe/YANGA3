@@ -44,6 +44,10 @@ class MainScreenTest {
     composeTestRule.onNodeWithContentDescription("Profile").assertExists()
     composeTestRule.onAllNodesWithContentDescription("Boards").assertCountEquals(0)
 
+    composeTestRule.onNodeWithText("首页").assertExists()
+    composeTestRule.onNodeWithText("消息").assertExists()
+    composeTestRule.onNodeWithText("我的").assertExists()
+
     composeTestRule.onAllNodesWithText("Settings").assertCountEquals(0)
     composeTestRule.onAllNodesWithText("Notifications").assertCountEquals(0)
   }
