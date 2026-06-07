@@ -141,6 +141,48 @@ class NgaReadOnlyRepositoryTest {
   }
 
   @Test
+  fun searchBoardsUsesBoardSearchAndParsesBoardSummaries() = runTest {
+    val transport = FakeTransport("forum.php" to fixture("subscribed_boards.json"))
+    val repository = DefaultNgaReadOnlyRepository(transport)
+
+    val result = repository.searchBoards(session(), "议事厅")
+
+    val boards = result.getOrThrow()
+    assertEquals(listOf("310"), boards.map { it.boardId })
+    assertEquals("真实关注板块", boards.first().name)
+    assertEquals("forum.php", transport.requests.single().pathName())
+    assertEquals("%D2%E9%CA%C2%CC%FC", transport.requests.single().query["key"])
+    assertEquals("ngaPassportUid=42; ngaPassportCid=abc", transport.requests.single().headers["Cookie"])
+  }
+
+  @Test
+  fun searchTopicsPassesSearchOptionsToTopicListAndParsesTopics() = runTest {
+    val transport = FakeTransport("thread.php" to fixture("topic_list_public.json"))
+    val repository = DefaultNgaReadOnlyRepository(transport)
+
+    val result = repository.searchTopics(
+      session = session(),
+      query = "测试",
+      fid = "7",
+      page = 2,
+      searchContent = true,
+      recommend = true,
+    )
+
+    val topics = result.getOrThrow()
+    assertEquals(2, topics.topics.size)
+    assertEquals("1001", topics.topics.first().topicId)
+    val request = transport.requests.single()
+    assertEquals("thread.php", request.pathName())
+    assertEquals("7", request.query["fid"])
+    assertEquals("2", request.query["page"])
+    assertEquals("%E6%B5%8B%E8%AF%95", request.query["key"])
+    assertEquals("1", request.query["content"])
+    assertEquals("1", request.query["recommend"])
+    assertEquals("postdatedesc", request.query["order_by"])
+  }
+
+  @Test
   fun loadBoardsDoesNotTreatRootSectionAsSubscribedFallback() = runTest {
     val transport = FakeTransport(
       responses = mapOf(

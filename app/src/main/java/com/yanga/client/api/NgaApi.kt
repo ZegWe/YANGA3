@@ -18,6 +18,7 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
     content: Int? = null,
     author: String? = null,
     key: String? = null,
+    fidRaw: String? = null,
     fidGroup: String? = null,
     recommend: Boolean = false,
   ): NgaRequest = get(
@@ -30,7 +31,9 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
       if (!author.isNullOrBlank()) {
         put("author", NgaEncoding.urlEncodeGbk(author))
       } else {
-        stid?.let { put("stid", it.toString()) } ?: fid?.let { put("fid", it.toString()) }
+        stid?.let { put("stid", it.toString()) }
+          ?: fidRaw?.takeIf { it.isNotBlank() }?.let { put("fid", it) }
+          ?: fid?.let { put("fid", it.toString()) }
         key?.takeIf { it.isNotBlank() }?.let { put("key", NgaEncoding.urlEncodeUtf8(it)) }
         if (recommend && stid != null && key == null) {
           put("key", "")
@@ -67,12 +70,8 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
     },
   )
 
-  fun boardSearch(boardName: String): NgaRequest = NgaRequest(
-    method = NgaHttpMethod.GET,
-    url = "http://bbs.nga.cn/forum.php",
-    query = linkedMapOf("__output" to "8", "key" to NgaEncoding.urlEncodeGbk(boardName)),
-    headers = commonHeaders(),
-  )
+  fun boardSearch(boardName: String): NgaRequest =
+    get("forum.php", linkedMapOf("__output" to "8", "key" to NgaEncoding.urlEncodeGbk(boardName)))
 
   fun remoteBoardCategories(): NgaRequest = get("app_api.php", linkedMapOf("__lib" to "home", "__act" to "category"))
 

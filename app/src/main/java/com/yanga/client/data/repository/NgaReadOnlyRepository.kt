@@ -6,6 +6,7 @@ import com.yanga.client.api.NgaApi
 import com.yanga.client.api.NgaApiException
 import com.yanga.client.api.HttpUrlConnectionNgaTransport
 import com.yanga.client.api.NgaBoardCategoryParser
+import com.yanga.client.api.NgaBoardSummary
 import com.yanga.client.api.NgaHttpResponse
 import com.yanga.client.api.NgaHttpTransport
 import com.yanga.client.api.NgaMessageParser
@@ -42,6 +43,19 @@ interface NgaReadOnlyRepository {
     fidGroup: String? = null,
     recommend: Boolean = false,
   ): Result<NgaTopicList>
+
+  suspend fun searchBoards(session: LoginSessionData?, query: String): Result<List<NgaBoardSummary>> =
+    Result.failure(UnsupportedOperationException("searchBoards is not implemented"))
+
+  suspend fun searchTopics(
+    session: LoginSessionData?,
+    query: String,
+    fid: String? = null,
+    page: Int = 1,
+    searchContent: Boolean = false,
+    recommend: Boolean = false,
+  ): Result<NgaTopicList> =
+    Result.failure(UnsupportedOperationException("searchTopics is not implemented"))
 
   suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int = 1): Result<NgaThreadRead>
 
@@ -234,6 +248,34 @@ class DefaultNgaReadOnlyRepository(
     logDebug("loadBoardTopics fid=$fid stid=$stid page=$page fidGroup=$fidGroup recommend=$recommend hasCookie=${!session?.cookie.isNullOrBlank()}")
     execute(
       api(session).topicList(fid = numericFid, stid = stid, page = page, fidGroup = fidGroup, recommend = recommend),
+      NgaTopicListParser::parse,
+    )
+  }
+
+  override suspend fun searchBoards(session: LoginSessionData?, query: String): Result<List<NgaBoardSummary>> =
+    withContext(Dispatchers.IO) {
+      execute(api(session).boardSearch(query), NgaBoardCategoryParser::parseBoards)
+    }
+
+  override suspend fun searchTopics(
+    session: LoginSessionData?,
+    query: String,
+    fid: String?,
+    page: Int,
+    searchContent: Boolean,
+    recommend: Boolean,
+  ): Result<NgaTopicList> = withContext(Dispatchers.IO) {
+    val stid = fid?.removePrefix("t")?.toIntOrNull().takeIf { fid?.startsWith("t") == true }
+    val fidRaw = fid.takeUnless { it.isNullOrBlank() || it.startsWith("t") }
+    execute(
+      api(session).topicList(
+        page = page,
+        stid = stid,
+        fidRaw = fidRaw,
+        key = query,
+        content = if (searchContent) 1 else null,
+        recommend = recommend,
+      ),
       NgaTopicListParser::parse,
     )
   }

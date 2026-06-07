@@ -106,6 +106,7 @@ internal fun HomeScreen(
   onLoginClick: () -> Unit,
   onBoardClick: (BoardPreview) -> Unit = {},
   onTopicClick: (TopicPreview) -> Unit = {},
+  onSearchClick: () -> Unit = {},
 ) {
   Column(
     modifier = modifier
@@ -123,7 +124,7 @@ internal fun HomeScreen(
       },
     )
 
-    SearchPill(text = "Search boards, topics, and users")
+    SearchPill(text = "Search boards and topics", onClick = onSearchClick)
 
     if (loginSession == null) {
       LoginPrompt(onLoginClick = onLoginClick)
@@ -139,6 +140,7 @@ internal fun BoardsScreen(
   modifier: Modifier = Modifier,
   state: BoardsUiState = BoardsUiState(),
   onBoardClick: (BoardPreview) -> Unit = {},
+  onSearchClick: () -> Unit = {},
 ) {
   val sections = (state.sections as? LoadableUiState.Content)?.value.orEmpty()
   val categoryLabels = remember(sections) { listOf("收藏") + sections.map { it.name } }
@@ -164,7 +166,7 @@ internal fun BoardsScreen(
   Column(
     modifier = modifier.fillMaxSize(),
   ) {
-    BoardsScreenHeader()
+    BoardsScreenHeader(onSearchClick = onSearchClick)
 
     SecondaryScrollableTabRow(
       selectedTabIndex = selectedTabIndex,

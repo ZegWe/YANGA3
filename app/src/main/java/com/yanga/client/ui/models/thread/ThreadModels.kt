@@ -1,6 +1,9 @@
 package com.yanga.client.ui
 
 data class PostEmbeddedReplyPreview(
+  val pid: String = "",
+  val tid: String = "",
+  val floorNumber: Int = 0,
   val author: String,
   val authorAvatarUrl: String? = null,
   val content: String,

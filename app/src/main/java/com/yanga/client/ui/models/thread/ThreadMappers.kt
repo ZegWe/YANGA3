@@ -25,6 +25,9 @@ internal fun NgaThreadPost.toPreview(): PostPreview =
 
 private fun NgaThreadEmbeddedReply.toPreview(): PostEmbeddedReplyPreview =
   PostEmbeddedReplyPreview(
+    pid = pid,
+    tid = tid,
+    floorNumber = lou,
     author = author,
     authorAvatarUrl = authorAvatarUrl,
     content = content,

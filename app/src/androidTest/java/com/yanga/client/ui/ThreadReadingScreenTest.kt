@@ -328,6 +328,51 @@ class ThreadReadingScreenTest {
   }
 
   @Test
+  fun threadReadingScreenRoutesEmbeddedReplyOriginalPostButton() {
+    var clickedUrl = ""
+    composeTestRule.setContent {
+      ThreadReadingScreen(
+        state =
+          ThreadUiState(
+            title = "Embedded reply thread",
+            page = "1",
+            replyCount = "41",
+            posts =
+              LoadableUiState.Content(
+                listOf(
+                  PostPreview(
+                    author = "reader",
+                    floor = "楼主",
+                    time = "now",
+                    avatarInitial = "R",
+                    content = "正文",
+                    hotReplies =
+                      listOf(
+                        PostEmbeddedReplyPreview(
+                          pid = "869524613",
+                          tid = "25968165",
+                          floorNumber = 40,
+                          author = "hot",
+                          content = "热点回复",
+                        ),
+                      ),
+                  ),
+                ),
+              ),
+          ),
+        onBack = {},
+        onLinkClick = { clickedUrl = it },
+      )
+    }
+
+    composeTestRule.onNodeWithText("热点回复 [原帖]").performTouchInput {
+      click(Offset(right - 24f, center.y))
+    }
+
+    assertEquals("nga://post/869524613?tid=25968165&page=3", clickedUrl)
+  }
+
+  @Test
   fun threadReadingScreenRepeatsScrollWhenTargetRequestChanges() {
     val posts =
       (1..30).map { index ->

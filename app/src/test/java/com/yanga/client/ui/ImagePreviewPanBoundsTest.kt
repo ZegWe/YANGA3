@@ -58,6 +58,34 @@ class ImagePreviewPanBoundsTest {
   }
 
   @Test
+  fun embeddedReplyOriginalPostUrlIncludesThreadAndPageHints() {
+    val reply =
+      PostEmbeddedReplyPreview(
+        pid = "869524613",
+        tid = "25968165",
+        floorNumber = 40,
+        author = "hot",
+        content = "热点回复",
+      )
+
+    assertEquals(
+      "nga://post/869524613?tid=25968165&page=3",
+      embeddedReplyOriginalPostUrl(reply),
+    )
+  }
+
+  @Test
+  fun embeddedReplyOriginalPostUrlReturnsNullWithoutPostId() {
+    val reply =
+      PostEmbeddedReplyPreview(
+        author = "commenter",
+        content = "贴条",
+      )
+
+    assertEquals(null, embeddedReplyOriginalPostUrl(reply))
+  }
+
+  @Test
   fun imagePreviewPageKeysStayUniqueForDuplicateUrls() {
     val repeatedUrl = "https://img.nga.178.com/attachments/mon_202606/01/sample.jpg"
 

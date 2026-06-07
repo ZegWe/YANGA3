@@ -40,6 +40,34 @@ class NgaApiTest {
   }
 
   @Test
+  fun topicListBuildsTopicSearchVariants() {
+    val globalSearch = api.topicList(key = "测试")
+    assertEquals("%E6%B5%8B%E8%AF%95", globalSearch.query["key"])
+    assertFalse(globalSearch.query.containsKey("fid"))
+    assertFalse(globalSearch.query.containsKey("stid"))
+
+    val scopedFidSearch = api.topicList(fid = 7, key = "测试", page = 3)
+    assertEquals("7", scopedFidSearch.query["fid"])
+    assertEquals("%E6%B5%8B%E8%AF%95", scopedFidSearch.query["key"])
+    assertEquals("3", scopedFidSearch.query["page"])
+
+    val scopedStidSearch = api.topicList(stid = 99, key = "测试")
+    assertEquals("99", scopedStidSearch.query["stid"])
+    assertEquals("%E6%B5%8B%E8%AF%95", scopedStidSearch.query["key"])
+
+    val contentSearch = api.topicList(key = "测试", content = 1)
+    assertEquals("1", contentSearch.query["content"])
+
+    val recommendSearch = api.topicList(key = "测试", recommend = true)
+    assertEquals("1", recommendSearch.query["recommend"])
+    assertEquals("postdatedesc", recommendSearch.query["order_by"])
+
+    val multiFidSearch = api.topicList(fidRaw = "7,8,-9", key = "测试")
+    assertEquals("7,8,-9", multiFidSearch.query["fid"])
+    assertEquals("%E6%B5%8B%E8%AF%95", multiFidSearch.query["key"])
+  }
+
+  @Test
   fun articleReadBuildsThreadDetailQuery() {
     val request = api.articleRead(tid = 123, page = 3, authorId = 456)
 
@@ -209,7 +237,7 @@ class NgaApiTest {
   fun boardAndRemoteCategoryRequestsMatchReferenceEndpoints() {
     val boardSearch = api.boardSearch("议事厅")
     assertEquals(NgaHttpMethod.GET, boardSearch.method)
-    assertEquals("http://bbs.nga.cn/forum.php", boardSearch.url)
+    assertEquals("https://bbs.nga.cn/forum.php", boardSearch.url)
     assertEquals("8", boardSearch.query["__output"])
     assertEquals("%D2%E9%CA%C2%CC%FC", boardSearch.query["key"])
     assertEquals(session.cookie, boardSearch.headers["Cookie"])

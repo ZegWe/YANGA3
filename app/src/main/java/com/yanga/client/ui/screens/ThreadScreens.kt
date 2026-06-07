@@ -131,6 +131,7 @@ internal fun BoardTopicListScreen(
   onSetSubBoardEnabled: (String, Boolean) -> Unit = { _, _ -> },
   onOpenSubBoard: (SubBoardOption) -> Unit = {},
   onTopicFilterChange: (BoardTopicFilter) -> Unit = {},
+  onSearchClick: () -> Unit = {},
   onRefresh: () -> Unit = {},
   onLoadNextPage: () -> Unit = {},
   modifier: Modifier = Modifier,
@@ -189,7 +190,7 @@ internal fun BoardTopicListScreen(
               contentDescription = if (state.isFavorite) "Unfavorite board" else "Favorite board",
             )
           }
-          IconButton(onClick = {}) {
+          IconButton(onClick = onSearchClick) {
             Icon(
               imageVector = Icons.Outlined.Search,
               contentDescription = "搜索",
@@ -673,6 +674,7 @@ private fun ThreadPageLoadingIndicator() {
 }
 
 private const val THREAD_HEADER_ITEM_COUNT = 0
+private const val THREAD_POSTS_PER_PAGE = 20
 private val ThreadFabHideScrollThreshold = 24.dp
 private val ThreadFabShowScrollThreshold = 72.dp
 private val ThreadFabSlideOffscreenPadding = 16.dp
@@ -859,6 +861,15 @@ private fun PostEmbeddedReplyItem(
   val contentParts = remember(reply.content) { PostContentParser.parse(reply.content) }
   val contentBlocks = remember(contentParts) { groupPostContentParts(contentParts) }
   val imageUrls = remember(reply) { embeddedReplyPreviewImageUrls(reply) }
+  val originalPostUrl = remember(reply) { embeddedReplyOriginalPostUrl(reply) }
+  val lastInlineBlockIndex =
+    remember(contentBlocks, originalPostUrl) {
+      if (originalPostUrl == null) {
+        -1
+      } else {
+        contentBlocks.indexOfLast { it is PostContentBlock.Inline }
+      }
+    }
 
   Row(
     modifier = modifier.fillMaxWidth(),
@@ -905,10 +916,18 @@ private fun PostEmbeddedReplyItem(
         modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        for (block in contentBlocks) {
+        for ((blockIndex, block) in contentBlocks.withIndex()) {
           when (block) {
             is PostContentBlock.Inline -> {
-              PostInlineRichText(items = block.items, onLinkClick = onLinkClick)
+              PostInlineRichText(
+                items =
+                  if (blockIndex == lastInlineBlockIndex && originalPostUrl != null) {
+                    block.items.withEmbeddedReplyOriginalPostLink(originalPostUrl)
+                  } else {
+                    block.items
+                  },
+                onLinkClick = onLinkClick,
+              )
             }
             is PostContentBlock.Quote -> {
               PostQuoteBlock(
@@ -932,6 +951,12 @@ private fun PostEmbeddedReplyItem(
               )
             }
           }
+        }
+        if (originalPostUrl != null && lastInlineBlockIndex == -1) {
+          PostInlineRichText(
+            items = emptyList<PostInlineItem>().withEmbeddedReplyOriginalPostLink(originalPostUrl),
+            onLinkClick = onLinkClick,
+          )
         }
       }
     }
@@ -1369,6 +1394,38 @@ internal fun postPreviewImageUrls(post: PostPreview): List<String> =
 
 internal fun embeddedReplyPreviewImageUrls(reply: PostEmbeddedReplyPreview): List<String> =
   postContentImageUrls(reply.content)
+
+internal fun embeddedReplyOriginalPostUrl(reply: PostEmbeddedReplyPreview): String? {
+  val postId = reply.pid.takeIf { it.isNotBlank() && it.all(Char::isDigit) } ?: return null
+  val threadId = reply.tid.takeIf { it.isNotBlank() && it.all(Char::isDigit) }
+  val page = reply.floorNumber.takeIf { it > 0 }?.let { (it / THREAD_POSTS_PER_PAGE) + 1 }
+  val query =
+    buildList {
+      threadId?.let { add("tid=$it") }
+      page?.let { add("page=$it") }
+    }.joinToString("&")
+  return if (query.isBlank()) {
+    "nga://post/$postId"
+  } else {
+    "nga://post/$postId?$query"
+  }
+}
+
+private fun List<PostInlineItem>.withEmbeddedReplyOriginalPostLink(url: String): List<PostInlineItem> {
+  val label = " [原帖]"
+  return this +
+    PostInlineItem.Text(
+      text = label,
+      styles =
+        listOf(
+          PostTextStyleRange(
+            start = 1,
+            end = label.length,
+            linkUrl = url,
+          ),
+        ),
+    )
+}
 
 private fun postContentImageUrls(content: String): List<String> =
   PostContentParser.collectImageUrls(PostContentParser.parse(content)).distinct()

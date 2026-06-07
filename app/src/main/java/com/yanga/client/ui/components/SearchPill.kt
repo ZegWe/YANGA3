@@ -1,5 +1,6 @@
 package com.yanga.client.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -15,9 +16,13 @@ internal fun SearchPill(
   text: String,
   modifier: Modifier = Modifier,
   fillMaxWidth: Boolean = true,
+  onClick: (() -> Unit)? = null,
 ) {
+  val surfaceModifier =
+    (if (fillMaxWidth) modifier.fillMaxWidth() else modifier)
+      .then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick))
   Surface(
-    modifier = if (fillMaxWidth) modifier.fillMaxWidth() else modifier,
+    modifier = surfaceModifier,
     color = MaterialTheme.colorScheme.surfaceContainer,
     shape = MaterialTheme.shapes.extraLarge,
   ) {

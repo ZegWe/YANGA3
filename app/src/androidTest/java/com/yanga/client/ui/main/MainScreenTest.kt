@@ -73,7 +73,7 @@ class MainScreenTest {
     }
 
     composeTestRule.onNodeWithText("Yanga").assertExists()
-    composeTestRule.onNodeWithText("Search boards, topics, and users").assertExists()
+    composeTestRule.onNodeWithText("Search boards and topics").assertExists()
     composeTestRule.onNodeWithText("Active discussions").assertExists()
     composeTestRule.onNodeWithText("Home active topic").assertExists()
 

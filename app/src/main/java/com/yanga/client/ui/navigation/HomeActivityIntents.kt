@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import com.yanga.client.BoardTopicListActivity
 import com.yanga.client.LoginActivity
+import com.yanga.client.SearchActivity
 import com.yanga.client.ThreadActivity
 import com.yanga.client.WebViewActivity
 import com.yanga.client.ui.BoardDestination
@@ -13,6 +14,21 @@ import com.yanga.client.ui.TopicPreview
 
 object HomeActivityIntents {
   fun login(context: Context): Intent = Intent(context, LoginActivity::class.java)
+
+  fun search(context: Context): Intent =
+    Intent(context, SearchActivity::class.java).apply {
+      putExtra(SearchActivity.EXTRA_SCOPE, SearchActivity.SCOPE_GLOBAL)
+    }
+
+  fun search(context: Context, destination: BoardDestination): Intent =
+    Intent(context, SearchActivity::class.java).apply {
+      putExtra(SearchActivity.EXTRA_SCOPE, SearchActivity.SCOPE_BOARD)
+      putExtra(SearchActivity.EXTRA_BOARD_ID, destination.id)
+      putExtra(SearchActivity.EXTRA_BOARD_NAME, destination.name)
+      putExtra(SearchActivity.EXTRA_BOARD_ICON_URL, destination.iconUrl)
+      putExtra(SearchActivity.EXTRA_BOARD_CATEGORY, destination.category)
+      putExtra(SearchActivity.EXTRA_BOARD_IS_FAVORITE, destination.isFavorite)
+    }
 
   fun boardTopics(context: Context, board: BoardPreview): Intent =
     boardTopics(

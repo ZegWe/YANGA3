@@ -45,6 +45,9 @@ fun BoardListRoute(
       boardsViewModel.onBoardOpened()
       context.startActivity(HomeActivityIntents.boardTopics(context, board))
     },
+    onSearchClick = {
+      context.startActivity(HomeActivityIntents.search(context))
+    },
     modifier = modifier.fillMaxSize(),
   )
 }
