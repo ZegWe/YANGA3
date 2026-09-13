@@ -128,6 +128,7 @@ class MainUiModelsContractTest {
   fun profileDefaultSettingsRowsMatchApprovedProfileRedesign() {
     assertEquals(
       listOf(
+        SettingsPreview("about", "关于", "应用版本与更新"),
         SettingsPreview("theme", "主题", "跟随系统、浅色、深色"),
         SettingsPreview("endpoint", "设置端点", "https://bbs.nga.cn"),
       ),
@@ -135,5 +136,3 @@ class MainUiModelsContractTest {
     )
   }
 }
-
-

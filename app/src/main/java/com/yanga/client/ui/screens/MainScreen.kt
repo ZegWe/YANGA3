@@ -150,6 +150,7 @@ fun MainScreen(
             onLogout = onLogout,
             onEndpointChange = { profileViewModel.setEndpoint(it) },
             onThemeSettingsClick = { navigate(MainDestinationKey.ThemeSettings) },
+            onAboutClick = { navigate(MainDestinationKey.About) },
             homeContent = {
               BoardListRoute(
                 loginSession = loginSession,
@@ -186,6 +187,7 @@ fun MainScreen(
           )
         }
 
+        entry<MainDestinationKey.About> { AboutScreen(onBack = onBack) }
         entry<MainDestinationKey.ThemeSettings> {
           ThemeSettingsScreen(
             preferences = themePreferences,
@@ -219,6 +221,7 @@ private fun MainRootScaffold(
   onLogout: () -> Unit,
   onEndpointChange: (String) -> Unit,
   onThemeSettingsClick: () -> Unit,
+  onAboutClick: () -> Unit,
   homeContent: @Composable () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
@@ -239,6 +242,7 @@ private fun MainRootScaffold(
         onLogout = onLogout,
         onEndpointChange = onEndpointChange,
         onThemeSettingsClick = onThemeSettingsClick,
+        onAboutClick = onAboutClick,
         homeContent = homeContent,
         paddingValues = paddingValues,
       )
@@ -256,6 +260,7 @@ private fun MainTabContent(
   onLogout: () -> Unit,
   onEndpointChange: (String) -> Unit,
   onThemeSettingsClick: () -> Unit,
+  onAboutClick: () -> Unit,
   homeContent: @Composable () -> Unit,
   paddingValues: PaddingValues,
 ) {
@@ -297,6 +302,7 @@ private fun MainTabContent(
         onLogout = onLogout,
         onEndpointChange = onEndpointChange,
         onThemeSettingsClick = onThemeSettingsClick,
+        onAboutClick = onAboutClick,
         modifier = profileContentModifier,
       )
   }
@@ -321,11 +327,3 @@ fun MainScreenPortraitPreview() {
     )
   }
 }
-
-
-
-
-
-
-
-

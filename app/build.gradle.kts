@@ -6,10 +6,13 @@ plugins {
   alias(libs.plugins.kotlin.serialization)
 }
 
+val ciSigningStore = System.getenv("YANGA_SIGNING_STORE")
 val releaseSigningFile = rootProject.file("signing/release.properties")
 val releaseSigning = Properties().apply {
     if (releaseSigningFile.isFile) releaseSigningFile.inputStream().use { load(it) }
 }
+
+val appVersion = Properties().apply { rootProject.file("version.properties").inputStream().use { load(it) } }
 
 android {
     namespace = "com.yanga.client"
@@ -18,17 +21,18 @@ android {
         applicationId = "com.zegwe.yanga"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        versionCode = appVersion.getProperty("versionCode").toInt().also { require(it > 0) }
+        versionName = appVersion.getProperty("versionName")
     }
 
     signingConfigs {
-        if (releaseSigningFile.isFile) {
+        if (releaseSigningFile.isFile || ciSigningStore != null) {
             create("release") {
-                storeFile = rootProject.file(releaseSigning.getProperty("storeFile"))
-                storePassword = releaseSigning.getProperty("storePassword")
-                keyAlias = releaseSigning.getProperty("keyAlias")
-                keyPassword = releaseSigning.getProperty("keyPassword")
+                storeFile = rootProject.file(ciSigningStore ?: releaseSigning.getProperty("storeFile"))
+                storePassword = System.getenv("YANGA_STORE_PASSWORD") ?: releaseSigning.getProperty("storePassword")
+                keyAlias = System.getenv("YANGA_KEY_ALIAS") ?: releaseSigning.getProperty("keyAlias")
+                keyPassword = System.getenv("YANGA_KEY_PASSWORD") ?: releaseSigning.getProperty("keyPassword")
             }
         }
     }
@@ -38,7 +42,7 @@ android {
             applicationIdSuffix = ".debug"
         }
         release {
-            if (releaseSigningFile.isFile) {
+            if (releaseSigningFile.isFile || ciSigningStore != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
             isMinifyEnabled = false
@@ -109,4 +113,3 @@ dependencies {
   androidTestImplementation(libs.androidx.test.runner)
   androidTestImplementation(libs.androidx.test.espresso.core)
 }
-

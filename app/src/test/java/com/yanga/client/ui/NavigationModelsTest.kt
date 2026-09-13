@@ -16,7 +16,7 @@ class NavigationModelsTest {
       MainDestinationKey.Thread(ThreadDestination("42", "Thread", 3, "99", 12)),
       MainDestinationKey.Search(first.destination),
       MainDestinationKey.Web("https://bbs.nga.cn", "NGA", "https://bbs.nga.cn"),
-      MainDestinationKey.Login, MainDestinationKey.ThemeSettings,
+      MainDestinationKey.Login, MainDestinationKey.ThemeSettings, MainDestinationKey.About,
     )
     val serializer = kotlinx.serialization.builtins.ListSerializer(MainDestinationKey.serializer())
     val encoded = kotlinx.serialization.json.Json.encodeToString(serializer, destinations)

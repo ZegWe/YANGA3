@@ -314,6 +314,20 @@ class MainScreenTest {
   }
 
   @Test
+  fun profileAboutRowShowsInstalledVersionAndUpdateAction() {
+    composeTestRule.setContent { MainScreen(repository = fakeRepository()) }
+    composeTestRule.onNodeWithContentDescription("Profile", useUnmergedTree = true).performClick()
+    composeTestRule.onNodeWithContentDescription("关于设置入口").performClick()
+    composeTestRule.onNodeWithText("关于").assertExists()
+    composeTestRule.onNodeWithText("当前版本：", substring = true).assertExists()
+    composeTestRule.onNodeWithText("检查更新").assertExists()
+    composeTestRule.onNodeWithText("GitHub 项目主页").assertExists()
+    composeTestRule.onAllNodesWithText("我的").assertCountEquals(0)
+    composeTestRule.onNodeWithContentDescription("返回").performClick()
+    composeTestRule.onNodeWithContentDescription("关于设置入口").assertExists()
+  }
+
+  @Test
   fun profileThemeRowOpensIndependentThemeSettingsPage() {
     val repository = fakeRepository()
     composeTestRule.setContent { MainScreen(repository = repository) }
