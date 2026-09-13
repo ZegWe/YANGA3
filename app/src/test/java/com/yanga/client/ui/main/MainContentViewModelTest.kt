@@ -39,15 +39,19 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainContentViewModelTest {
   private val dispatcher = StandardTestDispatcher()
+  private lateinit var originalTimeZone: java.util.TimeZone
 
   @Before
   fun setUp() {
+    originalTimeZone = java.util.TimeZone.getDefault()
+    java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Shanghai"))
     Dispatchers.setMain(dispatcher)
   }
 
   @After
   fun tearDown() {
     Dispatchers.resetMain()
+    java.util.TimeZone.setDefault(originalTimeZone)
   }
 
   @Test
