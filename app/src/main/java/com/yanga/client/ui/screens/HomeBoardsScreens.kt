@@ -25,7 +25,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SecondaryScrollableTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.Icons
@@ -168,7 +168,7 @@ internal fun BoardsScreen(
   ) {
     BoardsScreenHeader(onSearchClick = onSearchClick)
 
-    SecondaryScrollableTabRow(
+    PrimaryScrollableTabRow(
       selectedTabIndex = selectedTabIndex,
       modifier = Modifier.fillMaxWidth(),
       edgePadding = 0.dp,

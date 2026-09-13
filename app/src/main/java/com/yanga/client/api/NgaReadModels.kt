@@ -88,6 +88,8 @@ data class NgaNotificationSummary(
 )
 
 data class NgaProfileCounters(
+  val topicCount: Int? = null,
+  val replyCount: Int? = null,
   val favoriteTopics: Int = 0,
   val subscribedBoards: Int = 0,
   val unreadNotifications: Int = 0,

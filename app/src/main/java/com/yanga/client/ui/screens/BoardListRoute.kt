@@ -5,49 +5,47 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import com.yanga.client.YangaApplication
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.yanga.client.data.NgaReadOnlyRepository
+import com.yanga.client.data.boards.BoardsCatalog
+import com.yanga.client.ui.BoardPreview
 import com.yanga.client.ui.BoardsListViewModel
 import com.yanga.client.ui.BoardsScreen
 import com.yanga.client.ui.LoginSessionUiState
-import com.yanga.client.ui.ProfileViewModel
-import com.yanga.client.ui.navigation.HomeActivityIntents
 import com.yanga.client.ui.toData
 
 @Composable
 fun BoardListRoute(
   loginSession: LoginSessionUiState?,
-  app: YangaApplication,
+  repository: NgaReadOnlyRepository,
+  boardsCatalog: BoardsCatalog?,
+  forumEndpoint: String,
+  onBoardClick: (BoardPreview) -> Unit,
+  onSearchClick: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  val context = LocalContext.current
-  val boardsViewModel =
-    remember(app.repository, app.boardsCatalog) {
-      BoardsListViewModel(app.repository, app.boardsCatalog)
-    }
-  val profileViewModel = remember(app.repository) { ProfileViewModel(app.repository) }
-  val boardsState by boardsViewModel.state.collectAsState()
-  val profileState by profileViewModel.state.collectAsState()
-  val sessionData = loginSession?.toData()
-
-  LaunchedEffect(loginSession, profileState.forumEndpoint, app.repository) {
-    app.repository.setBaseUrl(profileState.forumEndpoint)
-    boardsViewModel.applyEndpoint(profileState.forumEndpoint)
-    boardsViewModel.refresh(sessionData)
-    profileViewModel.refresh(sessionData)
+  val boardsViewModel = viewModel<BoardsListViewModel> {
+    BoardsListViewModel(repository, boardsCatalog)
   }
-
+  val boardsState by boardsViewModel.state.collectAsState()
+  LaunchedEffect(loginSession, forumEndpoint) {
+    boardsViewModel.ensureLoaded(loginSession?.toData(), forumEndpoint)
+  }
+  // Do not measure a restored pager/grid against an empty loading dataset.
+  if (boardsState.sections is com.yanga.client.ui.LoadableUiState.Loading) {
+    androidx.compose.foundation.layout.Box(modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+      androidx.compose.material3.CircularProgressIndicator()
+    }
+    return
+  }
   BoardsScreen(
     state = boardsState,
     onBoardClick = { board ->
       boardsViewModel.onBoardOpened()
-      context.startActivity(HomeActivityIntents.boardTopics(context, board))
+      onBoardClick(board)
     },
-    onSearchClick = {
-      context.startActivity(HomeActivityIntents.search(context))
-    },
+    onSearchClick = onSearchClick,
     modifier = modifier.fillMaxSize(),
   )
 }

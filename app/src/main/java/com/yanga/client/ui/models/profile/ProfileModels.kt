@@ -20,9 +20,8 @@ data class ProfileUiState(
   companion object {
     val defaultSettingsRows =
       listOf(
-        SettingsPreview("阅", "Reading and appearance", "字体、主题、图片加载"),
-        SettingsPreview("缓", "Cache and history", "最近阅读、离线缓存"),
-        SettingsPreview("屏", "Block words", "过滤内容和用户"),
+        SettingsPreview("theme", "主题", "跟随系统、浅色、深色"),
+        SettingsPreview("endpoint", "设置端点", NgaDomains.BBS_NGA_CN),
       )
   }
 }

@@ -31,6 +31,27 @@ class ThreadReadingScreenTest {
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
   @Test
+  fun threadLoadingFailureShowsDataAndNetworkErrors() {
+    val state = mutableStateOf(ThreadUiState(title = "Failure test"))
+    composeTestRule.setContent {
+      ThreadReadingScreen(state = state.value, onBack = {})
+    }
+    composeTestRule.runOnIdle {
+      state.value = state.value.copy(
+        posts = LoadableUiState.Error("invalid JSON", org.json.JSONException("Unterminated string")),
+      )
+    }
+    composeTestRule.onNodeWithText("加载失败：帖子数据不完整或格式异常，无法解析。").assertExists()
+    composeTestRule.runOnIdle {
+      state.value = state.value.copy(
+        posts = LoadableUiState.Error("timeout", java.net.SocketTimeoutException()),
+      )
+    }
+    composeTestRule.onNodeWithText("加载失败：网络连接异常或请求超时，请稍后再试。").assertExists()
+    composeTestRule.onNodeWithText("加载失败：帖子数据不完整或格式异常，无法解析。").assertDoesNotExist()
+  }
+
+  @Test
   fun threadReadingScreenDoesNotLeaveLargeGapAfterLastPost() {
     val posts =
       (1..18).map { index ->

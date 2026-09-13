@@ -14,10 +14,20 @@ class ImageUrlResolverTest {
   }
 
   @Test
-  fun resolveKeepsAbsoluteHttpsUrls() {
+  fun resolveMigratesPersistedBoardIconUrls() {
     assertEquals(
-      "https://img4.nga.178.com/ngabbs/nga_classic/f/app/7.png",
+      "https://img4.nga.cn/ngabbs/nga_classic/f/app/7.png",
       ImageUrlResolver.resolve("https://img4.nga.178.com/ngabbs/nga_classic/f/app/7.png"),
+    )
+    for (scheme in listOf("https:", "http:", "")) {
+      assertEquals(
+        "https://img4.nga.cn/proxy/cache_attach/ficon/123v.png?v=2",
+        ImageUrlResolver.resolve("$scheme//img4.nga.178.com/proxy/cache_attach/ficon/123v.png?v=2"),
+      )
+    }
+    assertEquals(
+      "https://img4.nga.178.com/avatars/avatar.png",
+      ImageUrlResolver.resolve("https://img4.nga.178.com/avatars/avatar.png"),
     )
   }
 

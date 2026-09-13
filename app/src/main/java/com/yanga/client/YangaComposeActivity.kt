@@ -11,11 +11,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.yanga.client.theme.ThemePreferences
+import com.yanga.client.theme.ThemePreferencesStore
 import com.yanga.client.theme.YangaTheme
 import com.yanga.client.ui.LoginSessionUiState
 
 abstract class YangaComposeActivity : ComponentActivity() {
   protected var loginSession by mutableStateOf<LoginSessionUiState?>(null)
+    private set
+  protected var themePreferences by mutableStateOf(ThemePreferences())
     private set
 
   protected val app: YangaApplication
@@ -24,9 +28,10 @@ abstract class YangaComposeActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     loginSession = LoginSessionStore.load(this)
+    themePreferences = ThemePreferencesStore.load(this)
     enableEdgeToEdge()
     setContent {
-      YangaTheme {
+      YangaTheme(themePreferences = themePreferences) {
         Surface(color = MaterialTheme.colorScheme.background) {
           Content()
         }
@@ -55,5 +60,10 @@ abstract class YangaComposeActivity : ComponentActivity() {
     CookieManager.getInstance().flush()
     loginSession = null
     LoginSessionStore.clear(this)
+  }
+
+  protected fun updateThemePreferences(preferences: ThemePreferences) {
+    themePreferences = preferences
+    ThemePreferencesStore.save(this, preferences)
   }
 }

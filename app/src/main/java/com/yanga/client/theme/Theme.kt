@@ -13,18 +13,22 @@ import com.materialkolor.rememberDynamicColorScheme
 fun YangaTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
   dynamicColor: Boolean = true,
+  themePreferences: ThemePreferences = ThemePreferences(),
   content: @Composable () -> Unit,
 ) {
+  val resolvedDarkTheme = themePreferences.darkMode.resolveDarkTheme(darkTheme)
+  val seedColor = themePreferences.color.seedColor ?: YangaSeedColor
+  val useSystemDynamicColor = dynamicColor && themePreferences.color == ThemeColorPreference.System
   val colorScheme =
     when {
-      dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+      useSystemDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
         val context = LocalContext.current
-        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        if (resolvedDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
       }
       else ->
         rememberDynamicColorScheme(
-          seedColor = YangaSeedColor,
-          isDark = darkTheme,
+          seedColor = seedColor,
+          isDark = resolvedDarkTheme,
         )
     }
 

@@ -23,6 +23,17 @@ class BoardContentViewModel(
   private val subBoardFilterStore: SubBoardFilterStore? = null,
 ) : ViewModel() {
   private val logTag = "YangaSubBoardUi"
+  private var entryInitialized = false
+  private var entrySession: LoginSessionData? = null
+
+  // Returning to a retained entry must not reopen its original page or reset its filters.
+  fun ensureBoardOpened(session: LoginSessionData?, destination: BoardDestination) {
+    if (entryInitialized && entrySession == session) return
+    entryInitialized = true
+    entrySession = session
+    openBoard(session, destination)
+  }
+
   private val _state = MutableStateFlow<BoardTopicListUiState?>(null)
   val state: StateFlow<BoardTopicListUiState?> = _state.asStateFlow()
   private var loadingBoardId: String? = null

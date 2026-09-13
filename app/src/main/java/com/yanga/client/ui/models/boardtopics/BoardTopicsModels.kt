@@ -28,6 +28,7 @@ data class BoardTopicListUiState(
   val isLoadingNextTopicPage: Boolean = false,
 )
 
+@kotlinx.serialization.Serializable
 data class BoardDestination(
   val id: String,
   val name: String,

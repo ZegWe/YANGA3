@@ -40,6 +40,7 @@ data class ThreadUiState(
   val posts: LoadableUiState<List<PostPreview>> = LoadableUiState.Loading,
 )
 
+@kotlinx.serialization.Serializable
 data class ThreadDestination(
   val id: String,
   val title: String,

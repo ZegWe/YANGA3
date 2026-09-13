@@ -13,6 +13,17 @@ import kotlinx.coroutines.launch
 class ThreadContentViewModel(
   private val repository: NgaReadOnlyRepository,
 ) : ViewModel() {
+  private var entryInitialized = false
+  private var entrySession: LoginSessionData? = null
+
+  // Returning to a retained entry must not reopen its original page or reset its filters.
+  fun ensureThreadOpened(session: LoginSessionData?, destination: ThreadDestination) {
+    if (entryInitialized && entrySession == session) return
+    entryInitialized = true
+    entrySession = session
+    openThread(session, destination)
+  }
+
   private val _state = MutableStateFlow<ThreadUiState?>(null)
   val state: StateFlow<ThreadUiState?> = _state.asStateFlow()
   private var loadingThreadId: String? = null

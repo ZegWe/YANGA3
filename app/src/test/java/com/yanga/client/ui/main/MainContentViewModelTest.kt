@@ -208,6 +208,54 @@ class MainContentViewModelTest {
     return state as LoadableUiState.Error
   }
 
+  @Test
+  fun returningToBoardsDoesNotReloadButChangingSessionDoes() = runTest(dispatcher) {
+    val repository = FakeRepository()
+    val viewModel = BoardsListViewModel(repository)
+    viewModel.ensureLoaded(null, "https://bbs.nga.cn")
+    advanceUntilIdle()
+    val before = viewModel.state.value
+    viewModel.ensureLoaded(null, "https://bbs.nga.cn")
+    advanceUntilIdle()
+    assertSame(before, viewModel.state.value)
+    assertEquals(1, repository.loadBoardsSessions.size)
+    viewModel.ensureLoaded(LoginSessionData("reader", "42", "cookie"), "https://bbs.nga.cn")
+    advanceUntilIdle()
+    assertEquals(2, repository.loadBoardsSessions.size)
+  }
+
+  @Test
+  fun returningToThreadKeepsTheCurrentPageInsteadOfTheEntryPage() = runTest(dispatcher) {
+    val viewModel = ThreadContentViewModel(FakeRepository())
+    val destination = ThreadDestination("1001", "Thread", page = 1)
+    viewModel.ensureThreadOpened(null, destination)
+    advanceUntilIdle()
+    viewModel.openPage(null, 3)
+    advanceUntilIdle()
+    val before = viewModel.state.value
+    assertEquals("3", before?.page)
+    viewModel.ensureThreadOpened(null, destination)
+    advanceUntilIdle()
+    assertSame(before, viewModel.state.value)
+  }
+
+  @Test
+  fun returningToBoardKeepsFavoriteAndFilterChanges() = runTest(dispatcher) {
+    val viewModel = BoardContentViewModel(FakeRepository())
+    val destination = BoardDestination("7", "Board", isFavorite = false)
+    viewModel.ensureBoardOpened(null, destination)
+    advanceUntilIdle()
+    viewModel.setFavorite(true)
+    viewModel.setTopicFilter(BoardTopicFilter.Recommend)
+    advanceUntilIdle()
+    val before = viewModel.state.value
+    viewModel.ensureBoardOpened(null, destination)
+    advanceUntilIdle()
+    assertSame(before, viewModel.state.value)
+    assertEquals(true, viewModel.state.value?.isFavorite)
+    assertEquals(BoardTopicFilter.Recommend, viewModel.state.value?.selectedTopicFilter)
+  }
+
   private class FakeRepository(
     private val homeResult: Result<HomeReadData> = Result.success(
       HomeReadData(boards = listOf(boardSummary()), activeTopics = listOf(topicSummary())),
@@ -360,6 +408,8 @@ private fun notificationSummary(): NgaNotificationSummary =
 
 private fun profileCounters(): NgaProfileCounters =
   NgaProfileCounters(
+    topicCount = 48,
+    replyCount = 186,
     favoriteTopics = 5,
     subscribedBoards = 3,
     unreadNotifications = 4,
@@ -437,10 +487,9 @@ private fun notificationPreview(): SettingsPreview =
 
 private fun counterPreviews(): List<SettingsPreview> =
   listOf(
-    SettingsPreview("星", "Favorite topics", "5"),
-    SettingsPreview("版", "Subscribed boards", "3"),
-    SettingsPreview("通", "Unread notifications", "4", "4"),
-    SettingsPreview("信", "Unread messages", "2", "2"),
+    SettingsPreview("topic", "主题", "48"),
+    SettingsPreview("reply", "回复", "186"),
+    SettingsPreview("notification", "通知", "4", "4"),
   )
 
 

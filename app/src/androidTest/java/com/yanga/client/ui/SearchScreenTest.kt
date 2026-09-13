@@ -45,7 +45,7 @@ class SearchScreenTest {
 
     composeTestRule.onNode(hasSetTextAction()).performTextInput("议事厅")
     composeTestRule.onNode(hasSetTextAction()).performImeAction()
-    composeTestRule.onNodeWithText("议事厅").performClick()
+    composeTestRule.onNodeWithText("fid: 7", substring = true).performClick()
 
     assertTrue(submitted)
     assertEquals("议事厅", query)
@@ -91,9 +91,8 @@ class SearchScreenTest {
   }
 
   @Test
-  fun boardsAndBoardTopicScreensExposeSearchCallbacks() {
+  fun boardsScreenExposesSearchCallback() {
     var boardsSearchClicked = false
-    var boardTopicSearchClicked = false
 
     composeTestRule.setContent {
       BoardsScreen(
@@ -107,6 +106,11 @@ class SearchScreenTest {
     }
     composeTestRule.onNodeWithContentDescription("搜索").performClick()
     assertTrue(boardsSearchClicked)
+  }
+
+  @Test
+  fun boardTopicScreenExposesSearchCallback() {
+    var boardTopicSearchClicked = false
 
     composeTestRule.setContent {
       BoardTopicListScreen(

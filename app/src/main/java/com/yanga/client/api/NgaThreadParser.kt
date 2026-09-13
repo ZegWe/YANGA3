@@ -48,18 +48,26 @@ data class NgaThreadAttachment(
 )
 
 object NgaThreadParser {
+  private fun resolveAttachmentContent(content: String, attachmentBase: String?): String =
+    if (attachmentBase.isNullOrBlank()) content else
+    Regex("""(\[(?:img|flash|audio|video)[^\]]*\]\s*)((?:\./|/)?mon_[^\s\[<>]+)""", RegexOption.IGNORE_CASE)
+      .replace(content) { match ->
+        match.groupValues[1] + ImageUrlResolver.resolve(match.groupValues[2], attachmentBase)
+      }
+
   fun parseRead(raw: String): NgaThreadRead {
     val root = JSONObject(NgaResponseNormalizer.normalize(raw))
     val data = root.optJSONObject("data") ?: JSONObject()
     val topic = data.optJSONObject("__T") ?: JSONObject()
     val replies = data.optJSONObject("__R") ?: JSONObject()
     val users = data.optJSONObject("__U") ?: JSONObject()
+    val attachmentBase = data.optJSONObject("__GLOBAL")?.optString("_ATTACH_BASE_VIEW")
 
-    val commentContentByPid = buildCommentContentIndex(replies.optJSONObject("0"), topic, users)
+    val commentContentByPid = buildCommentContentIndex(replies.optJSONObject("0"), topic, users, attachmentBase)
 
     val posts = replies.keys().asSequence()
       .sortedWith(compareBy { it.toIntOrNull() ?: Int.MAX_VALUE })
-      .mapNotNull { key -> replies.optJSONObject(key)?.toPost(topic, users, commentContentByPid) }
+      .mapNotNull { key -> replies.optJSONObject(key)?.toPost(topic, users, attachmentBase, commentContentByPid) }
       .toList()
 
     val replyCount = topic.intValue("replies").coerceAtLeast(0)
@@ -79,17 +87,19 @@ object NgaThreadParser {
     opPost: JSONObject?,
     topic: JSONObject,
     users: JSONObject,
+    attachmentBase: String?,
   ): Map<String, NgaThreadEmbeddedReply> {
     if (opPost == null) return emptyMap()
     val comments = opPost.optJSONObject("comment") ?: return emptyMap()
     return comments.keys().asSequence()
-      .mapNotNull { key -> comments.optJSONObject(key)?.toEmbeddedReply(topic, users) }
+      .mapNotNull { key -> comments.optJSONObject(key)?.toEmbeddedReply(topic, users, attachmentBase) }
       .associateBy { it.pid }
   }
 
   private fun JSONObject.toPost(
     topic: JSONObject,
     users: JSONObject,
+    attachmentBase: String?,
     commentContentByPid: Map<String, NgaThreadEmbeddedReply>,
   ): NgaThreadPost {
     val authorId = stringValue("authorid")
@@ -111,13 +121,13 @@ object NgaThreadParser {
         ?: 0L
     val embeddedComments =
       if (intValue("lou") == 0) {
-        parseEmbeddedReplies("comment", topic, users)
+        parseEmbeddedReplies("comment", topic, users, attachmentBase)
       } else {
         emptyList()
       }
     val hotReplies =
       if (intValue("lou") == 0) {
-        parseEmbeddedReplies("hotreply", topic, users)
+        parseEmbeddedReplies("hotreply", topic, users, attachmentBase)
       } else {
         emptyList()
       }
@@ -129,13 +139,13 @@ object NgaThreadParser {
       author = author,
       authorAvatarUrl = NgaAvatarUrls.resolveUserAvatar(avatarRaw, authorId, memberId),
       subject = stringValue("subject").ifBlank { topic.stringValue("subject") },
-      content = content,
+      content = resolveAttachmentContent(content, attachmentBase),
       lou = intValue("lou"),
       postDate = postDate,
       editDate = parseAlterInfo(nullableStringValue("alterinfo")),
       embeddedComments = embeddedComments,
       hotReplies = hotReplies,
-      attachments = parseAttachments(),
+      attachments = parseAttachments(attachmentBase),
     )
   }
 
@@ -143,15 +153,16 @@ object NgaThreadParser {
     field: String,
     topic: JSONObject,
     users: JSONObject,
+    attachmentBase: String?,
   ): List<NgaThreadEmbeddedReply> {
     val container = optJSONObject(field) ?: return emptyList()
     return container.keys().asSequence()
       .sortedWith(compareBy { it.toIntOrNull() ?: Int.MAX_VALUE })
-      .mapNotNull { key -> container.optJSONObject(key)?.toEmbeddedReply(topic, users) }
+      .mapNotNull { key -> container.optJSONObject(key)?.toEmbeddedReply(topic, users, attachmentBase) }
       .toList()
   }
 
-  private fun JSONObject.toEmbeddedReply(topic: JSONObject, users: JSONObject): NgaThreadEmbeddedReply? {
+  private fun JSONObject.toEmbeddedReply(topic: JSONObject, users: JSONObject, attachmentBase: String?): NgaThreadEmbeddedReply? {
     val content = stringValue("content")
     if (content.isBlank()) return null
     val authorId = stringValue("authorid")
@@ -164,7 +175,7 @@ object NgaThreadParser {
       authorId = authorId,
       author = resolveAuthorName(user),
       authorAvatarUrl = NgaAvatarUrls.resolveUserAvatar(avatarRaw, authorId, memberId),
-      content = content,
+      content = resolveAttachmentContent(content, attachmentBase),
       postDate = longValue("postdatetimestamp").takeIf { it > 0 } ?: longValue("postdate"),
       score = intValue("score"),
       lou = intValue("lou"),
@@ -177,19 +188,19 @@ object NgaThreadParser {
     return match.groupValues[1].toLongOrNull()
   }
 
-  private fun JSONObject.parseAttachments(): List<NgaThreadAttachment> {
+  private fun JSONObject.parseAttachments(attachmentBase: String?): List<NgaThreadAttachment> {
     val container = optJSONObject("attachs") ?: optJSONObject("attachments") ?: return emptyList()
     return container.keys().asSequence()
       .sortedWith(compareBy { it.toIntOrNull() ?: Int.MAX_VALUE })
-      .mapNotNull { key -> container.opt(key).toAttachment(fallbackName = key) }
+      .mapNotNull { key -> container.opt(key).toAttachment(fallbackName = key, attachmentBase = attachmentBase) }
       .toList()
   }
 
-  private fun Any?.toAttachment(fallbackName: String): NgaThreadAttachment? =
+  private fun Any?.toAttachment(fallbackName: String, attachmentBase: String?): NgaThreadAttachment? =
     when (this) {
       is JSONObject -> {
         val url = nullableStringValue("url", "attachurl", "path", "src", "href")
-          ?.let(ImageUrlResolver::resolve)
+          ?.let { ImageUrlResolver.resolve(it, attachmentBase) }
           ?.takeIf { it.isNotBlank() }
           ?: return null
         val name = nullableStringValue("name", "filename", "file", "dscp", "desc")
@@ -199,7 +210,7 @@ object NgaThreadParser {
         NgaThreadAttachment(name = name, url = url)
       }
       is String -> {
-        val url = ImageUrlResolver.resolve(this).takeIf { it.isNotBlank() } ?: return null
+        val url = ImageUrlResolver.resolve(this, attachmentBase).takeIf { it.isNotBlank() } ?: return null
         NgaThreadAttachment(name = ImageUrlResolver.fileName(url), url = url)
       }
       else -> null

@@ -28,6 +28,19 @@ class BoardsListViewModel(
     }
   }
 
+  private var initialized = false
+  private var loadedSession: LoginSessionData? = null
+  private var loadedEndpoint: String? = null
+
+  fun ensureLoaded(session: LoginSessionData?, endpoint: String) {
+    if (initialized && loadedSession == session && loadedEndpoint == endpoint) return
+    initialized = true
+    loadedSession = session
+    loadedEndpoint = endpoint
+    applyEndpoint(endpoint)
+    refresh(session)
+  }
+
   fun refresh(session: LoginSessionData?) {
     val catalog = boardsCatalog
     if (catalog != null) {

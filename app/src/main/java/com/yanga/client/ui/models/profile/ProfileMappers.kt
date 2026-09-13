@@ -13,18 +13,12 @@ internal fun NgaNotificationSummary.toPreview(): SettingsPreview =
 
 internal fun NgaProfileCounters.toPreviews(): List<SettingsPreview> =
   listOf(
-    SettingsPreview("星", "Favorite topics", favoriteTopics.toString()),
-    SettingsPreview("版", "Subscribed boards", subscribedBoards.toString()),
+    SettingsPreview("topic", "主题", topicCount?.toString() ?: "--"),
+    SettingsPreview("reply", "回复", replyCount?.toString() ?: "--"),
     SettingsPreview(
-      icon = "通",
-      title = "Unread notifications",
+      icon = "notification",
+      title = "通知",
       subtitle = unreadNotifications.toString(),
       badge = unreadNotifications.takeIf { it > 0 }?.toString(),
-    ),
-    SettingsPreview(
-      icon = "信",
-      title = "Unread messages",
-      subtitle = unreadMessages.toString(),
-      badge = unreadMessages.takeIf { it > 0 }?.toString(),
     ),
   )

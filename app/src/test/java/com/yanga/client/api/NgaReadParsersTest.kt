@@ -107,7 +107,7 @@ class NgaReadParsersTest {
         todayTopicCount = 9,
         unreadCount = 2,
         isSubscribed = true,
-        iconUrl = "https://img4.nga.178.com/ngabbs/nga_classic/f/app/7.png",
+        iconUrl = "https://img4.nga.cn/ngabbs/nga_classic/f/app/7.png",
       ),
       categories[0].boards.single(),
     )
@@ -154,7 +154,7 @@ class NgaReadParsersTest {
     assertEquals("310", sections.single().groups.single().boards.single().boardId)
     assertEquals("怀旧服讨论", sections.single().groups.single().boards.single().name)
     assertEquals(
-      "https://img4.nga.178.com/proxy/cache_attach/ficon/321v.png",
+      "https://img4.nga.cn/proxy/cache_attach/ficon/321v.png",
       sections.single().groups.single().boards.single().iconUrl,
     )
   }
@@ -219,6 +219,28 @@ class NgaReadParsersTest {
       ),
       counters,
     )
+  }
+
+  @Test
+  fun accountParserReadsOptionalTopicAndReplyCounters() {
+    val counters =
+      NgaAccountParser.parseProfileCounters(
+        """
+        {
+          "data": {
+            "counters": {
+              "topics": 48,
+              "replies": 186,
+              "notifications": 12
+            }
+          }
+        }
+        """.trimIndent(),
+      )
+
+    assertEquals(48, counters.topicCount)
+    assertEquals(186, counters.replyCount)
+    assertEquals(12, counters.unreadNotifications)
   }
 
   private fun fixture(name: String): String =

@@ -580,8 +580,13 @@ private fun ThreadPageContent(
       val showThresholdPx = with(density) { ThreadFabShowScrollThreshold.toPx() }
       PrefetchPostImages(posts = posts)
 
+      var handledScrollRequest by androidx.compose.runtime.saveable.rememberSaveable {
+        androidx.compose.runtime.mutableIntStateOf(-1)
+      }
+
       LaunchedEffect(state.targetScrollRequestId, state.targetPostId, state.targetFloorNumber, posts, pageNumber, currentPage) {
         if (pageNumber != currentPage) return@LaunchedEffect
+        if (handledScrollRequest == state.targetScrollRequestId) return@LaunchedEffect
         val targetIndex =
           when {
             state.targetPostId != null -> posts.indexOfFirst { it.pid == state.targetPostId }
@@ -590,6 +595,7 @@ private fun ThreadPageContent(
           }
         if (targetIndex >= 0) {
           listState.animateScrollToItem(index = targetIndex + THREAD_HEADER_ITEM_COUNT)
+          handledScrollRequest = state.targetScrollRequestId
         }
       }
 
@@ -658,9 +664,39 @@ private fun ThreadPageContent(
         }
       }
   } else {
-    ThreadPageLoadingIndicator()
+    val message = if (pageNumber == currentPage) {
+      when (val result = state.posts) {
+        is LoadableUiState.Error -> threadLoadFailureMessage(result.cause)
+        is LoadableUiState.Empty -> result.message
+        LoadableUiState.LoginRequired -> "加载失败：请先登录后再查看此帖。"
+        else -> null
+      }
+    } else null
+    if (message != null) {
+      Box(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        contentAlignment = Alignment.Center,
+      ) {
+        Text(
+          text = message,
+          style = MaterialTheme.typography.bodyLarge,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+      }
+    } else {
+      ThreadPageLoadingIndicator()
+    }
   }
 }
+
+private fun threadLoadFailureMessage(cause: Throwable?): String =
+  when (cause) {
+    is org.json.JSONException -> "加载失败：帖子数据不完整或格式异常，无法解析。"
+    is java.io.IOException -> "加载失败：网络连接异常或请求超时，请稍后再试。"
+    is com.yanga.client.api.NgaApiException -> "加载失败：服务器拒绝请求或暂时不可用。"
+    else -> "加载失败：暂时无法读取帖子。"
+  }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable

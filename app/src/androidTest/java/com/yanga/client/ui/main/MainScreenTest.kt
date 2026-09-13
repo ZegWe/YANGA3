@@ -2,6 +2,7 @@ package com.yanga.client.ui
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import com.yanga.client.api.NgaBoardGroup
 import com.yanga.client.api.NgaBoardSection
 import com.yanga.client.api.NgaBoardSummary
@@ -26,6 +28,7 @@ import com.yanga.client.data.LoginSessionData
 import com.yanga.client.data.MessagesReadData
 import com.yanga.client.data.NgaReadOnlyRepository
 import com.yanga.client.data.ProfileReadData
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -35,13 +38,47 @@ class MainScreenTest {
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
   @Test
+  fun boardNavigationAndTabSwitchPreserveCategoryAndScrollPosition() {
+    var boardLoads = 0
+    val repository = object : NgaReadOnlyRepository by fakeRepository() {
+      override suspend fun loadBoards(session: LoginSessionData?): Result<BoardsReadData> {
+        boardLoads++
+        return Result.success(BoardsReadData(
+          subscribedBoards = emptyList(),
+          remoteSections = listOf(NgaBoardSection(
+            id = "category", name = "Retained category",
+            groups = listOf(NgaBoardGroup(
+              id = "group", name = "Group",
+              boards = (0..100).map { NgaBoardSummary(boardId = "$it", name = "Board $it") },
+            )),
+          )),
+        ))
+      }
+    }
+    composeTestRule.setContent { MainScreen(repository = repository) }
+    waitUntilTextExists("Retained category")
+    composeTestRule.onNodeWithText("Retained category").performClick()
+    composeTestRule.onNode(androidx.compose.ui.test.hasScrollToIndexAction())
+      .performScrollToNode(androidx.compose.ui.test.hasText("Board 80"))
+    val before = composeTestRule.onNodeWithText("Board 80").getUnclippedBoundsInRoot()
+    composeTestRule.onNodeWithText("Board 80").performClick()
+    composeTestRule.onNodeWithContentDescription("Back").performClick()
+    composeTestRule.onNodeWithText("Board 80").assertExists()
+    org.junit.Assert.assertEquals(before, composeTestRule.onNodeWithText("Board 80").getUnclippedBoundsInRoot())
+    composeTestRule.onNodeWithContentDescription("Messages", useUnmergedTree = true).performClick()
+    composeTestRule.onNodeWithContentDescription("Home", useUnmergedTree = true).performClick()
+    org.junit.Assert.assertEquals(before, composeTestRule.onNodeWithText("Board 80").getUnclippedBoundsInRoot())
+    composeTestRule.runOnIdle { org.junit.Assert.assertEquals(1, boardLoads) }
+  }
+
+  @Test
   fun mainScreenShowsFourPrimaryTabsOnly() {
     val repository = fakeRepository()
     composeTestRule.setContent { MainScreen(repository = repository) }
 
-    composeTestRule.onNodeWithContentDescription("Home").assertExists()
-    composeTestRule.onNodeWithContentDescription("Messages").assertExists()
-    composeTestRule.onNodeWithContentDescription("Profile").assertExists()
+    composeTestRule.onNodeWithContentDescription("Home", useUnmergedTree = true).assertExists()
+    composeTestRule.onNodeWithContentDescription("Messages", useUnmergedTree = true).assertExists()
+    composeTestRule.onNodeWithContentDescription("Profile", useUnmergedTree = true).assertExists()
     composeTestRule.onAllNodesWithContentDescription("Boards").assertCountEquals(0)
 
     composeTestRule.onNodeWithText("首页").assertExists()
@@ -243,7 +280,7 @@ class MainScreenTest {
     val repository = fakeRepository()
     composeTestRule.setContent { MainScreen(repository = repository) }
 
-    composeTestRule.onNodeWithContentDescription("Messages").performClick()
+    composeTestRule.onNodeWithContentDescription("Messages", useUnmergedTree = true).performClick()
 
     composeTestRule.onNodeWithText("Private messages").assertExists()
     composeTestRule.onNodeWithText("Write private message").assertExists()
@@ -261,18 +298,53 @@ class MainScreenTest {
     val repository = fakeRepository()
     composeTestRule.setContent { MainScreen(repository = repository) }
 
-    composeTestRule.onNodeWithContentDescription("Profile").performClick()
+    composeTestRule.onNodeWithContentDescription("Profile", useUnmergedTree = true).performClick()
 
     composeTestRule.onNodeWithText("当前未登录").assertExists()
-    composeTestRule.onNodeWithText("登录 NGA").assertExists()
-    composeTestRule.onNodeWithText("Sign in to load notifications").assertExists()
-    composeTestRule.onNodeWithText("Reading and appearance").assertExists()
-    composeTestRule.onNodeWithText("Cache and history").assertExists()
-    composeTestRule.onNodeWithText("Block words").assertExists()
+    composeTestRule.onAllNodesWithText("Sign in to load profile").assertCountEquals(0)
+    composeTestRule.onNodeWithText("登录").assertExists()
+    val loggedOutTitleBounds = composeTestRule.onNodeWithText("当前未登录").getUnclippedBoundsInRoot()
+    val loginButtonBounds = composeTestRule.onNodeWithText("登录").getUnclippedBoundsInRoot()
+    assertTrue(loginButtonBounds.top < loggedOutTitleBounds.bottom && loginButtonBounds.bottom > loggedOutTitleBounds.top)
+    composeTestRule.onAllNodesWithText("主题").assertCountEquals(2)
+    composeTestRule.onNodeWithText("设置端点").assertExists()
+    composeTestRule.onNodeWithText("账号").assertExists()
+    composeTestRule.onNodeWithText("账号设置").assertExists()
+    composeTestRule.onNodeWithText("签到").assertExists()
   }
 
   @Test
-  fun loggedInProfileTabShowsAccountActions() {
+  fun profileThemeRowOpensIndependentThemeSettingsPage() {
+    val repository = fakeRepository()
+    composeTestRule.setContent { MainScreen(repository = repository) }
+
+    composeTestRule.onNodeWithContentDescription("Profile", useUnmergedTree = true).performClick()
+    composeTestRule.onNodeWithContentDescription("主题设置入口").performClick()
+
+    composeTestRule.onNodeWithContentDescription("返回").assertExists()
+    composeTestRule.onNodeWithText("主题设置").assertExists()
+    composeTestRule.onNodeWithText("深色模式").assertExists()
+    composeTestRule.onNodeWithText("跟随系统").assertExists()
+    composeTestRule.onNodeWithText("浅色").assertExists()
+    composeTestRule.onNodeWithText("深色").assertExists()
+    composeTestRule.onNodeWithText("主题色").assertExists()
+    composeTestRule.onNodeWithText("动态取色").assertExists()
+    composeTestRule.onAllNodesWithText("桌面色").assertCountEquals(0)
+    composeTestRule.onAllNodesWithContentDescription("桌面主题色").assertCountEquals(0)
+
+    composeTestRule.onNodeWithText("动态取色").performClick()
+
+    composeTestRule.onNodeWithContentDescription("预设主题色 Yanga").assertExists()
+    composeTestRule.onNodeWithContentDescription("已选主题色").assertExists()
+    composeTestRule.onAllNodesWithText("首页").assertCountEquals(0)
+    composeTestRule.onAllNodesWithText("消息").assertCountEquals(0)
+    composeTestRule.onAllNodesWithText("我的").assertCountEquals(0)
+    composeTestRule.onAllNodesWithText("Yanga").assertCountEquals(0)
+    composeTestRule.onAllNodesWithText("海蓝").assertCountEquals(0)
+  }
+
+  @Test
+  fun loggedInProfileTabShowsRedesignedAccountSummaryAndActions() {
     composeTestRule.setContent {
       ProfileScreen(
         loginSession = LoginSessionUiState(
@@ -286,6 +358,7 @@ class MainScreenTest {
               username = "测试用户",
               uid = "42",
               cookie = "ngaPassportUid=42; ngaPassportCid=abc",
+              avatarUrl = "https://img4.nga.178.com/avatars/test.jpg",
             ),
           ),
           counters = LoadableUiState.LoginRequired,
@@ -296,13 +369,24 @@ class MainScreenTest {
       )
     }
 
-    composeTestRule.onNodeWithText("已登录").assertExists()
+    composeTestRule.onAllNodesWithText("已登录").assertCountEquals(0)
     composeTestRule.onNodeWithText("测试用户").assertExists()
     composeTestRule.onNodeWithText("UID 42").assertExists()
-    composeTestRule.onNodeWithText("Switch account").assertExists()
+    composeTestRule.onNodeWithContentDescription("切换账号").performClick()
+    composeTestRule.onAllNodesWithText("已登录账号").assertCountEquals(0)
+    composeTestRule.onAllNodesWithContentDescription("测试用户").assertCountEquals(2)
+    composeTestRule.onNodeWithContentDescription("当前账号").assertExists()
+    composeTestRule.onNodeWithText("添加账号").assertExists()
+    composeTestRule.onAllNodesWithText("主题").assertCountEquals(2)
+    composeTestRule.onNodeWithText("回复").assertExists()
+    composeTestRule.onNodeWithText("通知").assertExists()
+    composeTestRule.onNodeWithText("账号").assertExists()
+    composeTestRule.onNodeWithText("账号设置").assertExists()
+    composeTestRule.onNodeWithText("签到").assertExists()
+    composeTestRule.onNodeWithText("设置端点").assertExists()
     composeTestRule.onNodeWithText("退出登录").assertExists()
-    composeTestRule.onNodeWithText("Sign in to load notifications").assertExists()
-    composeTestRule.onNodeWithText("Settings").assertExists()
+    composeTestRule.onAllNodesWithText("Switch account").assertCountEquals(0)
+    composeTestRule.onAllNodesWithText("Check in").assertCountEquals(0)
   }
 
   @Test
@@ -386,8 +470,8 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("8").assertExists()
     composeTestRule.onNodeWithText("Remote boards").assertExists()
     composeTestRule.onNodeWithText("5").assertExists()
-    composeTestRule.onNodeWithText("Remote notification").assertExists()
-    composeTestRule.onNodeWithText("Remote reply alert").assertExists()
+    composeTestRule.onNodeWithText("账号设置").assertExists()
+    composeTestRule.onNodeWithText("设置端点").assertExists()
   }
 
   @Test
@@ -416,7 +500,8 @@ class MainScreenTest {
     }
 
     composeTestRule.onNodeWithText("Could not load profile counters").assertExists()
-    composeTestRule.onNodeWithText("Could not load notifications").assertExists()
+    composeTestRule.onNodeWithText("账号设置").assertExists()
+    composeTestRule.onNodeWithText("设置端点").assertExists()
   }
 
   @Test
@@ -433,19 +518,18 @@ class MainScreenTest {
       )
     }
 
-    composeTestRule.onNodeWithContentDescription("Home").assertExists()
+    composeTestRule.onNodeWithContentDescription("Home", useUnmergedTree = true).assertExists()
     composeTestRule.onAllNodesWithText("关于新版客户端首页信息密度的讨论").assertCountEquals(0)
 
-    composeTestRule.onNodeWithContentDescription("Messages").performClick()
+    composeTestRule.onNodeWithContentDescription("Messages", useUnmergedTree = true).performClick()
     waitUntilTextExists("Injected Contact")
     waitUntilTextExists("Injected private message preview")
 
-    composeTestRule.onNodeWithContentDescription("Profile").performClick()
+    composeTestRule.onNodeWithContentDescription("Profile", useUnmergedTree = true).performClick()
     waitUntilTextExists("远端测试用户")
     composeTestRule.onNodeWithText("UID 4242").assertExists()
-    composeTestRule.onNodeWithText("Favorite topics").assertExists()
-    composeTestRule.onNodeWithText("17").assertExists()
-    composeTestRule.onNodeWithText("Injected notification").assertExists()
+    composeTestRule.onAllNodesWithText("主题").assertCountEquals(2)
+    composeTestRule.onNodeWithText("通知").assertExists()
   }
 
   private fun waitUntilTextExists(text: String) {
@@ -578,6 +662,8 @@ class MainScreenTest {
 
   private val injectedCounters =
     NgaProfileCounters(
+      topicCount = 17,
+      replyCount = 31,
       favoriteTopics = 17,
       subscribedBoards = 9,
       unreadNotifications = 5,

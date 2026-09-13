@@ -123,6 +123,17 @@ class MainUiModelsContractTest {
     assertEquals(counters, (state.profile.counters as LoadableUiState.Content).value)
     assertEquals(notifications, (state.profile.notifications as LoadableUiState.Content).value)
   }
+
+  @Test
+  fun profileDefaultSettingsRowsMatchApprovedProfileRedesign() {
+    assertEquals(
+      listOf(
+        SettingsPreview("theme", "主题", "跟随系统、浅色、深色"),
+        SettingsPreview("endpoint", "设置端点", "https://bbs.nga.cn"),
+      ),
+      ProfileUiState.defaultSettingsRows,
+    )
+  }
 }
 
 

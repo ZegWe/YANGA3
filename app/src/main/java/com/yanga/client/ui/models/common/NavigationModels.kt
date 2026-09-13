@@ -14,8 +14,12 @@ import kotlinx.serialization.Serializable
 @Serializable
 sealed interface MainDestinationKey : NavKey {
   @Serializable data object Home : MainDestinationKey
-  @Serializable data object Messages : MainDestinationKey
-  @Serializable data object Profile : MainDestinationKey
+  @Serializable data object Login : MainDestinationKey
+  @Serializable data class Board(val destination: BoardDestination, val instanceId: String = java.util.UUID.randomUUID().toString()) : MainDestinationKey
+  @Serializable data class Thread(val destination: ThreadDestination, val instanceId: String = java.util.UUID.randomUUID().toString()) : MainDestinationKey
+  @Serializable data class Search(val board: BoardDestination? = null, val instanceId: String = java.util.UUID.randomUUID().toString()) : MainDestinationKey
+  @Serializable data class Web(val url: String, val title: String, val baseUrl: String, val instanceId: String = java.util.UUID.randomUUID().toString()) : MainDestinationKey
+  @Serializable data object ThemeSettings : MainDestinationKey
 }
 
 enum class MainTab(
@@ -44,3 +48,15 @@ val MainTopLevelDestination.tab: MainTab
     MainTopLevelDestination.Messages -> MainTab.Messages
     MainTopLevelDestination.Profile -> MainTab.Profile
   }
+
+object MainNavigationSlideSpec {
+  const val DurationMillis = 300
+
+  fun forwardEnterOffset(fullWidth: Int): Int = fullWidth
+
+  fun forwardExitOffset(fullWidth: Int): Int = -fullWidth / 3
+
+  fun popEnterOffset(fullWidth: Int): Int = -fullWidth / 3
+
+  fun popExitOffset(fullWidth: Int): Int = fullWidth
+}

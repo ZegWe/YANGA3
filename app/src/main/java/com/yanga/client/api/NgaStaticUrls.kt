@@ -7,9 +7,9 @@ object NgaStaticUrls {
     return "$normalized/read.php?tid=$tid$pageQuery"
   }
 
-  fun boardIcon(fid: Int): String = "https://img4.nga.178.com/ngabbs/nga_classic/f/app/$fid.png"
+  fun boardIcon(fid: Int): String = "https://img4.nga.cn/ngabbs/nga_classic/f/app/$fid.png"
 
-  fun boardIconByStid(stid: Int): String = "https://img4.nga.178.com/proxy/cache_attach/ficon/${stid}v.png"
+  fun boardIconByStid(stid: Int): String = "https://img4.nga.cn/proxy/cache_attach/ficon/${stid}v.png"
 
   fun expandRelativeImage(url: String): String =
     if (url.startsWith("./mon_")) {

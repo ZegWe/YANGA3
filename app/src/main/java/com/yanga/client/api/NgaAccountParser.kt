@@ -18,6 +18,8 @@ object NgaAccountParser {
     val counters = data.objectValue("counters", "counter", "counts") ?: data.objectValue("0") ?: data
 
     return NgaProfileCounters(
+      topicCount = counters.nullableIntValue("topic_count", "topicCount", "topics", "topic", "threads", "thread_count"),
+      replyCount = counters.nullableIntValue("reply_count", "replyCount", "replies", "reply", "posts", "post_count"),
       favoriteTopics = counters.intValue("favorite_topics", "favoriteTopics", "favor", "favorites"),
       subscribedBoards = counters.intValue("subscribed_boards", "subscribedBoards", "subscribed", "subboards"),
       unreadNotifications = counters.intValue("unread_notifications", "unreadNotifications", "noti", "notifications"),
