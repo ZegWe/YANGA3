@@ -855,6 +855,7 @@ private fun PostItem(
             post.embeddedComments.forEach { reply ->
               PostEmbeddedReplyItem(
                 reply = reply,
+                onUserClick = onUserClick,
                 onLinkClick = onLinkClick,
                 onImageClick = onImageClick,
               )
@@ -870,6 +871,7 @@ private fun PostItem(
             post.hotReplies.forEach { reply ->
               PostEmbeddedReplyItem(
                 reply = reply,
+                onUserClick = onUserClick,
                 onLinkClick = onLinkClick,
                 onImageClick = onImageClick,
               )
@@ -924,6 +926,7 @@ private fun PostBodySection(
 @Composable
 private fun PostEmbeddedReplyItem(
   reply: PostEmbeddedReplyPreview,
+  onUserClick: (String) -> Unit,
   onLinkClick: (String) -> Unit,
   onImageClick: (List<String>, Int) -> Unit,
   modifier: Modifier = Modifier,
@@ -954,7 +957,7 @@ private fun PostEmbeddedReplyItem(
       UserAvatar(
         name = reply.author,
         avatarUrl = reply.authorAvatarUrl,
-        modifier = Modifier.size(36.dp),
+        modifier = Modifier.size(36.dp).clickable(enabled = reply.authorId.toLongOrNull()?.let { it > 0 } == true) { onUserClick(reply.authorId) }.semantics { contentDescription = "查看${reply.author}的资料" },
         size = 36.dp,
       )
       Text(

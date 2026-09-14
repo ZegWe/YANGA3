@@ -17,6 +17,21 @@ class PostFloorActionsTest {
   private val post = PostPreview(pid = "21", floorNumber = 20, author = "作者", authorId = "42",
     isOriginalPoster = true, floor = "20 楼", time = "今天", content = "楼主的后续回复", avatarInitial = "作", score = 7)
 
+  @Test fun embeddedAndHotReplyAvatarsOpenTheirAuthors() {
+    var opened = ""
+    val replies = post.copy(
+      embeddedComments = listOf(PostEmbeddedReplyPreview(authorId = "77", author = "跟帖作者", content = "评论")),
+      hotReplies = listOf(PostEmbeddedReplyPreview(authorId = "88", author = "热评作者", content = "热评")),
+    )
+    compose.setContent { MaterialTheme {
+      ThreadReadingScreen(ThreadUiState(posts = LoadableUiState.Content(listOf(replies))), onBack = {}, onUserClick = { opened = it })
+    } }
+    compose.onNodeWithContentDescription("查看跟帖作者的资料").performScrollTo().performClick()
+    compose.runOnIdle { assertEquals("77", opened) }
+    compose.onNodeWithContentDescription("查看热评作者的资料").performScrollTo().performClick()
+    compose.runOnIdle { assertEquals("88", opened) }
+  }
+
   @Test fun laterReplyShowsAuthorBadgeAndIndependentFloorNumber() {
     compose.setContent { MaterialTheme {
       ThreadReadingScreen(ThreadUiState(posts = LoadableUiState.Content(listOf(post))), onBack = {})
