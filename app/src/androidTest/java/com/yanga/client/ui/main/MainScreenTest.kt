@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollTo
 import com.yanga.client.api.NgaBoardGroup
 import com.yanga.client.api.NgaBoardSection
 import com.yanga.client.api.NgaBoardSummary
@@ -60,7 +61,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("Retained category").performClick()
     composeTestRule.onNode(
       androidx.compose.ui.test.hasScrollToIndexAction() and
-        androidx.compose.ui.test.hasAnyDescendant(androidx.compose.ui.test.hasText("Board 0")),
+        androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(
+          androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange,
+        ),
     )
       .performScrollToNode(androidx.compose.ui.test.hasText("Board 80"))
     val before = composeTestRule.onNodeWithText("Board 80").getUnclippedBoundsInRoot()
@@ -333,10 +336,18 @@ class MainScreenTest {
   @Test
   fun profileThemeRowOpensIndependentThemeSettingsPage() {
     val repository = fakeRepository()
-    composeTestRule.setContent { MainScreen(repository = repository) }
+    val preferences = androidx.compose.runtime.mutableStateOf(com.yanga.client.theme.ThemePreferences())
+    composeTestRule.setContent {
+      MainScreen(
+        repository = repository,
+        themePreferences = preferences.value,
+        onThemePreferencesChange = { preferences.value = it },
+      )
+    }
 
     composeTestRule.onNodeWithContentDescription("Profile", useUnmergedTree = true).performClick()
-    composeTestRule.onNodeWithContentDescription("主题设置入口").performClick()
+    composeTestRule.onNodeWithContentDescription("主题设置入口").performScrollTo().performClick()
+    waitUntilTextExists("主题设置")
 
     composeTestRule.onNodeWithContentDescription("返回").assertExists()
     composeTestRule.onNodeWithText("主题设置").assertExists()
@@ -349,8 +360,17 @@ class MainScreenTest {
     composeTestRule.onAllNodesWithText("桌面色").assertCountEquals(0)
     composeTestRule.onAllNodesWithContentDescription("桌面主题色").assertCountEquals(0)
 
-    composeTestRule.onNodeWithText("动态取色").performClick()
+    composeTestRule.onNodeWithText("动态取色").performScrollTo()
+    if (composeTestRule.onAllNodes(
+        androidx.compose.ui.test.isToggleable() and androidx.compose.ui.test.isOn(),
+      ).fetchSemanticsNodes().isNotEmpty()) {
+      composeTestRule.onNodeWithText("动态取色").performClick()
+    }
 
+    composeTestRule.waitUntil(timeoutMillis = 5_000) {
+      composeTestRule.onAllNodesWithContentDescription("预设主题色 Yanga")
+        .fetchSemanticsNodes().isNotEmpty()
+    }
     composeTestRule.onNodeWithContentDescription("预设主题色 Yanga").assertExists()
     composeTestRule.onNodeWithContentDescription("已选主题色").assertExists()
     composeTestRule.onAllNodesWithText("首页").assertCountEquals(0)
