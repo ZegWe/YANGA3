@@ -102,7 +102,10 @@ internal fun AboutScreen(onBack: () -> Unit) {
             state.release?.notes?.takeIf { it.isNotBlank() }?.let { notes ->
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("更新内容", style = MaterialTheme.typography.titleMedium)
-                    Text(notes, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    ReleaseNotesText(notes) { url ->
+                        try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                        catch (_: Exception) { linkError = "无法打开浏览器，请访问 $url" }
+                    }
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
