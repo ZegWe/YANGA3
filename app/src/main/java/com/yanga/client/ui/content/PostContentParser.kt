@@ -145,14 +145,12 @@ private class BbContentParser(private val source: String, private val depth: Int
           parseImageTag()?.let { parts += it }
         }
         startsWithIgnoreCase("[noimg]") -> {
-          flushText()
+          // The official renderer leaves this tag as text. Consume the whole
+          // block so relative paths inside it cannot become standalone images.
           val close = indexOfIgnoreCase("[/noimg]", pos + "[noimg]".length)
-          if (close >= 0) {
-            pos = close + "[/noimg]".length
-            parts += PostContentPart.Text("【原帖图片不可用】")
-          } else {
-            pos += "[noimg]".length
-          }
+          val end = if (close >= 0) close + "[/noimg]".length else source.length
+          textBuffer.append(source.substring(pos, end))
+          pos = end
         }
         startsWith("[s:") -> {
           flushText()

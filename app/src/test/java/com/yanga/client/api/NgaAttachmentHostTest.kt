@@ -6,6 +6,19 @@ import org.junit.Test
 
 class NgaAttachmentHostTest {
   @Test
+  fun noimgPreservesOriginalText() {
+    val raw = """{"data":{
+      "__GLOBAL":{"_ATTACH_BASE_VIEW":"img.nga.cn/attachments"},
+      "__T":{"tid":47544549},
+      "__R":{"0":{"pid":1,"lou":0,"content":"[noimg]./-7Qbvwn-dj7mK2bT1kShs-13i.jpg[/noimg] [noimg]./mon_a.jpg[/noimg]"}}
+    }}"""
+    assertEquals(
+      "[noimg]./-7Qbvwn-dj7mK2bT1kShs-13i.jpg[/noimg] [noimg]./mon_a.jpg[/noimg]",
+      NgaThreadParser.parseRead(raw).posts.single().content,
+    )
+  }
+
+  @Test
   fun serverAttachmentBaseReachesPostsCommentsHotRepliesAndAttachments() {
     val raw = """{"data":{
       "__GLOBAL":{"_ATTACH_BASE_VIEW":"img.nga.cn/attachments"},
