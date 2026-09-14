@@ -2,7 +2,6 @@ package com.yanga.client.ui
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -52,7 +51,8 @@ internal fun AboutScreen(onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.primaryContainer) {
-                    Image(painterResource(R.mipmap.ic_launcher_foreground), contentDescription = null, modifier = Modifier.size(88.dp))
+                    Icon(painterResource(R.drawable.ic_yanga_mark), contentDescription = null,
+                        modifier = Modifier.size(88.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
                 Text("Yanga", style = MaterialTheme.typography.headlineLarge)
                 Text("让社区阅读更自在", style = MaterialTheme.typography.bodyLarge,

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Human footprint: five graduated toes, an inset arch and a rounded heel.
+     Artwork is 48dp tall inside 72dp; shared by launcher and About. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="72dp" android:height="72dp"
+    android:viewportWidth="72" android:viewportHeight="72">
+    <group android:translateX="-1">
+        <path android:fillColor="#523D28"
+            android:pathData="M23,12 C19,12 17,15 17,19 C17,23 19,26 23,26 C27,26 29,23 29,19 C29,15 27,12 23,12 Z" />
+        <path android:fillColor="#523D28"
+            android:pathData="M36,12 C33,12 32,14 32,17 C32,20 33,23 36,23 C39,23 40,20 40,17 C40,14 39,12 36,12 Z" />
+        <path android:fillColor="#523D28"
+            android:pathData="M46,16 C43,16 42,18 42,21 C42,24 43,26 46,26 C49,26 50,24 50,21 C50,18 49,16 46,16 Z" />
+        <path android:fillColor="#523D28"
+            android:pathData="M54,23 C52,23 51,25 51,27 C51,30 52,32 54,32 C57,32 58,30 58,27 C58,25 57,23 54,23 Z" />
+        <path android:fillColor="#523D28"
+            android:pathData="M57,35 C55,35 54,36 54,38 C54,40 55,42 57,42 C59,42 60,40 60,38 C60,36 59,35 57,35 Z" />
+        <path android:fillColor="#523D28"
+            android:pathData="M28,29 C23,31 22,36 26,40 C30,44 32,46 29,50 C25,55 27,60 33,60 C39,60 42,55 44,49 L49,36 C51,31 45,28 40,28 C35,27 31,27 28,29 Z" />
+    </group>
+</vector>
