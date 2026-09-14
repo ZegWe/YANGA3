@@ -50,9 +50,30 @@ fun ThreadRoute(
   val threadState =
     threadContentState?.takeIf { threadContentViewModel.matchesThread(destination.id) }
       ?: ThreadUiState(title = destination.title)
+  fun openReply(post: com.yanga.client.ui.PostPreview?) {
+    val url = Uri.parse(baseUrl).buildUpon().encodedPath("/post.php").clearQuery()
+      .appendQueryParameter("action", "reply").appendQueryParameter("tid", destination.id)
+      .appendQueryParameter("pid", post?.pid?.ifBlank { "0" } ?: "0").build().toString()
+    navigate(MainDestinationKey.Web(url = url, title = post?.let { "回复 ${it.author}" } ?: "回复主题", baseUrl = baseUrl))
+  }
   ThreadReadingScreen(
     state = threadState,
     onBack = onBack,
+    onReplyClick = { openReply(null) },
+    onReplyPost = { openReply(it) },
+    onFilterAuthor = { threadContentViewModel.filterAuthor(loginSession?.toData(), it) },
+    onReact = if (loginSession == null) null else { post, support ->
+      repository.reactToPost(loginSession.toData(), destination.id, post.pid.ifBlank { "0" }, support).fold(
+        onSuccess = {
+          val fresh = if (post.floorNumber == 0) repository.loadThread(loginSession.toData(), destination.id, 1)
+            .getOrNull()?.posts?.firstOrNull { it.lou == 0 }
+            else repository.loadThreadPost(loginSession.toData(), post.pid).getOrNull()
+          fresh?.let { threadContentViewModel.updatePostScore(post.pid, it.score) }
+          Result.success(fresh?.score)
+        },
+        onFailure = { Result.failure(it) },
+      )
+    },
     onPageChange = { page ->
       threadContentViewModel.openPage(loginSession?.toData(), page)
     },

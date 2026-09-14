@@ -1,8 +1,15 @@
 package com.yanga.client.ui
 
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.platform.LocalDensity
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
@@ -20,7 +27,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -80,17 +86,16 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
+import androidx.compose.ui.semantics.getTextLayoutResult
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.semantics.getTextLayoutResult
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -167,11 +172,20 @@ internal fun BoardTopicListScreen(
               modifier = Modifier.size(32.dp),
               iconSize = 32.dp,
             )
-            Column {
-              Text(text = state.boardName, style = MaterialTheme.typography.titleMedium)
+            Column(Modifier.weight(1f)) {
+              Text(
+                text = state.boardName,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+              )
               if (state.fid.isNotBlank()) {
                 Text(
                   text = "fid: ${state.fid}",
+                  maxLines = 1,
+                  softWrap = false,
+                  overflow = TextOverflow.Ellipsis,
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -375,6 +389,9 @@ internal fun ThreadReadingScreen(
   onPageChange: (Int) -> Unit = {},
   onFloorJump: (Int) -> Unit = {},
   onReplyClick: () -> Unit = {},
+  onReplyPost: (PostPreview) -> Unit = {},
+  onFilterAuthor: (PostPreview?) -> Unit = {},
+  onReact: (suspend (PostPreview, Boolean) -> Result<Int?>)? = null,
   onLinkClick: (String) -> Unit = {},
   onAttachmentDownload: (PostAttachmentPreview) -> Unit = {},
   modifier: Modifier = Modifier,
@@ -388,15 +405,9 @@ internal fun ThreadReadingScreen(
   var fabGroupVisible by remember { mutableStateOf(true) }
   var fabGroupSize by remember { mutableStateOf(IntSize.Zero) }
   val density = LocalDensity.current
-  val fabHiddenOffset =
-    with(density) {
-      (fabGroupSize.width + ThreadFabSlideOffscreenPadding.toPx()).toDp()
-    }
-  val fabGroupOffsetX by animateDpAsState(
-    targetValue = if (fabGroupVisible) 0.dp else fabHiddenOffset,
-    animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
-    label = "Thread FAB group horizontal offset",
-  )
+  val hiddenOffset = with(density) { fabGroupSize.width.toDp() + 16.dp }
+  val fabOffset by animateDpAsState(if (fabGroupVisible) 0.dp else hiddenOffset,
+    animationSpec = tween(220, easing = FastOutSlowInEasing), label = "Thread actions")
   val currentPage = state.page.toIntOrNull()?.coerceAtLeast(1) ?: 1
   val maxPage = (state.maxPage.toIntOrNull() ?: currentPage).coerceAtLeast(currentPage)
   val pagerState =
@@ -421,48 +432,61 @@ internal fun ThreadReadingScreen(
   Scaffold(
     modifier = modifier.fillMaxSize(),
     topBar = {
-      TopAppBar(
-        title = {
-          Column {
-            Text(
-              text = state.title,
-              style = MaterialTheme.typography.titleMedium,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis
-            )
-            Text(
-              text = "第 $currentPage / $maxPage 页 · 左右滑动翻页",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-          }
-        },
-        navigationIcon = {
-          IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-          }
-        },
-        actions = {
-          Box {
-            IconButton(onClick = { menuExpanded = true }) {
-              Icon(Icons.Filled.MoreVert, contentDescription = "More")
+      Column {
+        TopAppBar(
+          title = {
+            Column {
+              Text(
+                text = state.title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+              )
+              Text(
+                text = "第 $currentPage / $maxPage 页 · 左右滑动翻页",
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
             }
-            ThreadOverflowMenu(
-              expanded = menuExpanded,
-              isFavorited = isFavorited,
-              onDismiss = { menuExpanded = false },
-              onToggleFavorite = {
-                isFavorited = !isFavorited
-                menuExpanded = false
-              },
-              onOpenInBrowser = {
-                menuExpanded = false
-                onOpenInBrowser()
-              },
-            )
+          },
+          navigationIcon = {
+            IconButton(onClick = onBack) {
+              Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+          },
+          actions = {
+            Box {
+              IconButton(onClick = { menuExpanded = true }) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "More")
+              }
+              ThreadOverflowMenu(
+                expanded = menuExpanded,
+                isFavorited = isFavorited,
+                onDismiss = { menuExpanded = false },
+                onToggleFavorite = {
+                  isFavorited = !isFavorited
+                  menuExpanded = false
+                },
+                onOpenInBrowser = {
+                  menuExpanded = false
+                  onOpenInBrowser()
+                },
+              )
+            }
+          }
+        )
+        if (state.filteredAuthorId != null) {
+          Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("只看：${state.filteredAuthorName.orEmpty()}", Modifier.weight(1f),
+              style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            TextButton(onClick = { onFilterAuthor(null) }) { Text("查看全部") }
           }
         }
-      )
+      }
     }
   ) { paddingValues ->
     Box(
@@ -474,7 +498,7 @@ internal fun ThreadReadingScreen(
       HorizontalPager(
         state = pagerState,
         beyondViewportPageCount = 0,
-        key = { page -> page },
+        key = { page -> "${state.filteredAuthorId.orEmpty()}:$page" },
         modifier = Modifier.fillMaxSize(),
       ) { page ->
         ThreadPageContent(
@@ -486,36 +510,27 @@ internal fun ThreadReadingScreen(
           },
           onLinkClick = onLinkClick,
           onAttachmentClick = { attachment -> pendingAttachment = attachment },
+          onReplyPost = onReplyPost,
+          onFilterAuthor = { onFilterAuthor(it) },
+          onReact = onReact,
           onFabVisibilityChange = { fabGroupVisible = it },
         )
       }
       Column(
-        modifier =
-          Modifier
-            .align(Alignment.BottomEnd)
-            .offset(x = fabGroupOffsetX)
-            .onSizeChanged { fabGroupSize = it }
-            .navigationBarsPadding()
-            .padding(end = 16.dp, bottom = 16.dp),
-        horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.align(Alignment.BottomEnd).offset(x = fabOffset).onSizeChanged { fabGroupSize = it }
+          .navigationBarsPadding().padding(end = 16.dp, bottom = 16.dp),
+        horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp),
       ) {
-        FloatingActionButton(
-          onClick = { showQuickJumpSheet = true },
+        FloatingActionButton(onClick = { showQuickJumpSheet = true },
           containerColor = MaterialTheme.colorScheme.secondaryContainer,
-          contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        ) {
-          Text(
-            text = "$currentPage/$maxPage",
-            modifier = Modifier.padding(horizontal = 12.dp),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-          )
+          contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
+          Text("$currentPage/$maxPage", Modifier.padding(horizontal = 12.dp),
+            style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
         }
-        FloatingActionButton(onClick = onReplyClick) {
-          Icon(Icons.Filled.Edit, contentDescription = "Reply")
-        }
+        FloatingActionButton(onClick = onReplyClick) { Icon(Icons.Filled.Edit, contentDescription = "Reply") }
       }
+
+
     }
   }
 
@@ -565,6 +580,9 @@ private fun ThreadPageContent(
   onImageUrlsChange: (List<String>, Int) -> Unit,
   onLinkClick: (String) -> Unit,
   onAttachmentClick: (PostAttachmentPreview) -> Unit,
+  onReplyPost: (PostPreview) -> Unit,
+  onFilterAuthor: (PostPreview) -> Unit,
+  onReact: (suspend (PostPreview, Boolean) -> Result<Int?>)?,
   onFabVisibilityChange: (Boolean) -> Unit,
 ) {
   val currentPage = state.page.toIntOrNull()
@@ -576,9 +594,20 @@ private fun ThreadPageContent(
 
   if (posts != null) {
       val listState = rememberLazyListState()
-      val density = LocalDensity.current
-      val hideThresholdPx = with(density) { ThreadFabHideScrollThreshold.toPx() }
-      val showThresholdPx = with(density) { ThreadFabShowScrollThreshold.toPx() }
+      LaunchedEffect(listState, pageNumber, currentPage) {
+        if (pageNumber != currentPage) return@LaunchedEffect
+        var previous = listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        var movement = 0
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }.collect { current ->
+          val delta = if (current.first == previous.first) current.second - previous.second
+            else if (current.first > previous.first) 100 else -100
+          movement = if ((movement > 0) == (delta > 0)) movement + delta else delta
+          if (current.first == 0 && current.second == 0) onFabVisibilityChange(true)
+          else if (movement > 48) onFabVisibilityChange(false)
+          else if (movement < -144) onFabVisibilityChange(true)
+          previous = current
+        }
+      }
       PrefetchPostImages(posts = posts)
 
       var handledScrollRequest by androidx.compose.runtime.saveable.rememberSaveable {
@@ -600,51 +629,6 @@ private fun ThreadPageContent(
         }
       }
 
-      LaunchedEffect(listState, pageNumber, currentPage, hideThresholdPx, showThresholdPx) {
-        if (pageNumber != currentPage) return@LaunchedEffect
-        var previousIndex = listState.firstVisibleItemIndex
-        var previousOffset = listState.firstVisibleItemScrollOffset
-        var accumulatedDownScroll = 0f
-        var accumulatedUpScroll = 0f
-
-        snapshotFlow {
-          listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
-        }.collect { (index, offset) ->
-          val isAtTop = index == 0 && offset == 0
-          if (isAtTop) {
-            accumulatedDownScroll = 0f
-            accumulatedUpScroll = 0f
-            onFabVisibilityChange(true)
-          } else {
-            val delta = when {
-              index == previousIndex -> (offset - previousOffset).toFloat()
-              index > previousIndex -> hideThresholdPx
-              else -> -showThresholdPx
-            }
-            when {
-              delta > 0 -> {
-                accumulatedDownScroll += delta
-                accumulatedUpScroll = 0f
-                if (accumulatedDownScroll >= hideThresholdPx) {
-                  onFabVisibilityChange(false)
-                  accumulatedDownScroll = 0f
-                }
-              }
-              delta < 0 -> {
-                accumulatedUpScroll += -delta
-                accumulatedDownScroll = 0f
-                if (accumulatedUpScroll >= showThresholdPx) {
-                  onFabVisibilityChange(true)
-                  accumulatedUpScroll = 0f
-                }
-              }
-            }
-          }
-          previousIndex = index
-          previousOffset = offset
-        }
-      }
-
       LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
@@ -661,6 +645,9 @@ private fun ThreadPageContent(
               onImageClick = onImageUrlsChange,
               onLinkClick = onLinkClick,
               onAttachmentClick = onAttachmentClick,
+              onReplyPost = onReplyPost,
+              onFilterAuthor = onFilterAuthor,
+              onReact = onReact,
             )
         }
       }
@@ -712,9 +699,6 @@ private fun ThreadPageLoadingIndicator() {
 
 private const val THREAD_HEADER_ITEM_COUNT = 0
 private const val THREAD_POSTS_PER_PAGE = 20
-private val ThreadFabHideScrollThreshold = 24.dp
-private val ThreadFabShowScrollThreshold = 72.dp
-private val ThreadFabSlideOffscreenPadding = 16.dp
 
 @Composable
 private fun ThreadTitleCard(title: String, modifier: Modifier = Modifier) {
@@ -741,22 +725,38 @@ private fun PostItem(
   onImageClick: (List<String>, Int) -> Unit = { _, _ -> },
   onLinkClick: (String) -> Unit = {},
   onAttachmentClick: (PostAttachmentPreview) -> Unit = {},
+  onReplyPost: (PostPreview) -> Unit = {},
+  onFilterAuthor: (PostPreview) -> Unit = {},
+  onReact: (suspend (PostPreview, Boolean) -> Result<Int?>)? = null,
 ) {
   val contentParts = remember(post.content) { PostContentParser.parse(post.content) }
   val contentBlocks = remember(contentParts) { groupPostContentParts(contentParts) }
   val imageUrls = remember(post) { postPreviewImageUrls(post) }
 
+  var showPostMenu by remember(post.pid) { mutableStateOf(false) }
+  val haptics = LocalHapticFeedback.current
+  fun openPostMenu() {
+    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+    showPostMenu = true
+  }
+  if (showPostMenu) {
+    PostFloorMenu(post, contentParts, onDismiss = { showPostMenu = false }, onFilter = onFilterAuthor)
+  }
   Card(
     modifier =
       modifier
         .fillMaxWidth()
-        .semantics { contentDescription = "Post card ${post.floor}" },
+        .pointerInput(post.pid) { detectTapGestures(onLongPress = { openPostMenu() }) }
+        .semantics {
+          contentDescription = "Post card ${post.floor}"
+          onLongClick(label = "楼层操作") { openPostMenu(); true }
+        },
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-    shape = MaterialTheme.shapes.medium,
+    shape = MaterialTheme.shapes.extraLarge,
   ) {
     Column(
       modifier = Modifier.padding(16.dp),
-      verticalArrangement = Arrangement.spacedBy(12.dp)
+      verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -770,19 +770,30 @@ private fun PostItem(
           size = 40.dp,
         )
         Column(modifier = Modifier.weight(1f)) {
-          Text(text = post.author, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(text = post.author, modifier = Modifier.weight(1f, fill = false), maxLines = 1,
+              overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            if (post.isOriginalPoster) Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.small) {
+              Text("楼主", Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+          }
           Text(
-            text = "${post.floor} · ${post.time}",
+            text = post.time,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
+        }
+        Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.large) {
+          Text(post.floor, Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
         }
       }
 
       if (!title.isNullOrBlank()) {
         Text(
           text = title,
-          style = MaterialTheme.typography.titleLarge,
+          style = MaterialTheme.typography.headlineSmall,
           fontWeight = FontWeight.Bold,
           color = MaterialTheme.colorScheme.onSurface,
         )
@@ -820,6 +831,7 @@ private fun PostItem(
           }
         }
       }
+
 
       if (post.embeddedComments.isNotEmpty()) {
         PostSectionDivider()
@@ -862,6 +874,7 @@ private fun PostItem(
           }
         }
       }
+      PostFloorActions(post, onReplyPost, onReact)
     }
   }
 }
@@ -986,6 +999,11 @@ private fun PostEmbeddedReplyItem(
                 onClick = { onImageClick(imageUrls, imageUrls.indexOf(block.part.url).takeIf { it >= 0 } ?: 0) },
               )
             }
+            is PostContentBlock.Structured -> {
+              StructuredPostContent(block.part) { children ->
+                PostNestedParts(children, imageUrls, onLinkClick, onImageClick)
+              }
+            }
             is PostContentBlock.Audio -> {
               PostAudioPlayer(
                 url = block.part.url,
@@ -1009,11 +1027,6 @@ private fun PostEmbeddedReplyItem(
 private fun PostQuoteBlock(
   parts: List<PostContentPart>,
   imageUrls: List<String>,
-            is PostContentBlock.Structured -> {
-              StructuredPostContent(block.part) { children ->
-                PostNestedParts(children, imageUrls, onLinkClick, onImageClick)
-              }
-            }
   onLinkClick: (String) -> Unit,
   onImageClick: (List<String>, Int) -> Unit,
   modifier: Modifier = Modifier,
@@ -1463,29 +1476,6 @@ internal fun embeddedReplyOriginalPostUrl(reply: PostEmbeddedReplyPreview): Stri
   }
 }
 
-private fun List<PostInlineItem>.withEmbeddedReplyOriginalPostLink(url: String): List<PostInlineItem> {
-  val label = " [原帖]"
-  return this +
-    PostInlineItem.Text(
-      text = label,
-      styles =
-        listOf(
-          PostTextStyleRange(
-            start = 1,
-            end = label.length,
-            linkUrl = url,
-          ),
-        ),
-    )
-}
-
-private fun postContentImageUrls(content: String): List<String> =
-  PostContentParser.collectImageUrls(PostContentParser.parse(content)).distinct()
-
-@Composable
-private fun PostInlineRichText(
-  items: List<PostInlineItem>,
-  modifier: Modifier = Modifier,
 @Composable
 private fun PostNestedParts(
   parts: List<PostContentPart>,
@@ -1510,6 +1500,29 @@ private fun PostNestedParts(
   }
 }
 
+private fun List<PostInlineItem>.withEmbeddedReplyOriginalPostLink(url: String): List<PostInlineItem> {
+  val label = " [原帖]"
+  return this +
+    PostInlineItem.Text(
+      text = label,
+      styles =
+        listOf(
+          PostTextStyleRange(
+            start = 1,
+            end = label.length,
+            linkUrl = url,
+          ),
+        ),
+    )
+}
+
+private fun postContentImageUrls(content: String): List<String> =
+  PostContentParser.collectImageUrls(PostContentParser.parse(content)).distinct()
+
+@Composable
+private fun PostInlineRichText(
+  items: List<PostInlineItem>,
+  modifier: Modifier = Modifier,
   style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge,
   color: Color = MaterialTheme.colorScheme.onSurface,
   onLinkClick: (String) -> Unit = {},
@@ -1608,6 +1621,9 @@ private fun PostNestedParts(
         .then(linkModifier)
         .clearAndSetSemantics {
         this.text = AnnotatedString(semanticText)
+        getTextLayoutResult { results ->
+          textLayoutResult?.let { results.add(it) } ?: false
+        }
         if (emoticonDescription.isNotEmpty()) {
           contentDescription = emoticonDescription
         }
@@ -1631,9 +1647,6 @@ private fun PostRichText(
 ) {
   val linkColor = MaterialTheme.colorScheme.primary
   var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
-        getTextLayoutResult { results ->
-          textLayoutResult?.let { results.add(it) } ?: false
-        }
   val baseFontSize = style.fontSize
   val annotatedText =
     remember(text, styles, linkColor, baseItalic, baseFontSize) {

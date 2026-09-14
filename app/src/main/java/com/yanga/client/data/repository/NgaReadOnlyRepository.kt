@@ -59,6 +59,12 @@ interface NgaReadOnlyRepository {
 
   suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int = 1): Result<NgaThreadRead>
 
+  suspend fun loadThreadByAuthor(session: LoginSessionData?, tid: String, page: Int, authorId: String): Result<NgaThreadRead> =
+    Result.failure(UnsupportedOperationException("暂不支持按作者筛选"))
+
+  suspend fun reactToPost(session: LoginSessionData?, tid: String, pid: String, support: Boolean): Result<Unit> =
+    Result.failure(UnsupportedOperationException("暂不支持赞踩"))
+
   suspend fun loadThreadPost(session: LoginSessionData?, pid: String): Result<NgaThreadPost>
 
   suspend fun listLocalFavoriteBoards(): Result<List<LocalFavoriteBoard>>
@@ -282,6 +288,20 @@ class DefaultNgaReadOnlyRepository(
 
   override suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int): Result<NgaThreadRead> = withContext(Dispatchers.IO) {
     execute(api(session).articleRead(tid = tid.toIntOrNull(), page = page), NgaThreadParser::parseRead)
+  }
+
+  override suspend fun loadThreadByAuthor(session: LoginSessionData?, tid: String, page: Int, authorId: String): Result<NgaThreadRead> = withContext(Dispatchers.IO) {
+    runCatching { require(authorId.toIntOrNull()?.let { it > 0 } == true) { "匿名作者暂不支持跨页筛选" } }.fold(
+      onSuccess = { execute(api(session).articleRead(tid = tid.toIntOrNull(), page = page, authorId = authorId.toInt()), NgaThreadParser::parseRead) },
+      onFailure = { Result.failure(it) },
+    )
+  }
+
+  override suspend fun reactToPost(session: LoginSessionData?, tid: String, pid: String, support: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+    if (session == null || session.cookie.isBlank()) return@withContext Result.failure(IllegalStateException("请先登录后再赞踩"))
+    val threadId = tid.toIntOrNull() ?: return@withContext Result.failure(IllegalArgumentException("帖子编号无效"))
+    val postId = pid.toIntOrNull() ?: return@withContext Result.failure(IllegalArgumentException("楼层编号无效"))
+    execute(api(session).like(threadId, postId, support), com.yanga.client.api.NgaReactionParser::requireSuccess)
   }
 
   override suspend fun loadThreadPost(session: LoginSessionData?, pid: String): Result<NgaThreadPost> = withContext(Dispatchers.IO) {

@@ -40,6 +40,8 @@ data class NgaThreadPost(
   val embeddedComments: List<NgaThreadEmbeddedReply> = emptyList(),
   val hotReplies: List<NgaThreadEmbeddedReply> = emptyList(),
   val attachments: List<NgaThreadAttachment> = emptyList(),
+  val score: Int = 0,
+  val isOriginalPoster: Boolean = false,
 )
 
 data class NgaThreadAttachment(
@@ -74,7 +76,8 @@ object NgaThreadParser {
     val rowCount = data.intValue("__ROWS").takeIf { it > 0 } ?: (replyCount + 1)
     return NgaThreadRead(
       tid = topic.stringValue("tid").ifBlank { posts.firstOrNull()?.tid.orEmpty() },
-      subject = topic.stringValue("subject").ifBlank { posts.firstOrNull()?.subject.orEmpty() },
+      subject = topic.stringValue("subject").takeIf { it.isNotBlank() }?.let(NgaDisplayText::singleLine)
+        ?: posts.firstOrNull()?.subject.orEmpty(),
       fid = topic.stringValue("fid").ifBlank { posts.firstOrNull()?.fid.orEmpty() },
       page = data.intValue("__PAGE").takeIf { it > 0 } ?: 1,
       replyCount = replyCount,
@@ -138,8 +141,11 @@ object NgaThreadParser {
       authorId = authorId,
       author = author,
       authorAvatarUrl = NgaAvatarUrls.resolveUserAvatar(avatarRaw, authorId, memberId),
-      subject = stringValue("subject").ifBlank { topic.stringValue("subject") },
+      subject = NgaDisplayText.singleLine(stringValue("subject").ifBlank { topic.stringValue("subject") }),
       content = resolveAttachmentContent(content, attachmentBase),
+      score = intValue("score"),
+      isOriginalPoster = intValue("lou") == 0 ||
+        (authorId.toLongOrNull()?.let { it > 0 } == true && authorId == topic.stringValue("authorid")),
       lou = intValue("lou"),
       postDate = postDate,
       editDate = parseAlterInfo(nullableStringValue("alterinfo")),

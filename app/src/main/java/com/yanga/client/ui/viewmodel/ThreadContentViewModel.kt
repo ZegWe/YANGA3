@@ -30,10 +30,33 @@ class ThreadContentViewModel(
   private var loadingPage: Int? = null
   private var activeThreadId: String? = null
   private var activeDestination: ThreadDestination? = null
+  private var filteredAuthorId: String? = null
+  private var filteredAuthorName: String? = null
+  private var requestGeneration = 0
   private var targetScrollRequestId = 0
   private val pageCache = mutableMapOf<Int, ThreadUiState>()
 
   fun matchesThread(threadId: String): Boolean = activeThreadId == threadId
+
+  fun filterAuthor(session: LoginSessionData?, post: PostPreview?) {
+    val destination = activeDestination ?: return
+    if (post != null && post.authorId.toIntOrNull()?.let { it > 0 } != true) return
+    filteredAuthorId = post?.authorId
+    filteredAuthorName = post?.author
+    requestGeneration++
+    pageCache.clear()
+    _state.value = null
+    openThread(session, destination.copy(page = 1, targetPostId = null, targetFloorNumber = null))
+  }
+
+  fun updatePostScore(pid: String, score: Int) {
+    fun ThreadUiState.updated(): ThreadUiState {
+      val loaded = posts as? LoadableUiState.Content ?: return this
+      return copy(posts = LoadableUiState.Content(loaded.value.map { if (it.pid == pid) it.copy(score = score) else it }))
+    }
+    pageCache.keys.toList().forEach { page -> pageCache[page] = pageCache.getValue(page).updated() }
+    _state.update { it?.updated()?.withCachedPosts() }
+  }
 
   fun openThread(session: LoginSessionData?, topic: TopicPreview) {
     openThread(session = session, destination = ThreadDestination(id = topic.id, title = topic.title))
@@ -52,6 +75,8 @@ class ThreadContentViewModel(
     activeDestination = destination
     val cached = _state.value
     if (activeThreadId != threadId) {
+      filteredAuthorId = null
+      filteredAuthorName = null
       pageCache.clear()
     }
     if (
@@ -98,20 +123,27 @@ class ThreadContentViewModel(
         )
         ?.withCachedPosts()
         ?: ThreadUiState(
+          filteredAuthorId = filteredAuthorId,
+          filteredAuthorName = filteredAuthorName,
           title = fallbackTitle,
           page = page.toString(),
           targetPostId = destination.targetPostId,
           targetFloorNumber = destination.targetFloorNumber,
           targetScrollRequestId = scrollRequestId,
         )
+    val generation = ++requestGeneration
+    val authorFilter = filteredAuthorId
     viewModelScope.launch {
-      val result = repository.loadThread(session, threadId, page)
+      val result = if (authorFilter == null) repository.loadThread(session, threadId, page)
+        else repository.loadThreadByAuthor(session, threadId, page, authorFilter)
       _state.update { current ->
-        if (loadingThreadId == threadId && loadingPage == page && current != null) {
+        if (generation == requestGeneration && loadingThreadId == threadId && loadingPage == page && current != null) {
           result.fold(
             onSuccess = { data ->
               val loadedState =
                 ThreadUiState(
+                  filteredAuthorId = filteredAuthorId,
+                  filteredAuthorName = filteredAuthorName,
                   title = data.subject.ifBlank { fallbackTitle },
                   page = data.page.toString(),
                   maxPage = data.maxPage.toString(),
@@ -132,6 +164,8 @@ class ThreadContentViewModel(
             },
             onFailure = {
               ThreadUiState(
+                filteredAuthorId = filteredAuthorId,
+                filteredAuthorName = filteredAuthorName,
                 title = fallbackTitle,
                 page = page.toString(),
                 maxPage = current.maxPage,
@@ -160,6 +194,12 @@ class ThreadContentViewModel(
   fun openFloor(session: LoginSessionData?, floor: Int) {
     val destination = activeDestination ?: return
     val targetFloor = floor.coerceAtLeast(0)
+    if (filteredAuthorId != null) {
+      filteredAuthorId = null
+      filteredAuthorName = null
+      pageCache.clear()
+      _state.value = null
+    }
     openThread(
       session = session,
       destination =
@@ -207,6 +247,7 @@ class ThreadContentViewModel(
     loadingThreadId = null
     loadingPage = null
     activeThreadId = null
+    requestGeneration++
     activeDestination = null
     pageCache.clear()
     _state.value = null
@@ -219,7 +260,7 @@ class ThreadContentViewModel(
     if (currentPage != null && currentPosts != null) {
       pages[currentPage] = currentPosts
     }
-    return copy(cachedPostsByPage = pages)
+    return copy(cachedPostsByPage = pages, filteredAuthorId = filteredAuthorId, filteredAuthorName = filteredAuthorName)
   }
 
   private fun cachedPostsByPage(): Map<Int, List<PostPreview>> =

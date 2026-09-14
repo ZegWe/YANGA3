@@ -21,6 +21,9 @@ data class PostPreview(
   val embeddedComments: List<PostEmbeddedReplyPreview> = emptyList(),
   val hotReplies: List<PostEmbeddedReplyPreview> = emptyList(),
   val attachments: List<PostAttachmentPreview> = emptyList(),
+  val authorId: String = "",
+  val isOriginalPoster: Boolean = false,
+  val score: Int = 0,
 )
 
 data class PostAttachmentPreview(
@@ -36,6 +39,8 @@ data class ThreadUiState(
   val targetPostId: String? = null,
   val targetFloorNumber: Int? = null,
   val targetScrollRequestId: Int = 0,
+  val filteredAuthorId: String? = null,
+  val filteredAuthorName: String? = null,
   val cachedPostsByPage: Map<Int, List<PostPreview>> = emptyMap(),
   val posts: LoadableUiState<List<PostPreview>> = LoadableUiState.Loading,
 )

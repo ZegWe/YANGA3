@@ -124,6 +124,8 @@ fun WebViewRoute(
           Text(
             text = displayTitle,
             maxLines = 1,
+            softWrap = false,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
           )
         },
         navigationIcon = {
