@@ -141,6 +141,7 @@ fun MainScreen(
             onThemeSettingsClick = { navigate(MainDestinationKey.ThemeSettings) },
             onAboutClick = { navigate(MainDestinationKey.About) },
             onCheckIn = { profileViewModel.checkIn(sessionData) },
+            onAccountSettings = { if (sessionData == null) onLoginClick() else navigate(MainDestinationKey.AccountSettings) },
             onUserClick = { sessionData?.let { navigate(MainDestinationKey.User(it.uid)) } ?: onLoginClick() },
             homeContent = {
               BoardListRoute(
@@ -178,6 +179,11 @@ fun MainScreen(
           )
         }
 
+        entry<MainDestinationKey.AccountSettings> {
+          AccountSettingsScreen(repository, sessionData, onBack, onLoginClick) {
+            navigate(MainDestinationKey.Web("${profileState.forumEndpoint}/nuke.php?func=ucp&uid=${sessionData?.uid.orEmpty()}", "论坛个人中心", profileState.forumEndpoint))
+          }
+        }
         entry<MainDestinationKey.User> { key -> UserProfileScreen(key.uid, repository, sessionData, onBack) }
         entry<MainDestinationKey.About> { AboutScreen(onBack = onBack) }
         entry<MainDestinationKey.ThemeSettings> {
@@ -214,6 +220,7 @@ private fun MainRootScaffold(
   onEndpointChange: (String) -> Unit,
   onThemeSettingsClick: () -> Unit,
   onAboutClick: () -> Unit,
+  onAccountSettings: () -> Unit,
   onCheckIn: () -> Unit,
   onUserClick: () -> Unit,
   homeContent: @Composable () -> Unit = {},
@@ -237,6 +244,7 @@ private fun MainRootScaffold(
         onEndpointChange = onEndpointChange,
         onThemeSettingsClick = onThemeSettingsClick,
         onAboutClick = onAboutClick,
+        onAccountSettings = onAccountSettings,
         onCheckIn = onCheckIn,
         onUserClick = onUserClick,
         homeContent = homeContent,
@@ -257,6 +265,7 @@ private fun MainTabContent(
   onEndpointChange: (String) -> Unit,
   onThemeSettingsClick: () -> Unit,
   onAboutClick: () -> Unit,
+  onAccountSettings: () -> Unit,
   onCheckIn: () -> Unit,
   onUserClick: () -> Unit,
   homeContent: @Composable () -> Unit,
@@ -301,6 +310,7 @@ private fun MainTabContent(
         onEndpointChange = onEndpointChange,
         onThemeSettingsClick = onThemeSettingsClick,
         onAboutClick = onAboutClick,
+        onAccountSettings = onAccountSettings,
         onCheckIn = onCheckIn,
         onUserClick = onUserClick,
         modifier = profileContentModifier,

@@ -136,6 +136,7 @@ internal fun ProfileScreen(
   onEndpointChange: (String) -> Unit = {},
   onThemeSettingsClick: () -> Unit = {},
   onAboutClick: () -> Unit = {},
+  onAccountSettings: () -> Unit = {},
   onCheckIn: () -> Unit = {},
   onUserClick: () -> Unit = {},
   modifier: Modifier = Modifier,
@@ -174,7 +175,7 @@ internal fun ProfileScreen(
       title = "账号",
       modifier = Modifier.padding(horizontal = ProfileHorizontalPadding),
     )
-    AccountRows(state = state, onCheckIn = { if (loginSession == null) onLoginClick() else onCheckIn() })
+    AccountRows(onAccountSettings = onAccountSettings, state = state, onCheckIn = { if (loginSession == null) onLoginClick() else onCheckIn() })
     SectionHeader(
       title = "设置",
       modifier = Modifier.padding(horizontal = ProfileHorizontalPadding),
@@ -709,10 +710,11 @@ private fun ProfileCounter(label: String, value: String, modifier: Modifier = Mo
 }
 
 @Composable
-private fun AccountRows(state: ProfileUiState, onCheckIn: () -> Unit, modifier: Modifier = Modifier) {
+private fun AccountRows(onAccountSettings: () -> Unit, state: ProfileUiState, onCheckIn: () -> Unit, modifier: Modifier = Modifier) {
   Column(modifier = modifier.fillMaxWidth()) {
     SettingsRow(
-      row = SettingsPreview("account", "账号设置", "个人资料、头像、签名与账号安全"),
+      row = SettingsPreview("account", "账号设置", "签名编辑与论坛个人中心"),
+      onClick = onAccountSettings,
     )
     SettingsRow(
       row = SettingsPreview("check_in", "签到", state.checkInMessage ?: "点击进行每日签到"),
