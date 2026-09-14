@@ -392,7 +392,7 @@ internal fun ThreadReadingScreen(
   onReplyPost: (PostPreview) -> Unit = {},
   onUserClick: (String) -> Unit = {},
   onFilterAuthor: (PostPreview?) -> Unit = {},
-  onReact: (suspend (PostPreview, Boolean) -> Result<Int?>)? = null,
+  onReact: (suspend (PostPreview, Boolean) -> Result<com.yanga.client.api.NgaReactionResult>)? = null,
   onLinkClick: (String) -> Unit = {},
   onAttachmentDownload: (PostAttachmentPreview) -> Unit = {},
   onVote: PollSubmit? = null,
@@ -590,7 +590,7 @@ private fun ThreadPageContent(
   onReplyPost: (PostPreview) -> Unit,
   onUserClick: (String) -> Unit,
   onFilterAuthor: (PostPreview) -> Unit,
-  onReact: (suspend (PostPreview, Boolean) -> Result<Int?>)?,
+  onReact: (suspend (PostPreview, Boolean) -> Result<com.yanga.client.api.NgaReactionResult>)?,
   onFabVisibilityChange: (Boolean) -> Unit,
 ) {
   val currentPage = state.page.toIntOrNull()
@@ -741,7 +741,7 @@ private fun PostItem(
   onReplyPost: (PostPreview) -> Unit = {},
   onUserClick: (String) -> Unit = {},
   onFilterAuthor: (PostPreview) -> Unit = {},
-  onReact: (suspend (PostPreview, Boolean) -> Result<Int?>)? = null,
+  onReact: (suspend (PostPreview, Boolean) -> Result<com.yanga.client.api.NgaReactionResult>)? = null,
 ) {
   val contentParts = remember(post.content) { PostContentParser.parse(post.content) }
   val contentBlocks = remember(contentParts) { groupPostContentParts(contentParts) }

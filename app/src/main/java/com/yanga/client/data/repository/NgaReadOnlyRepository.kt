@@ -74,7 +74,7 @@ interface NgaReadOnlyRepository {
   suspend fun loadThreadByAuthor(session: LoginSessionData?, tid: String, page: Int, authorId: String): Result<NgaThreadRead> =
     Result.failure(UnsupportedOperationException("暂不支持按作者筛选"))
 
-  suspend fun reactToPost(session: LoginSessionData?, tid: String, pid: String, support: Boolean): Result<Unit> =
+  suspend fun reactToPost(session: LoginSessionData?, tid: String, pid: String, support: Boolean): Result<com.yanga.client.api.NgaReactionResult> =
     Result.failure(UnsupportedOperationException("暂不支持赞踩"))
 
   suspend fun loadThreadPost(session: LoginSessionData?, pid: String): Result<NgaThreadPost>
@@ -362,11 +362,11 @@ class DefaultNgaReadOnlyRepository(
       })
     }
 
-  override suspend fun reactToPost(session: LoginSessionData?, tid: String, pid: String, support: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+  override suspend fun reactToPost(session: LoginSessionData?, tid: String, pid: String, support: Boolean): Result<com.yanga.client.api.NgaReactionResult> = withContext(Dispatchers.IO) {
     if (session == null || session.cookie.isBlank()) return@withContext Result.failure(IllegalStateException("请先登录后再赞踩"))
     val threadId = tid.toIntOrNull() ?: return@withContext Result.failure(IllegalArgumentException("帖子编号无效"))
     val postId = pid.toIntOrNull() ?: return@withContext Result.failure(IllegalArgumentException("楼层编号无效"))
-    execute(api(session).like(threadId, postId, support), com.yanga.client.api.NgaReactionParser::requireSuccess)
+    execute(api(session).like(threadId, postId, support), com.yanga.client.api.NgaReactionParser::parse)
   }
 
   override suspend fun submitPoll(session: LoginSessionData?, poll: com.yanga.client.api.NgaPoll, ids: List<Int>): Result<Unit> =

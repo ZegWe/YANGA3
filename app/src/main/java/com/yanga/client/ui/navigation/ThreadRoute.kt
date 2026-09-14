@@ -65,12 +65,12 @@ fun ThreadRoute(
     onFilterAuthor = { threadContentViewModel.filterAuthor(loginSession?.toData(), it) },
     onReact = if (loginSession == null) null else { post, support ->
       repository.reactToPost(loginSession.toData(), destination.id, post.pid.ifBlank { "0" }, support).fold(
-        onSuccess = {
+        onSuccess = { result ->
           val fresh = if (post.floorNumber == 0) repository.loadThread(loginSession.toData(), destination.id, 1)
             .getOrNull()?.posts?.firstOrNull { it.lou == 0 }
             else repository.loadThreadPost(loginSession.toData(), post.pid).getOrNull()
           fresh?.let { threadContentViewModel.updatePostScore(post.pid, it.score) }
-          Result.success(fresh?.score)
+          Result.success(result.copy(score = fresh?.score))
         },
         onFailure = { Result.failure(it) },
       )

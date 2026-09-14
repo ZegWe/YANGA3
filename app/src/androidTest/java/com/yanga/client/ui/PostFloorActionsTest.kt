@@ -59,7 +59,7 @@ class PostFloorActionsTest {
       PostFloorActions(current, { replyPid = it.pid }, { _, support ->
         votes += support
         current = current.copy(score = if (support) 8 else 6)
-        Result.success(current.score)
+        Result.success(com.yanga.client.api.NgaReactionResult(score = current.score))
       })
     } }
     compose.onNodeWithText("7").assertExists()
@@ -86,12 +86,21 @@ class PostFloorActionsTest {
   }
 
   @Test fun successfulReactionWithoutFreshScoreUsesOnlyIconState() {
-    compose.setContent { MaterialTheme { PostFloorActions(post, {}, { _, _ -> Result.success(null) }) } }
+    compose.setContent { MaterialTheme { PostFloorActions(post, {}, { _, _ -> Result.success(com.yanga.client.api.NgaReactionResult()) }) } }
     compose.onNodeWithContentDescription("点赞").performClick()
     compose.onNodeWithContentDescription("点赞").assertIsSelected()
     compose.onNodeWithText("已提交，请刷新查看最新赞数").assertDoesNotExist()
     compose.onNodeWithContentDescription("点赞").performClick()
     compose.onNodeWithContentDescription("点赞").assertIsNotSelected()
+  }
+
+  @Test fun serverCancellationOverridesStaleUnselectedIcon() {
+    compose.setContent { MaterialTheme { PostFloorActions(post, {}, { _, _ ->
+      Result.success(com.yanga.client.api.NgaReactionResult(reaction = 0))
+    }) } }
+    compose.onNodeWithContentDescription("点赞").performClick()
+    compose.onNodeWithContentDescription("点赞").assertIsNotSelected()
+    compose.onNodeWithText("赞踩未完成").assertDoesNotExist()
   }
 
   @Test fun rejectedReactionDoesNotChangeCountAndCanBeRetried() {

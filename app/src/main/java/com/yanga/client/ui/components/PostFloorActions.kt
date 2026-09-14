@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
 internal fun PostFloorActions(
   post: PostPreview,
   onReply: (PostPreview) -> Unit,
-  onReact: (suspend (PostPreview, Boolean) -> Result<Int?>)?,
+  onReact: (suspend (PostPreview, Boolean) -> Result<com.yanga.client.api.NgaReactionResult>)?,
 ) {
   var busy by remember { mutableStateOf(false) }
   var reaction by rememberSaveable(post.pid) { mutableIntStateOf(0) }
@@ -36,9 +36,9 @@ internal fun PostFloorActions(
     scope.launch {
       try {
         onReact(post, support).fold(
-          onSuccess = {
+          onSuccess = { result ->
             val clicked = if (support) 1 else -1
-            reaction = if (reaction == clicked) 0 else clicked
+            reaction = result.reaction ?: if (reaction == clicked) 0 else clicked
           },
           onFailure = { message = it.message ?: "操作失败，请稍后重试" },
         )
