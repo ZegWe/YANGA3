@@ -78,7 +78,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("回复").performClick()
     composeTestRule.runOnIdle { org.junit.Assert.assertEquals("Replies", opened) }
     composeTestRule.onAllNodesWithText("今天已经签到").assertCountEquals(0)
-    composeTestRule.onNodeWithContentDescription("签到").performClick()
+    composeTestRule.onNodeWithContentDescription("未签到").performClick()
     composeTestRule.onNodeWithText("每日签到").assertExists()
     composeTestRule.onNodeWithText("今天已经签到").assertExists()
     composeTestRule.runOnIdle { org.junit.Assert.assertEquals(1, checks) }

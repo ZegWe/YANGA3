@@ -165,6 +165,7 @@ internal fun ProfileScreen(
       session = state.session,
       onUserClick = onUserClick,
       checkInRunning = state.checkInRunning,
+      checkedIn = state.checkedIn,
       onCheckIn = { showCheckInDialog = true; onCheckIn() },
       onLoginClick = {
         if (state.session is LoadableUiState.Content) {
@@ -599,6 +600,7 @@ private fun ProfileAccountCard(
   onUserClick: () -> Unit,
   onCheckIn: () -> Unit,
   checkInRunning: Boolean,
+  checkedIn: Boolean,
   modifier: Modifier = Modifier,
 ) {
   TonalCard(modifier = modifier) {
@@ -666,7 +668,7 @@ private fun ProfileAccountCard(
         is LoadableUiState.Content -> Row(verticalAlignment = Alignment.CenterVertically) {
           FilledTonalIconButton(onClick = onCheckIn, enabled = !checkInRunning) {
             if (checkInRunning) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            else Icon(Icons.Outlined.StarBorder, contentDescription = "签到")
+            else Icon(if (checkedIn) Icons.Outlined.Check else Icons.Outlined.StarBorder, contentDescription = if (checkedIn) "已签到" else "未签到")
           }
           IconButton(onClick = onLoginClick) {
             Icon(

@@ -13,19 +13,33 @@ import kotlinx.coroutines.launch
 
 class ProfileViewModel(
   private val repository: NgaReadOnlyRepository,
+  private val checkInStore: com.yanga.client.data.CheckInStore = com.yanga.client.data.CheckInStore(),
+  private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
   private val _state = MutableStateFlow(ProfileUiState(forumEndpoint = NgaDomains.BBS_NGA_CN))
   val state: StateFlow<ProfileUiState> = _state.asStateFlow()
 
   private var generation = 0
 
+  fun syncCheckInState(session: LoginSessionData?) {
+    _state.update { it.copy(checkedIn = session != null && checkInStore.isCheckedIn(session.uid, now())) }
+  }
+
   fun checkIn(session: LoginSessionData?) {
     if (session == null || _state.value.checkInRunning) return
+    syncCheckInState(session)
+    if (_state.value.checkedIn) {
+      _state.update { it.copy(checkInMessage = "今天已经签到") }
+      return
+    }
     val requestGeneration = generation
+    val requestedAt = now()
     _state.update { it.copy(checkInRunning = true, checkInMessage = "签到中…") }
     viewModelScope.launch {
       val result = repository.checkIn(session)
+      if (result.isSuccess) checkInStore.record(session.uid, requestedAt)
       if (requestGeneration != generation) return@launch
+      syncCheckInState(session)
       _state.update { it.copy(checkInRunning = false, checkInMessage = result.getOrElse { error -> error.message ?: "签到失败，请重试" }) }
     }
   }
@@ -35,6 +49,7 @@ class ProfileViewModel(
   }
 
   fun refresh(session: LoginSessionData?) {
+    syncCheckInState(session)
     val requestGeneration = ++generation
     _state.update { it.copy(checkInRunning = false, checkInMessage = null) }
     if (session == null) {

@@ -62,7 +62,9 @@ fun MainScreen(
   modifier: Modifier = Modifier,
 ) {
   val messagesViewModel = viewModel<MessagesViewModel> { MessagesViewModel(repository) }
-  val profileViewModel = viewModel<ProfileViewModel> { ProfileViewModel(repository) }
+  val context = androidx.compose.ui.platform.LocalContext.current
+  val checkInStore = remember { com.yanga.client.data.CheckInStore(context.getSharedPreferences("daily_check_in", android.content.Context.MODE_PRIVATE)) }
+  val profileViewModel = viewModel<ProfileViewModel> { ProfileViewModel(repository, checkInStore) }
   val messagesState by messagesViewModel.state.collectAsState()
   val profileState by profileViewModel.state.collectAsState()
   val backStack = rememberNavBackStack(MainDestinationKey.Home)
@@ -70,6 +72,12 @@ fun MainScreen(
   val navigate: (MainDestinationKey) -> Unit = { backStack.add(it) }
   val onBack: () -> Unit = { popBackStack(backStack) }
   val onLoginClick: () -> Unit = { navigate(MainDestinationKey.Login) }
+  LaunchedEffect(sessionData) {
+    while (true) {
+      profileViewModel.syncCheckInState(sessionData)
+      kotlinx.coroutines.delay(30_000)
+    }
+  }
   LaunchedEffect(pendingDestination) {
     pendingDestination?.let {
       navigate(it)
