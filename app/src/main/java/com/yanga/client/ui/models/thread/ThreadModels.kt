@@ -21,6 +21,7 @@ data class PostPreview(
   val embeddedComments: List<PostEmbeddedReplyPreview> = emptyList(),
   val hotReplies: List<PostEmbeddedReplyPreview> = emptyList(),
   val attachments: List<PostAttachmentPreview> = emptyList(),
+  val poll: com.yanga.client.api.NgaPoll? = null,
   val authorId: String = "",
   val isOriginalPoster: Boolean = false,
   val score: Int = 0,

@@ -394,6 +394,7 @@ internal fun ThreadReadingScreen(
   onReact: (suspend (PostPreview, Boolean) -> Result<Int?>)? = null,
   onLinkClick: (String) -> Unit = {},
   onAttachmentDownload: (PostAttachmentPreview) -> Unit = {},
+  onVote: PollSubmit? = null,
   modifier: Modifier = Modifier,
 ) {
   var menuExpanded by remember { mutableStateOf(false) }
@@ -510,6 +511,8 @@ internal fun ThreadReadingScreen(
           },
           onLinkClick = onLinkClick,
           onAttachmentClick = { attachment -> pendingAttachment = attachment },
+          onVote = onVote,
+          onOpenWeb = onOpenInBrowser,
           onReplyPost = onReplyPost,
           onFilterAuthor = { onFilterAuthor(it) },
           onReact = onReact,
@@ -580,6 +583,8 @@ private fun ThreadPageContent(
   onImageUrlsChange: (List<String>, Int) -> Unit,
   onLinkClick: (String) -> Unit,
   onAttachmentClick: (PostAttachmentPreview) -> Unit,
+  onVote: PollSubmit?,
+  onOpenWeb: () -> Unit,
   onReplyPost: (PostPreview) -> Unit,
   onFilterAuthor: (PostPreview) -> Unit,
   onReact: (suspend (PostPreview, Boolean) -> Result<Int?>)?,
@@ -645,6 +650,8 @@ private fun ThreadPageContent(
               onImageClick = onImageUrlsChange,
               onLinkClick = onLinkClick,
               onAttachmentClick = onAttachmentClick,
+              onVote = onVote,
+              onOpenWeb = onOpenWeb,
               onReplyPost = onReplyPost,
               onFilterAuthor = onFilterAuthor,
               onReact = onReact,
@@ -725,6 +732,8 @@ private fun PostItem(
   onImageClick: (List<String>, Int) -> Unit = { _, _ -> },
   onLinkClick: (String) -> Unit = {},
   onAttachmentClick: (PostAttachmentPreview) -> Unit = {},
+  onVote: PollSubmit? = null,
+  onOpenWeb: () -> Unit = {},
   onReplyPost: (PostPreview) -> Unit = {},
   onFilterAuthor: (PostPreview) -> Unit = {},
   onReact: (suspend (PostPreview, Boolean) -> Result<Int?>)? = null,
@@ -832,6 +841,7 @@ private fun PostItem(
         }
       }
 
+      post.poll?.let { PostPollCard(it, onVote, onOpenWeb) }
 
       if (post.embeddedComments.isNotEmpty()) {
         PostSectionDivider()

@@ -138,6 +138,19 @@ fun ThreadRoute(
       }
     },
     onAttachmentDownload = { downloadAttachment(context, it) },
+    onVote = if (loginSession == null) null else { poll, ids ->
+      val session = loginSession.toData()
+      repository.submitPoll(session, poll, ids).fold(
+        onSuccess = {
+          // A successful vote must not be retried just because reloading results failed.
+          val fresh = repository.loadThread(session, poll.tid, threadState.page.toIntOrNull() ?: 1)
+            .getOrNull()?.posts?.firstNotNullOfOrNull { it.poll }
+          fresh?.let(threadContentViewModel::updatePollResults)
+          Result.success(fresh)
+        },
+        onFailure = { Result.failure(it) },
+      )
+    },
     modifier = Modifier.fillMaxSize(),
   )
 }

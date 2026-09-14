@@ -67,6 +67,9 @@ interface NgaReadOnlyRepository {
 
   suspend fun loadThreadPost(session: LoginSessionData?, pid: String): Result<NgaThreadPost>
 
+  suspend fun submitPoll(session: LoginSessionData?, poll: com.yanga.client.api.NgaPoll, ids: List<Int>): Result<Unit> =
+    Result.failure(UnsupportedOperationException("投票暂不可用"))
+
   suspend fun listLocalFavoriteBoards(): Result<List<LocalFavoriteBoard>>
 
   suspend fun addLocalFavoriteBoard(board: LocalFavoriteBoard): Result<Unit>
@@ -303,6 +306,15 @@ class DefaultNgaReadOnlyRepository(
     val postId = pid.toIntOrNull() ?: return@withContext Result.failure(IllegalArgumentException("楼层编号无效"))
     execute(api(session).like(threadId, postId, support), com.yanga.client.api.NgaReactionParser::requireSuccess)
   }
+
+  override suspend fun submitPoll(session: LoginSessionData?, poll: com.yanga.client.api.NgaPoll, ids: List<Int>): Result<Unit> =
+    withContext(Dispatchers.IO) {
+      val login = session.requireLogin() ?: return@withContext Result.failure(LoginRequiredException())
+      poll.validationError(ids)?.let { return@withContext Result.failure(IllegalArgumentException(it)) }
+      val tid = poll.tid.toIntOrNull()?.takeIf { it > 0 }
+        ?: return@withContext Result.failure(IllegalArgumentException("投票主题无效"))
+      execute(api(login).vote(tid, ids), com.yanga.client.api.NgaPollParser::requireSuccessfulSubmission)
+    }
 
   override suspend fun loadThreadPost(session: LoginSessionData?, pid: String): Result<NgaThreadPost> = withContext(Dispatchers.IO) {
     execute(api(session).articleRead(pid = pid.toIntOrNull())) { raw ->

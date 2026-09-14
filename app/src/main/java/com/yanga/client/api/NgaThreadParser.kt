@@ -40,6 +40,7 @@ data class NgaThreadPost(
   val embeddedComments: List<NgaThreadEmbeddedReply> = emptyList(),
   val hotReplies: List<NgaThreadEmbeddedReply> = emptyList(),
   val attachments: List<NgaThreadAttachment> = emptyList(),
+  val poll: NgaPoll? = null,
   val score: Int = 0,
   val isOriginalPoster: Boolean = false,
 )
@@ -143,6 +144,7 @@ object NgaThreadParser {
       authorAvatarUrl = NgaAvatarUrls.resolveUserAvatar(avatarRaw, authorId, memberId),
       subject = NgaDisplayText.singleLine(stringValue("subject").ifBlank { topic.stringValue("subject") }),
       content = resolveAttachmentContent(content, attachmentBase),
+      poll = NgaPollParser.parse(tid, stringValue("vote")),
       score = intValue("score"),
       isOriginalPoster = intValue("lou") == 0 ||
         (authorId.toLongOrNull()?.let { it > 0 } == true && authorId == topic.stringValue("authorid")),

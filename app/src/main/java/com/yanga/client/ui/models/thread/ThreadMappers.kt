@@ -15,6 +15,7 @@ internal fun NgaThreadPost.toPreview(): PostPreview =
     score = score,
     time = postDate.toUiDateTimeString(),
     content = content,
+    poll = poll,
     avatarInitial = author.initialOrFallback(),
     embeddedComments = embeddedComments.map { it.toPreview() },
     hotReplies = hotReplies.map { it.toPreview() },

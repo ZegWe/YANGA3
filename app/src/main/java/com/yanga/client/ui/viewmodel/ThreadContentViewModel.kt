@@ -38,6 +38,18 @@ class ThreadContentViewModel(
 
   fun matchesThread(threadId: String): Boolean = activeThreadId == threadId
 
+  fun updatePollResults(poll: com.yanga.client.api.NgaPoll) {
+    if (activeThreadId != poll.tid) return
+    fun ThreadUiState.updated(): ThreadUiState {
+      val loaded = posts as? LoadableUiState.Content ?: return this
+      return copy(posts = LoadableUiState.Content(loaded.value.map { post ->
+        if (post.poll?.tid == poll.tid) post.copy(poll = poll) else post
+      }))
+    }
+    pageCache.keys.toList().forEach { page -> pageCache[page] = pageCache.getValue(page).updated() }
+    _state.update { it?.updated()?.withCachedPosts() }
+  }
+
   fun filterAuthor(session: LoginSessionData?, post: PostPreview?) {
     val destination = activeDestination ?: return
     if (post != null && post.authorId.toIntOrNull()?.let { it > 0 } != true) return
