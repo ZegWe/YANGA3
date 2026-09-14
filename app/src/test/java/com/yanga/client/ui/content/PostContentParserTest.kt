@@ -6,6 +6,17 @@ import org.junit.Test
 
 class PostContentParserTest {
   @Test
+  fun deletedTextUsesOfficialGrayAndStrikeThrough() {
+    val parts = PostContentParser.parse("[del]别骂了别骂了[/del]<br/>原客户端 NGA玩家社区")
+    val text = parts.single() as PostContentPart.Text
+    val deleted = text.styles.single()
+    assertEquals("别骂了别骂了", text.text.substring(deleted.start, deleted.end))
+    assertTrue(deleted.strikeThrough)
+    assertEquals("gray", deleted.color)
+  }
+
+
+  @Test
   fun parseNoimgWithLegacyRelativePathAndSurroundingText() {
     val parts = PostContentParser.parse("before [noimg]./-7Qbvwn-dj7mK2bT1kShs-13i.jpg[/noimg] after")
     assertEquals(
@@ -86,7 +97,7 @@ class PostContentParserTest {
     assertEquals(PostTextStyleRange(6, 10, bold = true), text.styles[0])
     assertEquals(PostTextStyleRange(11, 17, italic = true), text.styles[1])
     assertEquals(PostTextStyleRange(18, 23, underline = true), text.styles[2])
-    assertEquals(PostTextStyleRange(24, 28, strikeThrough = true), text.styles[3])
+    assertEquals(PostTextStyleRange(24, 28, strikeThrough = true, color = "gray"), text.styles[3])
   }
 
   @Test

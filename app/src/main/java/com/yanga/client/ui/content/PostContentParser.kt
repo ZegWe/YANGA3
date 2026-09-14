@@ -504,7 +504,7 @@ private class InlineTextParser(private val source: String) {
         "b" -> ActiveStyle(bold = true)
         "i" -> ActiveStyle(italic = true)
         "u" -> ActiveStyle(underline = true)
-        "del" -> ActiveStyle(strikeThrough = true)
+        "del" -> ActiveStyle(strikeThrough = true, color = "gray")
         "color" -> ActiveStyle(color = arg.ifBlank { null })
         "size" -> ActiveStyle(sizePercent = arg.removeSuffix("%").toIntOrNull())
         "url" -> ActiveStyle(linkUrl = arg.ifBlank { null })
