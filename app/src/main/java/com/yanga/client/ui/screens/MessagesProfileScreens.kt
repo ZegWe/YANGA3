@@ -135,6 +135,7 @@ internal fun ProfileScreen(
   onLogout: () -> Unit,
   onEndpointChange: (String) -> Unit = {},
   onThemeSettingsClick: () -> Unit = {},
+  onAboutClick: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   var showEndpointDialog by remember { mutableStateOf(false) }
@@ -184,6 +185,7 @@ internal fun ProfileScreen(
               { showEndpointDialog = true }
             }
             "theme" -> onThemeSettingsClick
+            "about" -> onAboutClick
             else -> {
               {}
             }
@@ -818,10 +820,3 @@ private fun String.toSettingsImageVector(): ImageVector =
     "endpoint" -> Icons.Outlined.OpenInBrowser
     else -> Icons.Outlined.Settings
   }
-
-
-
-
-
-
-

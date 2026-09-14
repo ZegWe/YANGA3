@@ -1,0 +1,105 @@
+name: Android build and release
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Test and build debug APK
+        run: bash gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yanga-debug-${{ github.sha }}
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: android-stable-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Validate version and prevent release downgrade
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, re, urllib.request, urllib.error
+          from pathlib import Path
+          values = dict(line.strip().split('=', 1) for line in Path('version.properties').read_text().splitlines() if '=' in line)
+          version, code = values['versionName'], int(values['versionCode'])
+          assert re.fullmatch(r'[0-9]+\.[0-9]+(?:\.[0-9]+)?', version), 'Invalid stable version'
+          assert os.environ['GITHUB_REF_NAME'] == 'v' + version, 'Tag must match version.properties'
+          assert 0 < code <= 2100000000, 'Invalid Android versionCode'
+          request = urllib.request.Request('https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY'] + '/releases/latest', headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+          try:
+              with urllib.request.urlopen(request) as response:
+                  latest = json.load(response)
+              previous = [int(m.group(1)) for asset in latest['assets'] if (m := re.fullmatch(r'yanga-[0-9.]+-([0-9]+)-release\.apk', asset['name']))]
+              assert previous, 'Existing release has no versionCode asset; migrate it before releasing'
+              assert code > max(previous), 'versionCode must increase over the latest release'
+          except urllib.error.HTTPError as error:
+              if error.code != 404:
+                  raise
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write(f'APK_NAME=yanga-{version}-{code}-release.apk\n')
+          PY
+      - name: Restore private release signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          YANGA_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          YANGA_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          YANGA_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64" && test -n "$YANGA_STORE_PASSWORD" && test -n "$YANGA_KEY_ALIAS" && test -n "$YANGA_KEY_PASSWORD" || { echo 'Configure all four Android signing secrets before pushing a release tag.'; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/yanga-release.keystore"
+          chmod 600 "$RUNNER_TEMP/yanga-release.keystore"
+      - name: Build signed release
+        env:
+          YANGA_SIGNING_STORE: ${{ runner.temp }}/yanga-release.keystore
+          YANGA_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          YANGA_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          YANGA_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          bash gradlew :app:assembleRelease --no-daemon
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify app/build/outputs/apk/release/app-release.apk
+          cp app/build/outputs/apk/release/app-release.apk "$APK_NAME"
+      - name: Publish complete stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$APK_NAME" --verify-tag --draft --title "Yanga $GITHUB_REF_NAME" --generate-notes
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+      - name: Remove signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/yanga-release.keystore"
