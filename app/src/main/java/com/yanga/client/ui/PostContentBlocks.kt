@@ -11,6 +11,7 @@ internal sealed class PostContentBlock {
   data class Image(val part: PostContentPart.Image) : PostContentBlock()
 
   data class Audio(val part: PostContentPart.Audio) : PostContentBlock()
+  data class Structured(val part: PostContentPart) : PostContentBlock()
 }
 
 internal sealed class PostInlineItem {
@@ -54,6 +55,11 @@ internal fun groupPostContentParts(parts: List<PostContentPart>): List<PostConte
       is PostContentPart.Audio -> {
         flushInlineItems()
         blocks += PostContentBlock.Audio(part)
+      }
+      is PostContentPart.ListBlock, is PostContentPart.Collapse, is PostContentPart.Code,
+      is PostContentPart.Heading, is PostContentPart.Table, PostContentPart.Rule -> {
+        flushInlineItems()
+        blocks += PostContentBlock.Structured(part)
       }
     }
   }

@@ -16,6 +16,16 @@ data class PostTextStyleRange(
 )
 
 sealed class PostContentPart {
+  data class ListBlock(val items: List<List<PostContentPart>>, val marker: String? = null) : PostContentPart()
+  data class Collapse(val title: String, val parts: List<PostContentPart>) : PostContentPart()
+  data class Code(val text: String, val language: String = "") : PostContentPart()
+  data class Heading(val parts: List<PostContentPart>) : PostContentPart()
+  data class CellSpan(val columns: Int = 1, val rows: Int = 1)
+  data class Table(
+    val rows: List<List<List<PostContentPart>>>,
+    val spans: List<List<CellSpan>> = emptyList(),
+  ) : PostContentPart()
+  data object Rule : PostContentPart()
   data class Text(
     val text: String,
     val styles: List<PostTextStyleRange> = emptyList(),
@@ -66,6 +76,10 @@ object PostContentParser {
         when (part) {
           is PostContentPart.Image -> add(part.url)
           is PostContentPart.Quote -> addAll(collectImageUrls(part.parts))
+          is PostContentPart.ListBlock -> part.items.forEach { addAll(collectImageUrls(it)) }
+          is PostContentPart.Heading -> addAll(collectImageUrls(part.parts))
+          is PostContentPart.Collapse -> addAll(collectImageUrls(part.parts))
+          is PostContentPart.Table -> part.rows.flatten().forEach { addAll(collectImageUrls(it)) }
           else -> Unit
         }
       }
@@ -82,9 +96,7 @@ private object ContentNormalizer {
         .replace("&amp;", "&")
     return decodedEntities
       .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
-      .replace(Regex("&#(\\d+);")) { match ->
-        match.groupValues[1].toIntOrNull()?.toChar()?.toString() ?: match.value
-      }
+      .let(com.yanga.client.api.NgaDisplayText::decodeEntities)
   }
 }
 
@@ -96,10 +108,11 @@ private object ContentNormalizer {
  * Image     ::= ImgTag | HtmlImg | RelativeImgPath
  * Audio     ::= "[flash=audio]" MediaUrl "[/flash]"
  */
-private class BbContentParser(private val source: String) {
+private class BbContentParser(private val source: String, private val depth: Int = 0) {
   private var pos = 0
 
   fun parseDocument(): List<PostContentPart> {
+    if (depth >= 32) return listOf(PostContentPart.Text(source))
     val parts = mutableListOf<PostContentPart>()
     val textBuffer = StringBuilder()
 
@@ -114,6 +127,15 @@ private class BbContentParser(private val source: String) {
 
     while (!atEnd()) {
       when {
+        blockHeader() != null -> {
+          flushText()
+          parts += parseStructuredBlock(blockHeader()!!)
+        }
+        startsWithIgnoreCase("[hr]") -> {
+          flushText()
+          consume("[hr]")
+          parts += PostContentPart.Rule
+        }
         startsWithIgnoreCase("[quote]") -> {
           flushText()
           parts += parseQuote()
@@ -169,8 +191,96 @@ private class BbContentParser(private val source: String) {
     }
     val inner = source.substring(innerStart, pos)
     if (depth == 0) consume("[/quote]")
-    val innerParts = BbContentParser(inner).parseDocument()
+    val innerParts = child(inner)
     return PostContentPart.Quote(innerParts)
+  }
+
+  private fun child(text: String): List<PostContentPart> = BbContentParser(text, depth + 1).parseDocument()
+
+  private fun blockHeader(): MatchResult? = BLOCK_OPEN.matchAt(source, pos)
+
+  private fun parseStructuredBlock(header: MatchResult): PostContentPart {
+    val name = header.groupValues[1].lowercase()
+    val argument = header.groupValues[2].removePrefix("=").trim()
+    pos = header.range.last + 1
+    val start = pos
+    var nesting = 1
+    var close: MatchResult? = null
+    var inCode = false
+    for (token in ALL_BLOCK_TAGS.findAll(source, start)) {
+      val tokenName = token.groupValues[2].lowercase()
+      val closing = token.groupValues[1] == "/"
+      if (name != "code" && tokenName == "code") { inCode = !closing; continue }
+      if (inCode || tokenName != name) continue
+      if (closing) nesting-- else if (name != "code") nesting++
+      if (nesting == 0) { close = token; break }
+    }
+    val body = source.substring(start, close?.range?.first ?: source.length)
+    pos = close?.range?.last?.plus(1) ?: source.length
+    return when (name) {
+      "h" -> PostContentPart.Heading(child(body))
+      "code" -> PostContentPart.Code(body.removePrefix("\n").removeSuffix("\n"), argument)
+      "collapse", "spoiler" -> PostContentPart.Collapse(argument.ifBlank { "折叠内容" }, child(body))
+      "list" -> {
+        val items = splitTopLevel(body, "*").map { child(it.removeSuffix("[/*]")) }
+        PostContentPart.ListBlock(items, argument.takeIf { it in setOf("1", "a", "A", "i", "I") })
+      }
+      "table" -> {
+        val rowTokens = splitTopLevel(body, "tr")
+        val spans = mutableListOf<List<PostContentPart.CellSpan>>()
+        val rows = rowTokens.map { row ->
+          val attributes = mutableListOf<String>()
+          val cells = splitTopLevel(row, "td", attributes).map { child(it) }
+          spans += attributes.map { tag ->
+            fun span(name: String) = Regex("$name\\s*=?\\s*(\\d+)", RegexOption.IGNORE_CASE)
+              .find(tag)?.groupValues?.get(1)?.toIntOrNull()?.coerceIn(1, 100) ?: 1
+            PostContentPart.CellSpan(span("colspan"), span("rowspan"))
+          }
+          cells
+        }
+        PostContentPart.Table(rows, spans)
+      }
+      else -> PostContentPart.Text(body)
+    }
+  }
+
+  /** Split only at the current nesting level, retaining nested rich blocks and malformed text. */
+  private fun splitTopLevel(body: String, separator: String, attributes: MutableList<String>? = null): List<String> {
+    val result = mutableListOf<String>()
+    val buffer = StringBuilder()
+    val stack = mutableListOf<String>()
+    var cursor = 0
+    var started = false
+    var header = ""
+    fun flush() {
+      if (started || buffer.isNotBlank()) { result += buffer.toString(); attributes?.add(header) }
+      buffer.clear()
+    }
+    for (tag in ALL_BLOCK_TAGS.findAll(body)) {
+      buffer.append(body.substring(cursor, tag.range.first))
+      val name = tag.groupValues[2].lowercase()
+      val closing = tag.groupValues[1] == "/"
+      if (stack.isEmpty() && name == separator) {
+        flush()
+        started = !closing
+        header = if (closing) "" else tag.value
+      } else {
+        buffer.append(tag.value)
+        if (name in setOf("list", "table", "quote", "collapse", "spoiler", "code", "h")) {
+          if (closing && stack.lastOrNull() == name) stack.removeAt(stack.lastIndex)
+          else if (!closing && stack.lastOrNull() != "code") stack += name
+        }
+      }
+      cursor = tag.range.last + 1
+    }
+    buffer.append(body.substring(cursor))
+    flush()
+    return result
+  }
+
+  private companion object {
+    val BLOCK_OPEN = Regex("\\[(list|collapse|spoiler|code|table|h)(=[^\\]]*)?\\]", RegexOption.IGNORE_CASE)
+    val ALL_BLOCK_TAGS = Regex("\\[(/?)(list|table|quote|collapse|spoiler|code|h|tr|td|\\*)(?:\\d+|[=\\s][^\\]]*)?\\]", RegexOption.IGNORE_CASE)
   }
 
   private fun parseImageTag(): PostContentPart.Image? {
@@ -342,8 +452,8 @@ private class InlineTextParser(private val source: String) {
     val close = source.indexOf(']', pos)
     if (close == -1) return null
     val raw = source.substring(pos + 1, close)
-    pos = close + 1
     if (raw.isEmpty()) return null
+    pos = close + 1
 
     val closing = raw.startsWith("/")
     val body = if (closing) raw.substring(1) else raw
@@ -357,17 +467,17 @@ private class InlineTextParser(private val source: String) {
       name = body.substring(0, equals)
       arg = body.substring(equals + 1)
     }
-    return Tag(name.lowercase(), arg?.trim()?.ifBlank { null }, closing)
+    return Tag(name.lowercase(), arg?.trim()?.ifBlank { null }, closing, source.substring(pos - raw.length - 2, pos))
   }
 
   private fun applyTag(tag: Tag) {
     if (tag.name == "align") return
+    if (tag.name == "*") {
+      if (!tag.closing) output.append("\n• ")
+      return
+    }
     if (!isInlineTag(tag.name)) {
-      output.append('[')
-      output.append(if (tag.closing) "/" else "")
-      output.append(tag.name)
-      tag.arg?.let { output.append('=').append(it) }
-      output.append(']')
+      output.append(tag.raw)
       return
     }
     if (tag.closing) {
@@ -501,6 +611,7 @@ private class InlineTextParser(private val source: String) {
     val name: String,
     val arg: String?,
     val closing: Boolean,
+    val raw: String,
   )
 
   private companion object {

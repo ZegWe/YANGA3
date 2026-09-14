@@ -18,6 +18,7 @@ android {
         applicationId = "com.zegwe.yanga"
         minSdk = 24
         targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 1
         versionName = "1.0"
     }

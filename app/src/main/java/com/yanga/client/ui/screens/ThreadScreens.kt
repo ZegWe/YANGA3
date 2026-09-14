@@ -90,6 +90,7 @@ import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.semantics.getTextLayoutResult
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -806,7 +807,12 @@ private fun PostItem(
               onClick = { onImageClick(imageUrls, imageUrls.indexOf(block.part.url).takeIf { it >= 0 } ?: 0) },
             )
           }
-          is PostContentBlock.Audio -> {
+          is PostContentBlock.Structured -> {
+              StructuredPostContent(block.part) { children ->
+                PostNestedParts(children, imageUrls, onLinkClick, onImageClick)
+              }
+            }
+            is PostContentBlock.Audio -> {
             PostAudioPlayer(
               url = block.part.url,
               label = block.part.label,
@@ -1003,6 +1009,11 @@ private fun PostEmbeddedReplyItem(
 private fun PostQuoteBlock(
   parts: List<PostContentPart>,
   imageUrls: List<String>,
+            is PostContentBlock.Structured -> {
+              StructuredPostContent(block.part) { children ->
+                PostNestedParts(children, imageUrls, onLinkClick, onImageClick)
+              }
+            }
   onLinkClick: (String) -> Unit,
   onImageClick: (List<String>, Int) -> Unit,
   modifier: Modifier = Modifier,
@@ -1044,7 +1055,12 @@ private fun PostQuoteBlock(
               onClick = { onImageClick(imageUrls, imageUrls.indexOf(block.part.url).takeIf { it >= 0 } ?: 0) },
             )
           }
-          is PostContentBlock.Audio -> {
+          is PostContentBlock.Structured -> {
+              StructuredPostContent(block.part) { children ->
+                PostNestedParts(children, imageUrls, onLinkClick, onImageClick)
+              }
+            }
+            is PostContentBlock.Audio -> {
             PostAudioPlayer(
               url = block.part.url,
               label = block.part.label,
@@ -1470,6 +1486,30 @@ private fun postContentImageUrls(content: String): List<String> =
 private fun PostInlineRichText(
   items: List<PostInlineItem>,
   modifier: Modifier = Modifier,
+@Composable
+private fun PostNestedParts(
+  parts: List<PostContentPart>,
+  imageUrls: List<String>,
+  onLinkClick: (String) -> Unit,
+  onImageClick: (List<String>, Int) -> Unit,
+) {
+  val blocks = remember(parts) { groupPostContentParts(parts) }
+  for (block in blocks) {
+    when (block) {
+      is PostContentBlock.Inline -> PostInlineRichText(items = block.items, style = androidx.compose.material3.LocalTextStyle.current, onLinkClick = onLinkClick)
+      is PostContentBlock.Quote -> PostQuoteBlock(block.part.parts, imageUrls, onLinkClick, onImageClick)
+      is PostContentBlock.Image -> CachedPostImage(
+        url = block.part.url,
+        onClick = { onImageClick(imageUrls, imageUrls.indexOf(block.part.url).coerceAtLeast(0)) },
+      )
+      is PostContentBlock.Audio -> PostAudioPlayer(block.part.url, block.part.label)
+      is PostContentBlock.Structured -> StructuredPostContent(block.part) {
+        PostNestedParts(it, imageUrls, onLinkClick, onImageClick)
+      }
+    }
+  }
+}
+
   style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge,
   color: Color = MaterialTheme.colorScheme.onSurface,
   onLinkClick: (String) -> Unit = {},
@@ -1500,7 +1540,7 @@ private fun PostInlineRichText(
               val start = (textStart + range.start).coerceIn(textStart, textStart + item.text.length)
               val end = (textStart + range.end).coerceIn(textStart, textStart + item.text.length)
               addStyle(
-                range.toSpanStyle(linkColor, MaterialTheme.typography.bodyLarge.fontSize),
+                range.toSpanStyle(linkColor, style.fontSize),
                 start,
                 end,
               )
@@ -1591,6 +1631,9 @@ private fun PostRichText(
 ) {
   val linkColor = MaterialTheme.colorScheme.primary
   var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+        getTextLayoutResult { results ->
+          textLayoutResult?.let { results.add(it) } ?: false
+        }
   val baseFontSize = style.fontSize
   val annotatedText =
     remember(text, styles, linkColor, baseItalic, baseFontSize) {
