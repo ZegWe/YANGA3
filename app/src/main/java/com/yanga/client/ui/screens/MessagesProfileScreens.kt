@@ -24,7 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
@@ -666,9 +666,9 @@ private fun ProfileAccountCard(
       }
       when (session) {
         is LoadableUiState.Content -> Row(verticalAlignment = Alignment.CenterVertically) {
-          FilledTonalIconButton(onClick = onCheckIn, enabled = !checkInRunning) {
+          IconButton(onClick = onCheckIn, enabled = !checkInRunning) {
             if (checkInRunning) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            else Icon(if (checkedIn) Icons.Outlined.Check else Icons.Outlined.StarBorder, contentDescription = if (checkedIn) "已签到" else "未签到")
+            else Icon(if (checkedIn) Icons.Filled.Star else Icons.Outlined.StarBorder, contentDescription = if (checkedIn) "已签到" else "未签到")
           }
           IconButton(onClick = onLoginClick) {
             Icon(
