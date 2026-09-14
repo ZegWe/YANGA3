@@ -6,6 +6,18 @@ import org.junit.Test
 
 class ImageUrlResolverTest {
   @Test
+  fun resolveMigratesLegacyEmoticons() {
+    for (scheme in listOf("https:", "http:", "")) {
+      assertEquals(
+        "https://img4.nga.cn/ngabbs/post/smile/ac21.png?v=2",
+        ImageUrlResolver.resolve("$scheme//img4.nga.178.com/ngabbs/post/smile/ac21.png?v=2"),
+      )
+    }
+    val current = "https://img4.nga.cn/ngabbs/post/smile/ac21.png"
+    assertEquals(current, ImageUrlResolver.resolve(current))
+  }
+
+  @Test
   fun resolveExpandsRelativeNgaAttachmentPath() {
     assertEquals(
       "https://img.nga.178.com/attachments/mon_a.jpg",

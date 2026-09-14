@@ -18,5 +18,5 @@ object NgaStaticUrls {
       url
     }
 
-  const val emoticonBaseUrl = "https://img4.nga.178.com/ngabbs/post/smile/"
+  const val emoticonBaseUrl = "https://img4.nga.cn/ngabbs/post/smile/"
 }

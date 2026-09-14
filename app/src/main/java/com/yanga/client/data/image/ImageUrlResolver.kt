@@ -20,7 +20,7 @@ object ImageUrlResolver {
     val trimmed = raw.trim()
     if (trimmed.isBlank()) return trimmed
 
-    // Persisted board directories may still contain the legacy image host.
+    // Persisted board directories and post bodies may still contain the legacy image host.
     val legacyIconPath = trimmed
       .removePrefix("https:")
       .removePrefix("http:")
@@ -28,7 +28,8 @@ object ImageUrlResolver {
       ?.removePrefix("//img4.nga.178.com")
     if (legacyIconPath != null && (
         legacyIconPath.startsWith("/ngabbs/nga_classic/f/app/") ||
-          legacyIconPath.startsWith("/proxy/cache_attach/ficon/")
+          legacyIconPath.startsWith("/proxy/cache_attach/ficon/") ||
+          legacyIconPath.startsWith("/ngabbs/post/smile/")
       )) {
       return "https://img4.nga.cn$legacyIconPath"
     }

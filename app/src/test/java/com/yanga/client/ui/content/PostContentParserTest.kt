@@ -88,7 +88,7 @@ class PostContentParserTest {
     assertEquals(
       PostContentPart.Emoticon(
         code = "[s:ac:囧]",
-        url = "https://img4.nga.178.com/ngabbs/post/smile/ac21.png",
+        url = "https://img4.nga.cn/ngabbs/post/smile/ac21.png",
         alt = "囧",
       ),
       parts[1],
