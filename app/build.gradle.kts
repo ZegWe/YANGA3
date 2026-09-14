@@ -96,6 +96,12 @@ dependencies {
   implementation(libs.material.kolor)
   implementation(libs.coil.compose)
   implementation(libs.coil.gif)
+  implementation(libs.markwon.core)
+  implementation(libs.markwon.linkify)
+  implementation(libs.markwon.tables)
+  implementation(libs.markwon.strike)
+  implementation(libs.markwon.tasks)
+
   // Tooling
   debugImplementation(libs.androidx.compose.ui.tooling)
   // Instrumented tests

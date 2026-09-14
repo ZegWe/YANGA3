@@ -1,33 +1,54 @@
 package com.yanga.client.ui
 
+import android.content.Context
+import android.text.method.LinkMovementMethod
+import android.widget.TextView
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLinkStyles
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withLink
-import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import io.noties.markwon.AbstractMarkwonPlugin
+import io.noties.markwon.Markwon
+import io.noties.markwon.MarkwonConfiguration
+import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
+import io.noties.markwon.ext.tables.TablePlugin
+import io.noties.markwon.ext.tasklist.TaskListPlugin
+import io.noties.markwon.linkify.LinkifyPlugin
+
+internal fun releaseNotesRenderer(context: Context, onOpenUrl: (String) -> Unit): Markwon =
+  Markwon.builder(context)
+    .usePlugin(StrikethroughPlugin.create())
+    .usePlugin(TablePlugin.create(context))
+    .usePlugin(TaskListPlugin.create(context))
+    .usePlugin(LinkifyPlugin.create())
+    .usePlugin(object : AbstractMarkwonPlugin() {
+      override fun configureConfiguration(builder: MarkwonConfiguration.Builder) {
+        builder.linkResolver { _, link ->
+          if (link.startsWith("https://") || link.startsWith("http://")) onOpenUrl(link)
+        }
+      }
+    })
+    .build()
 
 @Composable
 internal fun ReleaseNotesText(notes: String, onOpenUrl: (String) -> Unit) {
-  val links = Regex("""\[([^\]]+)\]\((https?://[^\s)]+)\)|(https?://[^\s<>]+)""")
-  val style = TextLinkStyles(SpanStyle(color = MaterialTheme.colorScheme.primary, textDecoration = TextDecoration.Underline))
-  val text = buildAnnotatedString {
-    var offset = 0
-    for (match in links.findAll(notes)) {
-      append(notes.substring(offset, match.range.first))
-      val markdown = match.groupValues[2].isNotEmpty()
-      val raw = if (markdown) match.groupValues[2] else match.value
-      val url = if (markdown) raw else raw.trimEnd('.', ',', ';', ':', ')', ']', '，', '。', '；')
-      withLink(LinkAnnotation.Url(url, style) { onOpenUrl(url) }) {
-        append(if (markdown) match.groupValues[1] else url)
-      }
-      if (!markdown) append(raw.substring(url.length))
-      offset = match.range.last + 1
-    }
-    append(notes.substring(offset))
-  }
-  Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+  val context = LocalContext.current
+  val open by rememberUpdatedState(onOpenUrl)
+  val renderer = remember(context) { releaseNotesRenderer(context) { open(it) } }
+  val textColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
+  val linkColor = MaterialTheme.colorScheme.primary.toArgb()
+  val fontSize = MaterialTheme.typography.bodyMedium.fontSize.value
+  AndroidView(
+    modifier = Modifier.fillMaxWidth(),
+    factory = { TextView(it).apply { movementMethod = LinkMovementMethod.getInstance() } },
+    update = {
+      it.setTextColor(textColor)
+      it.setLinkTextColor(linkColor)
+      it.textSize = fontSize
+      renderer.setMarkdown(it, notes)
+    },
+  )
 }
