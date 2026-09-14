@@ -25,6 +25,7 @@ data class PostPreview(
   val poll: com.yanga.client.api.NgaPoll? = null,
   val authorId: String = "",
   val isOriginalPoster: Boolean = false,
+  val bodyColor: String? = null,
   val score: Int = 0,
 )
 

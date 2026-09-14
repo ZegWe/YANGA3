@@ -12,6 +12,7 @@ internal fun NgaThreadPost.toPreview(): PostPreview =
     floor = "$lou 楼",
     authorId = authorId,
     isOriginalPoster = isOriginalPoster,
+    bodyColor = bodyColor,
     score = score,
     time = postDate.toUiDateTimeString(),
     content = content,

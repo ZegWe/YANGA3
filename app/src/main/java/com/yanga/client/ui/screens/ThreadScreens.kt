@@ -816,7 +816,7 @@ private fun PostItem(
       for (block in contentBlocks) {
         when (block) {
           is PostContentBlock.Inline -> {
-            PostInlineRichText(items = block.items, onLinkClick = onLinkClick)
+            PostInlineRichText(items = block.items, color = post.bodyColor?.toComposeColor() ?: MaterialTheme.colorScheme.onSurface, onLinkClick = onLinkClick)
           }
           is PostContentBlock.Quote -> {
             PostQuoteBlock(

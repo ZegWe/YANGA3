@@ -43,6 +43,8 @@ data class NgaThreadPost(
   val poll: NgaPoll? = null,
   val score: Int = 0,
   val isOriginalPoster: Boolean = false,
+  val authorMemberId: Int = 0,
+  val bodyColor: String? = null,
 )
 
 data class NgaThreadAttachment(
@@ -142,6 +144,7 @@ object NgaThreadParser {
       authorId = authorId,
       author = author,
       authorAvatarUrl = NgaAvatarUrls.resolveUserAvatar(avatarRaw, authorId, memberId),
+      authorMemberId = memberId?.toIntOrNull() ?: 0,
       subject = NgaDisplayText.singleLine(stringValue("subject").ifBlank { topic.stringValue("subject") }),
       content = resolveAttachmentContent(content, attachmentBase),
       poll = NgaPollParser.parse(tid, stringValue("vote")),

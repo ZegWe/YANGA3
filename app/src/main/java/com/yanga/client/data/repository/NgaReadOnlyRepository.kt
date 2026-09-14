@@ -341,15 +341,26 @@ class DefaultNgaReadOnlyRepository(
   }
 
   override suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int): Result<NgaThreadRead> = withContext(Dispatchers.IO) {
-    execute(api(session).articleRead(tid = tid.toIntOrNull(), page = page), NgaThreadParser::parseRead)
+    executeThreadRead(api(session).articleRead(tid = tid.toIntOrNull(), page = page))
   }
 
   override suspend fun loadThreadByAuthor(session: LoginSessionData?, tid: String, page: Int, authorId: String): Result<NgaThreadRead> = withContext(Dispatchers.IO) {
     runCatching { require(authorId.toIntOrNull()?.let { it > 0 } == true) { "匿名作者暂不支持跨页筛选" } }.fold(
-      onSuccess = { execute(api(session).articleRead(tid = tid.toIntOrNull(), page = page, authorId = authorId.toInt()), NgaThreadParser::parseRead) },
+      onSuccess = { executeThreadRead(api(session).articleRead(tid = tid.toIntOrNull(), page = page, authorId = authorId.toInt())) },
       onFailure = { Result.failure(it) },
     )
   }
+
+  private fun executeThreadRead(request: NgaRequest): Result<NgaThreadRead> =
+    execute(request, NgaThreadParser::parseRead).map { thread ->
+      if (thread.posts.isEmpty()) return@map thread
+      // JSON read responses omit the board moderator list used by the web renderer.
+      val htmlRequest = request.copy(query = request.query - setOf("__output", "noprefix", "v2"))
+      val mods = executeText(htmlRequest).getOrNull()?.let { com.yanga.client.api.NgaPostColors.moderators(it) }.orEmpty()
+      thread.copy(posts = thread.posts.map { post ->
+        post.copy(bodyColor = com.yanga.client.api.NgaPostColors.color(post.authorMemberId, post.authorId in mods))
+      })
+    }
 
   override suspend fun reactToPost(session: LoginSessionData?, tid: String, pid: String, support: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
     if (session == null || session.cookie.isBlank()) return@withContext Result.failure(IllegalStateException("请先登录后再赞踩"))
@@ -368,8 +379,7 @@ class DefaultNgaReadOnlyRepository(
     }
 
   override suspend fun loadThreadPost(session: LoginSessionData?, pid: String): Result<NgaThreadPost> = withContext(Dispatchers.IO) {
-    execute(api(session).articleRead(pid = pid.toIntOrNull())) { raw ->
-      val thread = NgaThreadParser.parseRead(raw)
+    executeThreadRead(api(session).articleRead(pid = pid.toIntOrNull())).mapCatching { thread ->
       thread.posts.firstOrNull { it.pid == pid }
         ?: thread.posts.firstOrNull()
         ?: throw IllegalStateException("Post $pid not found")
