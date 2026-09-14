@@ -12,6 +12,10 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.performClick
@@ -303,9 +307,7 @@ class ThreadReadingScreenTest {
 
     composeTestRule.onNodeWithText("[原帖]").assertDoesNotExist()
 
-    composeTestRule.onNodeWithText("Reply Post by author:\nquoted text").performTouchInput {
-      click(Offset(96f, 50f))
-    }
+    composeTestRule.onNodeWithText("Reply Post by author:\nquoted text").clickFirstCharacter()
 
     assertEquals("nga://post/253176649?tid=12937812&page=2", clickedUrl)
   }
@@ -341,9 +343,7 @@ class ThreadReadingScreenTest {
 
     composeTestRule.onNodeWithText("Reply to Reply Post by author (2026-06-01):\nquoted text").assertDoesNotExist()
 
-    composeTestRule.onNodeWithText("Reply Post by author (2026-06-01):\nquoted text").performTouchInput {
-      click(Offset(96f, 50f))
-    }
+    composeTestRule.onNodeWithText("Reply Post by author (2026-06-01):\nquoted text").clickFirstCharacter()
 
     assertEquals("nga://post/253176649?tid=12937812&page=2", clickedUrl)
   }
@@ -484,4 +484,11 @@ class ThreadReadingScreenTest {
 
     assertEquals("https://img.nga.178.com/attachments/mon_202606/01/sample.png", downloadUrl)
   }
+}
+
+private fun SemanticsNodeInteraction.clickFirstCharacter() {
+  val layouts = mutableListOf<TextLayoutResult>()
+  performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+  val target = layouts.single().getBoundingBox(1).center
+  performTouchInput { click(target) }
 }

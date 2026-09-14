@@ -106,8 +106,64 @@ class ThreadContentViewModelTest {
     assertEquals("p21", viewModel.state.value?.targetPostId)
   }
 
-  private class FakeRepository : NgaReadOnlyRepository {
+  @Test
+  fun refreshedPollResultsSurviveCachedPageNavigation() = runTest(dispatcher) {
+    val poll = com.yanga.client.api.NgaPoll("123", listOf(com.yanga.client.api.NgaPollOption(1, "A", 0)), 1)
+    val repository = FakeRepository(poll)
+    val viewModel = ThreadContentViewModel(repository)
+    viewModel.openThread(null, ThreadDestination("123", "Thread"))
+    advanceUntilIdle()
+    val updated = poll.copy(options = listOf(poll.options.single().copy(votes = 1)))
+    viewModel.updatePollResults(updated)
+    viewModel.openPage(null, 2)
+    advanceUntilIdle()
+    viewModel.openPage(null, 1)
+    advanceUntilIdle()
+    assertEquals(1L, (viewModel.state.value!!.posts as LoadableUiState.Content).value.single().poll?.totalVotes)
+    assertEquals(listOf(1, 2), repository.loadedPages)
+  }
+
+  @Test fun authorFilterUsesSeparatePagesAndClearsOnExit() = runTest(dispatcher) {
+    val repository = FakeRepository()
+    val model = ThreadContentViewModel(repository)
+    model.openThread(null, ThreadDestination("123", "Thread"))
+    advanceUntilIdle()
+    val post = (model.state.value!!.posts as LoadableUiState.Content).value.single()
+    model.filterAuthor(null, post)
+    advanceUntilIdle()
+    model.openPage(null, 2)
+    advanceUntilIdle()
+    assertEquals(listOf("42" to 1, "42" to 2), repository.filteredPages)
+    assertEquals("42", model.state.value!!.filteredAuthorId)
+    assertEquals("filtered 42 page 2", (model.state.value!!.posts as LoadableUiState.Content).value.single().content)
+    model.openPage(null, 1)
+    advanceUntilIdle()
+    assertEquals(2, repository.filteredPages.size)
+    model.filterAuthor(null, null)
+    advanceUntilIdle()
+    assertEquals(null, model.state.value!!.filteredAuthorId)
+    assertEquals("page 1", (model.state.value!!.posts as LoadableUiState.Content).value.single().content)
+  }
+
+  @Test fun updatedScoreSurvivesPageNavigation() = runTest(dispatcher) {
+    val model = ThreadContentViewModel(FakeRepository())
+    model.openThread(null, ThreadDestination("123", "Thread"))
+    advanceUntilIdle()
+    model.updatePostScore("p1", -2)
+    model.openPage(null, 2)
+    advanceUntilIdle()
+    model.openPage(null, 1)
+    advanceUntilIdle()
+    assertEquals(-2, (model.state.value!!.posts as LoadableUiState.Content).value.single().score)
+  }
+
+  private class FakeRepository(private val poll: com.yanga.client.api.NgaPoll? = null) : NgaReadOnlyRepository {
     val loadedPages = mutableListOf<Int>()
+    val filteredPages = mutableListOf<Pair<String, Int>>()
+    override suspend fun loadThreadByAuthor(session: LoginSessionData?, tid: String, page: Int, authorId: String): Result<NgaThreadRead> {
+      filteredPages += authorId to page
+      return loadThread(session, tid, page).map { it.copy(posts = it.posts.map { post -> post.copy(content = "filtered $authorId page $page") }) }
+    }
     val loadedPostIds = mutableListOf<String>()
 
     override suspend fun loadHome(): Result<HomeReadData> =
@@ -151,6 +207,7 @@ class ThreadContentViewModelTest {
                 author = "author",
                 subject = "Thread",
                 content = "page $page",
+                poll = poll.takeIf { page == 1 },
                 lou = (page - 1) * 20,
                 postDate = 0L,
               ),
