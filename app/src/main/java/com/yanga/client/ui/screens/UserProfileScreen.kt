@@ -72,7 +72,8 @@ internal fun UserProfileScreen(uid: String, repository: NgaReadOnlyRepository, s
             Icon(Icons.Outlined.Edit, null, tint = MaterialTheme.colorScheme.primary)
             Text("个性签名", style = MaterialTheme.typography.titleMedium)
           }
-          Text(user.signature.ifBlank { "这个用户还没有留下签名" }, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          if (user.signature.isBlank()) Text("这个用户还没有留下签名", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          else SignatureContent(user.signature)
         }
       }, onFailure = { error ->
         ProfileSectionCard {

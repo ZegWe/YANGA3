@@ -1990,3 +1990,28 @@ private fun JumpFloorDialog(
 
 
 
+
+
+/** Signatures use the same BBCode layout and image preview as forum posts. */
+@Composable
+internal fun SignatureContent(content: String, modifier: Modifier = Modifier) {
+  val parts = remember(content) { PostContentParser.parse(content) }
+  val images = remember(parts) { PostContentParser.collectImageUrls(parts) }
+  var imageIndex by remember(content) { mutableStateOf<Int?>(null) }
+  var linkError by remember(content) { mutableStateOf<String?>(null) }
+  val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+  Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    androidx.compose.material3.ProvideTextStyle(MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
+      PostNestedParts(parts, images, onLinkClick = { url ->
+        val resolved = runCatching { java.net.URI("https://bbs.nga.cn/").resolve(url).toString() }.getOrDefault(url)
+        if (resolved.startsWith("https://") || resolved.startsWith("http://")) {
+          linkError = runCatching { uriHandler.openUri(resolved) }.exceptionOrNull()?.let { "无法打开链接" }
+        } else linkError = "暂不支持打开此链接"
+      }, onImageClick = { urls, index -> if (urls.isNotEmpty()) imageIndex = index })
+    }
+    linkError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+  }
+  imageIndex?.let { index ->
+    if (images.isNotEmpty()) ImagePreviewDialog(images, index, onIndexChange = { imageIndex = it }, onDismiss = { imageIndex = null })
+  }
+}

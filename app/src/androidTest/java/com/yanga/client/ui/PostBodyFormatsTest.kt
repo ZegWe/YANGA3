@@ -17,6 +17,20 @@ import org.junit.Test
 class PostBodyFormatsTest {
   @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+  @Test fun signatureUsesFormattedPostRenderer() {
+    compose.setContent { MaterialTheme {
+      SignatureContent("[b]签名加粗[/b][color=red]红色文字[/color]<br/>[collapse=展开签名]隐藏内容[/collapse]")
+    } }
+    compose.onNodeWithText("签名加粗", substring = true).assertExists()
+    compose.onNodeWithText("[b]", substring = true).assertDoesNotExist()
+    val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+    compose.onNodeWithText("签名加粗", substring = true).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
+    val text = layouts.first().layoutInput.text
+    assertTrue(text.spanStyles.any { it.item.fontWeight == androidx.compose.ui.text.font.FontWeight.Bold })
+    compose.onNodeWithText("展开签名").performClick()
+    compose.onNodeWithText("隐藏内容").assertExists()
+  }
+
   @Test fun mergedRewardTableAndHeadingHaveCompactAlignedLayout() {
     compose.setContent {
       MaterialTheme {

@@ -81,6 +81,12 @@ private fun AccountSettingsEditor(repository: NgaReadOnlyRepository, session: Lo
               label = { Text("签名内容") }, supportingText = { Text("支持 NGA 标记，也可以留空清除签名") },
               enabled = !saving, minLines = 4, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
             )
+            if (signature.isNotBlank()) {
+              Text("签名预览", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+              Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
+                SignatureContent(signature, Modifier.padding(16.dp))
+              }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
               Button(enabled = !saving && signature != original, onClick = {
                 saving = true; message = null
