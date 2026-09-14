@@ -58,7 +58,10 @@ class MainScreenTest {
     composeTestRule.setContent { MainScreen(repository = repository) }
     waitUntilTextExists("Retained category")
     composeTestRule.onNodeWithText("Retained category").performClick()
-    composeTestRule.onNode(androidx.compose.ui.test.hasScrollToIndexAction())
+    composeTestRule.onNode(
+      androidx.compose.ui.test.hasScrollToIndexAction() and
+        androidx.compose.ui.test.hasAnyDescendant(androidx.compose.ui.test.hasText("Board 0")),
+    )
       .performScrollToNode(androidx.compose.ui.test.hasText("Board 80"))
     val before = composeTestRule.onNodeWithText("Board 80").getUnclippedBoundsInRoot()
     composeTestRule.onNodeWithText("Board 80").performClick()
