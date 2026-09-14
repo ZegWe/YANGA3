@@ -14,6 +14,9 @@ data class NgaTopicSummary(
   val subForumFid: String? = null,
   val categoryTopicId: String? = null,
   val entryTarget: NgaTopicEntryTarget? = null,
+  val titleStyle: NgaTitleStyle = NgaTitleStyle(),
+  val isLocked: Boolean = false,
+  val hasAttachments: Boolean = false,
 )
 
 data class NgaTopicEntryTarget(

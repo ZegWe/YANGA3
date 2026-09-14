@@ -67,6 +67,7 @@ internal fun SearchScreen(
                 is SearchMode.BoardScoped -> "搜索 ${mode.board.name}"
               },
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis,
           )
         },

@@ -24,6 +24,9 @@ internal fun NgaTopicSummary.toPreview(): TopicPreview {
     authorName = displayName,
     authorId = authorId.orEmpty(),
     navigationTarget = entryTarget.toNavigationTarget(title = title, boardName = boardName),
+    titleStyle = titleStyle,
+    isLocked = isLocked,
+    hasAttachments = hasAttachments,
   )
 }
 

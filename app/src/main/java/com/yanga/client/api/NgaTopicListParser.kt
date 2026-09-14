@@ -36,7 +36,7 @@ object NgaTopicListParser {
       if (name.isBlank()) return@mapNotNull null
       NgaSubBoard(
         id = key,
-        name = name,
+        name = NgaDisplayText.singleLine(name),
         valueId = entry.opt("0")?.toString()?.takeIf { it.isNotBlank() } ?: key.removePrefix("t"),
         // user_option add_to_block_tids uses thread/board ids aligned with sub_forums[3]/[0],
         // not the auxiliary marker in sub_forums[4].
@@ -81,10 +81,13 @@ object NgaTopicListParser {
     return NgaTopicSummary(
       topicId = topicId,
       boardId = topicFid,
-      boardName = stringValue("fname", "forumname", "forum_name", "board_name", "boardName"),
-      title = stringValue("subject", "title"),
+      boardName = NgaDisplayText.singleLine(
+        stringValue("fname", "forumname", "forum_name", "board_name", "boardName")
+          .ifBlank { parent?.stringValue("2").orEmpty() },
+      ),
+      title = NgaDisplayText.singleLine(stringValue("subject", "title")),
       authorId = authorId,
-      authorName = authorName,
+      authorName = authorName?.let(NgaDisplayText::singleLine),
       authorAvatarUrl = NgaAvatarUrls.resolveUserAvatar(avatarRaw, authorId.orEmpty(), memberId),
       replyCount = intValue("replies", "reply_count", "replyCount"),
       lastPostAt = nullableLongValue("lastpost", "last_post_at", "lastPostAt", "postdatetimestamp", "postdate"),
@@ -92,6 +95,13 @@ object NgaTopicListParser {
       subForumFid = subForumFid,
       categoryTopicId = categoryTopicId,
       entryTarget = entryTarget,
+      titleStyle = NgaTitleStyleParser.parse(
+        misc = stringValue("topic_misc"),
+        fontBits = optJSONObject("topic_misc_var")?.opt("1")?.toString()?.toIntOrNull(),
+        titleFont = stringValue("titlefont"),
+      ),
+      isLocked = intValue("type") and 1024 != 0,
+      hasAttachments = intValue("type") and 8192 != 0,
     )
   }
 

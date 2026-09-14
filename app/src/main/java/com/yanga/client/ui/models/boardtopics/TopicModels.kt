@@ -1,5 +1,7 @@
 package com.yanga.client.ui
 
+import com.yanga.client.api.NgaTitleStyle
+
 data class TopicPreview(
   val id: String,
   val title: String,
@@ -9,6 +11,9 @@ data class TopicPreview(
   val authorName: String = "",
   val authorId: String = "",
   val navigationTarget: TopicNavigationTarget = TopicNavigationTarget.Thread,
+  val titleStyle: NgaTitleStyle = NgaTitleStyle(),
+  val isLocked: Boolean = false,
+  val hasAttachments: Boolean = false,
 )
 
 sealed interface TopicNavigationTarget {
