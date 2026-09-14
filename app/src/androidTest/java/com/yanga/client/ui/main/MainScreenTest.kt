@@ -416,7 +416,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("添加账号").assertExists()
     composeTestRule.onAllNodesWithText("主题").assertCountEquals(2)
     composeTestRule.onNodeWithText("回复").assertExists()
-    composeTestRule.onNodeWithText("通知").assertExists()
+    composeTestRule.onAllNodesWithText("通知").assertCountEquals(2)
     composeTestRule.onNodeWithText("账号").assertExists()
     composeTestRule.onNodeWithText("账号设置").assertExists()
     composeTestRule.onNodeWithText("签到").assertExists()
@@ -505,6 +505,8 @@ class MainScreenTest {
 
     composeTestRule.onNodeWithText("Remote favorites").assertExists()
     composeTestRule.onNodeWithText("8").assertExists()
+    composeTestRule.onNodeWithText("Remote notification").assertExists()
+    composeTestRule.onNodeWithText("Remote reply alert").assertExists()
     composeTestRule.onNodeWithText("Remote boards").assertExists()
     composeTestRule.onNodeWithText("5").assertExists()
     composeTestRule.onNodeWithText("账号设置").assertExists()
@@ -566,7 +568,7 @@ class MainScreenTest {
     waitUntilTextExists("远端测试用户")
     composeTestRule.onNodeWithText("UID 4242").assertExists()
     composeTestRule.onAllNodesWithText("主题").assertCountEquals(2)
-    composeTestRule.onNodeWithText("通知").assertExists()
+    composeTestRule.onAllNodesWithText("通知").assertCountEquals(2)
   }
 
   private fun waitUntilTextExists(text: String) {
