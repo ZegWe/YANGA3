@@ -95,6 +95,7 @@ dependencies {
   implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.material.kolor)
   implementation(libs.coil.compose)
+  implementation(libs.coil.gif)
   // Tooling
   debugImplementation(libs.androidx.compose.ui.tooling)
   // Instrumented tests

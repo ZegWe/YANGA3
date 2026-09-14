@@ -31,6 +31,10 @@ class ImageCacheManager(
 ) {
   val imageLoader: ImageLoader =
     ImageLoader.Builder(context)
+      .components {
+        if (android.os.Build.VERSION.SDK_INT >= 28) add(coil.decode.ImageDecoderDecoder.Factory())
+        else add(coil.decode.GifDecoder.Factory())
+      }
       .diskCache {
         DiskCache.Builder()
           .directory(context.cacheDir.resolve(DISK_CACHE_DIR_NAME).toOkioPath())
@@ -57,13 +61,13 @@ class ImageCacheManager(
     )
 
   fun getDecodedBoardIcon(rawUrl: String, sizePx: Int): Bitmap? {
-    val url = ImageUrlResolver.resolve(rawUrl)
+    val url = ImageUrlResolver.resolveForRequest(rawUrl)
     if (url.isBlank()) return null
     return decodedBoardIcons.get(url, sizePx)
   }
 
   fun hasDecodedBoardIcon(rawUrl: String, sizePx: Int): Boolean {
-    val url = ImageUrlResolver.resolve(rawUrl)
+    val url = ImageUrlResolver.resolveForRequest(rawUrl)
     if (url.isBlank()) return false
     return decodedBoardIcons.has(url, sizePx)
   }
@@ -73,7 +77,7 @@ class ImageCacheManager(
   fun hasRawContentCache(rawUrl: String): Boolean = contentImageRawCache.has(rawUrl)
 
   fun isInMemory(rawUrl: String): Boolean {
-    val url = ImageUrlResolver.resolve(rawUrl)
+    val url = ImageUrlResolver.resolveForRequest(rawUrl)
     if (url.isBlank()) return false
     return imageLoader.memoryCache?.get(MemoryCache.Key(url)) != null ||
       decodedBoardIcons.has(url, BOARD_ICON_PREFETCH_PX)
@@ -105,7 +109,7 @@ class ImageCacheManager(
     crossfade: Boolean = true,
     sizePx: Int? = null,
   ): ImageRequest {
-    val url = ImageUrlResolver.resolve(rawUrl)
+    val url = ImageUrlResolver.resolveForRequest(rawUrl)
     return ImageRequest.Builder(context)
       .data(url)
       .apply { if (sizePx != null) size(sizePx) }
@@ -133,10 +137,11 @@ class ImageCacheManager(
     sizePx: Int? = null,
     data: Any? = null,
   ): ImageRequest {
-    val url = ImageUrlResolver.resolve(rawUrl)
+    val url = ImageUrlResolver.resolveForRequest(rawUrl)
     val model = data ?: getRawContentFile(url) ?: url
     return ImageRequest.Builder(context)
       .data(model)
+      .apply { if (runCatching { java.net.URI(url).host?.endsWith(".nga.cn") }.getOrNull() == true) setHeader("Referer", "https://bbs.nga.cn/") }
       .apply { if (sizePx != null) size(sizePx) }
       .memoryCacheKey(url)
       .memoryCachePolicy(CachePolicy.ENABLED)
@@ -170,7 +175,7 @@ class ImageCacheManager(
       .build()
 
   fun prefetchBoardIcon(context: Context, rawUrl: String) {
-    val url = ImageUrlResolver.resolve(rawUrl)
+    val url = ImageUrlResolver.resolveForRequest(rawUrl)
     if (url.isBlank()) return
     getCachedFile(url)?.let { file -> index.put(url, file.absolutePath) }
     imageLoader.enqueue(
@@ -187,7 +192,7 @@ class ImageCacheManager(
     rawUrls: Collection<String>,
     maxConcurrent: Int = PREFETCH_MAX_CONCURRENT,
   ) {
-    val urls = rawUrls.map(ImageUrlResolver::resolve).filter { it.isNotBlank() }.distinct()
+    val urls = rawUrls.map(ImageUrlResolver::resolveForRequest).filter { it.isNotBlank() }.distinct()
     if (urls.isEmpty()) return
     coroutineScope {
       val semaphore = Semaphore(maxConcurrent.coerceIn(1, urls.size))
@@ -224,7 +229,7 @@ class ImageCacheManager(
   ) {
     val urls =
       rawUrls
-        .map(ImageUrlResolver::resolve)
+        .map(ImageUrlResolver::resolveForRequest)
         .filter { it.isNotBlank() }
         .distinct()
         .filter { url -> !isInMemory(url) && hasDiskCache(url) }
@@ -255,7 +260,7 @@ class ImageCacheManager(
   }
 
   fun getCachedFile(rawUrl: String): File? {
-    val url = ImageUrlResolver.resolve(rawUrl)
+    val url = ImageUrlResolver.resolveForRequest(rawUrl)
     if (url.isBlank()) return null
 
     index.getByUrl(url)?.let { path ->
@@ -284,7 +289,7 @@ class ImageCacheManager(
   fun cacheDirectory(): File? = imageLoader.diskCache?.directory?.toFile()
 
   private fun recordCachedFile(request: ImageRequest, diskCacheKey: String?) {
-    val url = (request.data as? String)?.let(ImageUrlResolver::resolve).orEmpty()
+    val url = (request.data as? String)?.let(ImageUrlResolver::resolveForRequest).orEmpty()
     val key = diskCacheKey ?: url
     if (key.isBlank()) return
     getCachedFile(url.ifBlank { key })?.let { file -> index.put(url.ifBlank { key }, file.absolutePath) }
@@ -295,7 +300,7 @@ class ImageCacheManager(
     rawUrl: String,
     sizePx: Int,
   ): Bitmap? {
-    val url = ImageUrlResolver.resolve(rawUrl)
+    val url = ImageUrlResolver.resolveForRequest(rawUrl)
     if (url.isBlank()) return null
     decodedBoardIcons.get(url, sizePx)?.let { return it }
     val result =

@@ -17,7 +17,7 @@ internal class ContentImageRawCache(
   private val index = ImageCacheIndex(indexFile)
 
   fun get(rawUrl: String): File? {
-    val url = ImageUrlResolver.resolve(rawUrl)
+    val url = ImageUrlResolver.resolveForRequest(rawUrl)
     if (url.isBlank()) return null
     index.getByUrl(url)?.let { path ->
       val file = File(path)
@@ -29,7 +29,7 @@ internal class ContentImageRawCache(
   fun has(rawUrl: String): Boolean = get(rawUrl) != null
 
   fun store(rawUrl: String, bytes: ByteArray): File? {
-    val url = ImageUrlResolver.resolve(rawUrl)
+    val url = ImageUrlResolver.resolveForRequest(rawUrl)
     if (url.isBlank() || bytes.isEmpty()) return null
     val file = fileFor(url)
     file.parentFile?.mkdirs()
@@ -39,7 +39,7 @@ internal class ContentImageRawCache(
   }
 
   fun download(rawUrl: String): File? {
-    val url = ImageUrlResolver.resolve(rawUrl)
+    val url = ImageUrlResolver.resolveForRequest(rawUrl)
     if (url.isBlank()) return null
     get(url)?.let { return it }
     return runCatching {
@@ -48,6 +48,7 @@ internal class ContentImageRawCache(
         readTimeout = READ_TIMEOUT_MS
         instanceFollowRedirects = true
         setRequestProperty("User-Agent", userAgent)
+        if (URL(url).host.endsWith(".nga.cn")) setRequestProperty("Referer", "https://bbs.nga.cn/")
       }
       try {
         if (connection.responseCode !in SUCCESS_STATUS_RANGE) {

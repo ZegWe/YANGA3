@@ -83,7 +83,7 @@ fun CachedAsyncImage(
         onError = onError,
       )
     ImageCacheKind.Content -> {
-      val resolvedUrl = remember(url) { ImageUrlResolver.resolve(url) }
+      val resolvedUrl = remember(url) { ImageUrlResolver.resolveForRequest(url) }
       var modelData by remember(resolvedUrl) {
         mutableStateOf<Any>(cacheManager.getRawContentFile(url) ?: resolvedUrl)
       }

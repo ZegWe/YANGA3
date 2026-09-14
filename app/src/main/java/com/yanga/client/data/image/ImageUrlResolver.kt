@@ -3,6 +3,24 @@ package com.yanga.client.data.image
 import com.yanga.client.api.NgaStaticUrls
 
 object ImageUrlResolver {
+  /** Resolve persisted legacy URLs at the request boundary, including signatures. */
+  fun resolveForRequest(raw: String): String {
+    val value = raw.trim()
+    Regex("""^\.u/(\d+)(.*)$""").matchEntire(value)?.let { match ->
+      val uid = match.groupValues[1].toLongOrNull() ?: return value
+      // NGA commonui.uid2path2: six base-36 digits paired outside-in.
+      val shard = uid.toString(36).padStart(6, '0').takeLast(6)
+      return "https://user-file.nga.cn/${shard[0]}${shard[5]}/${shard[1]}${shard[4]}/${shard[2]}${shard[3]}/${match.groupValues[1]}${match.groupValues[2]}"
+    }
+    val resolved = if (value.startsWith("./")) "https://img.nga.cn/attachments/${value.removePrefix("./")}" else resolve(value)
+    val uri = runCatching { java.net.URI(resolved) }.getOrNull() ?: return resolved
+    val host = uri.host?.lowercase().orEmpty()
+    if (Regex("""img\d?\.nga\.178\.com""").matches(host) && uri.rawPath.orEmpty().startsWith("/attachments/")) {
+      return "https://img.nga.cn" + uri.rawPath + (uri.rawQuery?.let { "?$it" } ?: "") + (uri.rawFragment?.let { "#$it" } ?: "")
+    }
+    return resolved
+  }
+
   fun resolve(raw: String, attachmentBase: String?): String {
     val base = attachmentBase?.trim()?.trimEnd('/')?.takeIf { it.isNotBlank() }
       ?: return resolve(raw)

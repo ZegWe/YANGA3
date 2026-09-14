@@ -5,6 +5,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ImageUrlResolverTest {
+  @Test fun requestsMigrateOldAttachmentHostsAndRelativePaths() {
+    val path = "mon_202307/10/-5i9b7Q2s-7ptqXpZ6zT3cSb2-7u.gif"
+    for (raw in listOf("./$path", "/$path", path, "https://img.nga.178.com/attachments/$path", "http://img6.nga.178.com/attachments/$path")) {
+      assertEquals("https://img.nga.cn/attachments/$path", ImageUrlResolver.resolveForRequest(raw))
+    }
+    assertEquals("https://example.com/image.gif", ImageUrlResolver.resolveForRequest("https://example.com/image.gif"))
+    assertEquals("https://img.nga.cn/attachments/a.png?v=2#original", ImageUrlResolver.resolveForRequest("https://img.nga.178.com/attachments/a.png?v=2#original"))
+  }
+  @Test fun requestsExpandUserFileShards() {
+    assertEquals("https://user-file.nga.cn/01/00/00/1Qabc.png", ImageUrlResolver.resolveForRequest(".u/1Qabc.png"))
+  }
+
   @Test
   fun resolveMigratesLegacyEmoticons() {
     for (scheme in listOf("https:", "http:", "")) {
