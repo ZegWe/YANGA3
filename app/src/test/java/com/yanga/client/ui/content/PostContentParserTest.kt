@@ -6,6 +6,31 @@ import org.junit.Test
 
 class PostContentParserTest {
   @Test
+  fun parseNoimgWithLegacyRelativePathAndSurroundingText() {
+    val parts = PostContentParser.parse("before [noimg]./-7Qbvwn-dj7mK2bT1kShs-13i.jpg[/noimg] after")
+    assertEquals(
+      listOf(
+        PostContentPart.Text("before"),
+        PostContentPart.Text("【原帖图片不可用】"),
+        PostContentPart.Text("after"),
+      ),
+      parts,
+    )
+  }
+
+  @Test
+  fun unavailableImagesAreExcludedFromGalleryAndPrefetch() {
+    val parts = PostContentParser.parse(
+      "[quote][NOIMG] https://example.com/a.jpg [/NOIMG][img]./mon_b.jpg[/img][/quote]",
+    )
+    assertEquals(
+      listOf("https://img.nga.178.com/attachments/mon_b.jpg"),
+      PostContentParser.collectImageUrls(parts),
+    )
+    assertEquals(2, (parts.single() as PostContentPart.Quote).parts.size)
+  }
+
+  @Test
   fun parseExtractsBbCodeImage() {
     val parts = PostContentParser.parse("hello [img]./mon_a.jpg[/img] world")
 

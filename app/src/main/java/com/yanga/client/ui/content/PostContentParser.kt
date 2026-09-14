@@ -144,6 +144,16 @@ private class BbContentParser(private val source: String, private val depth: Int
           flushText()
           parseImageTag()?.let { parts += it }
         }
+        startsWithIgnoreCase("[noimg]") -> {
+          flushText()
+          val close = indexOfIgnoreCase("[/noimg]", pos + "[noimg]".length)
+          if (close >= 0) {
+            pos = close + "[/noimg]".length
+            parts += PostContentPart.Text("【原帖图片不可用】")
+          } else {
+            pos += "[noimg]".length
+          }
+        }
         startsWith("[s:") -> {
           flushText()
           parseEmoticon()?.let { parts += it }
