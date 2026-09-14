@@ -16,7 +16,7 @@ class NgaAvatarUrlsTest {
   @Test
   fun resolveAbsoluteAvatarUrl() {
     assertEquals(
-      "https://img4.nga.178.com/ngabbs/post/smile/ac1.png",
+      "https://img4.nga.cn/ngabbs/post/smile/ac1.png",
       NgaAvatarUrls.resolve("https://img4.nga.178.com/ngabbs/post/smile/ac1.png"),
     )
   }
