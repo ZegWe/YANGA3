@@ -23,6 +23,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.OpenInBrowser
@@ -145,6 +148,8 @@ internal fun ProfileScreen(
 ) {
   var showEndpointDialog by remember { mutableStateOf(false) }
   var showAccountSheet by remember { mutableStateOf(false) }
+  var showCheckInDialog by remember(loginSession?.uid) { mutableStateOf(false) }
+  var showNotifications by remember { mutableStateOf(false) }
 
   Column(
     modifier = modifier
@@ -152,13 +157,15 @@ internal fun ProfileScreen(
       .verticalScroll(rememberScrollState()),
     verticalArrangement = Arrangement.spacedBy(16.dp),
   ) {
-    PageHeader(
-      title = "我的",
-      subtitle = "账户设置与工具",
-      modifier = Modifier.padding(horizontal = ProfileHorizontalPadding),
-    )
+    Row(Modifier.padding(horizontal = ProfileHorizontalPadding), verticalAlignment = Alignment.CenterVertically) {
+      PageHeader(title = "我的", subtitle = "账户设置与工具", modifier = Modifier.weight(1f))
+      IconButton(onClick = onProfileRefresh) { Icon(Icons.Outlined.Refresh, contentDescription = "刷新资料与通知") }
+    }
     ProfileAccountCard(
       session = state.session,
+      onUserClick = onUserClick,
+      checkInRunning = state.checkInRunning,
+      onCheckIn = { showCheckInDialog = true; onCheckIn() },
       onLoginClick = {
         if (state.session is LoadableUiState.Content) {
           showAccountSheet = true
@@ -168,23 +175,23 @@ internal fun ProfileScreen(
       },
       modifier = Modifier.padding(horizontal = ProfileHorizontalPadding),
     )
-    TextButton(onClick = onUserClick, modifier = Modifier.padding(horizontal = ProfileHorizontalPadding)) { Text("查看用户页面") }
     ProfileCounterGrid(
       counters = state.counters,
+      onClick = { icon ->
+        when (icon) {
+          "topic" -> onPersonalTopics("Topics")
+          "reply" -> onPersonalTopics("Replies")
+          "notification" -> showNotifications = true
+        }
+      },
       modifier = Modifier.padding(horizontal = ProfileHorizontalPadding),
     )
-    Row(modifier = Modifier.padding(horizontal = ProfileHorizontalPadding)) {
-      TextButton(onClick = { onPersonalTopics("Topics") }) { Text("我的主题") }
-      TextButton(onClick = { onPersonalTopics("Replies") }) { Text("我的回复") }
-      TextButton(onClick = { onPersonalTopics("Favorites") }) { Text("收藏") }
-    }
-    TextButton(onClick = onProfileRefresh, modifier = Modifier.padding(horizontal = ProfileHorizontalPadding)) { Text("刷新资料与通知") }
-    ProfileNotifications(state.notifications)
     SectionHeader(
       title = "账号",
       modifier = Modifier.padding(horizontal = ProfileHorizontalPadding),
     )
-    AccountRows(onAccountSettings = onAccountSettings, state = state, onCheckIn = { if (loginSession == null) onLoginClick() else onCheckIn() })
+    SettingsRow(row = SettingsPreview("account", "账号设置", "签名、头像与账号安全"), onClick = onAccountSettings)
+    SettingsRow(row = SettingsPreview("check_in", "收藏", "查看收藏的主题与回复"), onClick = { onPersonalTopics("Favorites") })
     SectionHeader(
       title = "设置",
       modifier = Modifier.padding(horizontal = ProfileHorizontalPadding),
@@ -220,6 +227,29 @@ internal fun ProfileScreen(
         Text(text = "退出登录")
       }
     }
+  }
+
+  if (showCheckInDialog) {
+    AlertDialog(
+      onDismissRequest = { showCheckInDialog = false },
+      icon = { Icon(Icons.Outlined.StarBorder, contentDescription = null) },
+      title = { Text("每日签到") },
+      text = {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+          if (state.checkInRunning) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+          Text(state.checkInMessage ?: "正在签到…")
+        }
+      },
+      confirmButton = { TextButton(onClick = { showCheckInDialog = false }) { Text("关闭") } },
+    )
+  }
+  if (showNotifications) {
+    AlertDialog(
+      onDismissRequest = { showNotifications = false },
+      title = { Text("通知") },
+      text = { Column(Modifier.verticalScroll(rememberScrollState())) { ProfileNotifications(state.notifications) } },
+      confirmButton = { TextButton(onClick = { showNotifications = false }) { Text("关闭") } },
+    )
   }
 
   if (showEndpointDialog) {
@@ -575,6 +605,9 @@ private fun MessageThreadRow(message: MessagePreview, modifier: Modifier = Modif
 private fun ProfileAccountCard(
   session: LoadableUiState<LoginSessionData>,
   onLoginClick: () -> Unit,
+  onUserClick: () -> Unit,
+  onCheckIn: () -> Unit,
+  checkInRunning: Boolean,
   modifier: Modifier = Modifier,
 ) {
   TonalCard(modifier = modifier) {
@@ -588,12 +621,13 @@ private fun ProfileAccountCard(
         UserAvatar(
           name = session.value.username,
           avatarUrl = session.value.avatarUrl,
+          modifier = Modifier.clickable(onClick = onUserClick).semantics { contentDescription = "查看用户资料" },
           size = 42.dp,
         )
       } else {
         RoundMarker(text = markerText)
       }
-      Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      Column(modifier = Modifier.weight(1f).clickable(enabled = session is LoadableUiState.Content, onClick = onUserClick), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         when (session) {
           LoadableUiState.Loading -> {
             Text(text = "Loading profile", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -638,13 +672,18 @@ private fun ProfileAccountCard(
         }
       }
       when (session) {
-        is LoadableUiState.Content ->
+        is LoadableUiState.Content -> Row(verticalAlignment = Alignment.CenterVertically) {
+          FilledTonalIconButton(onClick = onCheckIn, enabled = !checkInRunning) {
+            if (checkInRunning) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            else Icon(Icons.Outlined.StarBorder, contentDescription = "签到")
+          }
           IconButton(onClick = onLoginClick) {
             Icon(
               imageVector = Icons.Outlined.SwapHoriz,
               contentDescription = "切换账号",
             )
           }
+        }
         LoadableUiState.LoginRequired ->
           Button(onClick = onLoginClick) {
             Text(text = "登录")
@@ -660,19 +699,23 @@ private fun ProfileAccountCard(
 @Composable
 private fun ProfileCounterGrid(
   counters: LoadableUiState<List<SettingsPreview>>,
+  onClick: (String) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   when (counters) {
-    LoadableUiState.Loading -> ProfileCounterRow(counters = defaultProfileCounters(), modifier = modifier)
-    is LoadableUiState.Content -> ProfileCounterRow(counters = counters.value.ifEmpty { defaultProfileCounters() }, modifier = modifier)
-    is LoadableUiState.Empty -> ProfileCounterRow(counters = defaultProfileCounters(), modifier = modifier)
-    is LoadableUiState.Error -> LoadableStateText(text = counters.message, modifier = modifier, isError = true)
-    LoadableUiState.LoginRequired -> ProfileCounterRow(counters = defaultProfileCounters(), modifier = modifier)
+    LoadableUiState.Loading -> ProfileCounterRow(onClick = onClick, counters = defaultProfileCounters(), modifier = modifier)
+    is LoadableUiState.Content -> ProfileCounterRow(onClick = onClick, counters = counters.value.ifEmpty { defaultProfileCounters() }, modifier = modifier)
+    is LoadableUiState.Empty -> ProfileCounterRow(onClick = onClick, counters = defaultProfileCounters(), modifier = modifier)
+    is LoadableUiState.Error -> Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      ProfileCounterRow(onClick = onClick, counters = defaultProfileCounters())
+      LoadableStateText(text = counters.message, isError = true)
+    }
+    LoadableUiState.LoginRequired -> ProfileCounterRow(onClick = onClick, counters = defaultProfileCounters(), modifier = modifier)
   }
 }
 
 @Composable
-private fun ProfileCounterRow(counters: List<SettingsPreview>, modifier: Modifier = Modifier) {
+private fun ProfileCounterRow(counters: List<SettingsPreview>, onClick: (String) -> Unit, modifier: Modifier = Modifier) {
   Row(
     modifier = modifier.fillMaxWidth(),
     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -681,7 +724,7 @@ private fun ProfileCounterRow(counters: List<SettingsPreview>, modifier: Modifie
       ProfileCounter(
         label = counter.title,
         value = counter.badge ?: counter.subtitle,
-        modifier = Modifier.weight(1f),
+        modifier = Modifier.weight(1f).clickable { onClick(counter.icon) },
       )
     }
   }
@@ -715,20 +758,6 @@ private fun ProfileCounter(label: String, value: String, modifier: Modifier = Mo
         overflow = TextOverflow.Ellipsis,
       )
     }
-  }
-}
-
-@Composable
-private fun AccountRows(onAccountSettings: () -> Unit, state: ProfileUiState, onCheckIn: () -> Unit, modifier: Modifier = Modifier) {
-  Column(modifier = modifier.fillMaxWidth()) {
-    SettingsRow(
-      row = SettingsPreview("account", "账号设置", "签名编辑与论坛个人中心"),
-      onClick = onAccountSettings,
-    )
-    SettingsRow(
-      row = SettingsPreview("check_in", "签到", state.checkInMessage ?: "点击进行每日签到"),
-      onClick = { if (!state.checkInRunning) onCheckIn() },
-    )
   }
 }
 
@@ -839,7 +868,6 @@ private fun String.toSettingsImageVector(): ImageVector =
 @Composable
 private fun ProfileNotifications(notifications: LoadableUiState<List<SettingsPreview>>) {
   Column(Modifier.padding(horizontal = ProfileHorizontalPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    Text("通知", style = MaterialTheme.typography.titleMedium)
     when (notifications) {
       is LoadableUiState.Content -> if (notifications.value.isEmpty()) Text("暂无通知") else notifications.value.forEach { notice ->
         Text(notice.title, style = MaterialTheme.typography.titleSmall)

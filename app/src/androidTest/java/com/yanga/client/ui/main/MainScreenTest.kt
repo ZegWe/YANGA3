@@ -39,6 +39,34 @@ class MainScreenTest {
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
   @Test
+  fun profileCardsOpenDestinationsAndCheckInShowsDialog() {
+    var opened = ""
+    var userOpened = false
+    var checks = 0
+    composeTestRule.setContent {
+      ProfileScreen(
+        loginSession = LoginSessionUiState("user", "42", "test"),
+        state = ProfileUiState(session = LoadableUiState.Content(LoginSessionData(username = "user", uid = "42", cookie = "test")), checkInMessage = "今天已经签到"),
+        onLoginClick = {}, onLogout = {}, onUserClick = { userOpened = true },
+        onPersonalTopics = { opened = it }, onCheckIn = { checks++ },
+      )
+    }
+    composeTestRule.onAllNodesWithText("查看用户页面").assertCountEquals(0)
+    composeTestRule.onAllNodesWithText("我的主题").assertCountEquals(0)
+    composeTestRule.onNodeWithContentDescription("查看用户资料").performClick()
+    composeTestRule.runOnIdle { assertTrue(userOpened) }
+    composeTestRule.onAllNodesWithText("主题")[0].performClick()
+    composeTestRule.runOnIdle { org.junit.Assert.assertEquals("Topics", opened) }
+    composeTestRule.onNodeWithText("回复").performClick()
+    composeTestRule.runOnIdle { org.junit.Assert.assertEquals("Replies", opened) }
+    composeTestRule.onAllNodesWithText("今天已经签到").assertCountEquals(0)
+    composeTestRule.onNodeWithContentDescription("签到").performClick()
+    composeTestRule.onNodeWithText("每日签到").assertExists()
+    composeTestRule.onNodeWithText("今天已经签到").assertExists()
+    composeTestRule.runOnIdle { org.junit.Assert.assertEquals(1, checks) }
+  }
+
+  @Test
   fun boardNavigationAndTabSwitchPreserveCategoryAndScrollPosition() {
     var boardLoads = 0
     val repository = object : NgaReadOnlyRepository by fakeRepository() {
@@ -316,7 +344,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("设置端点").assertExists()
     composeTestRule.onNodeWithText("账号").assertExists()
     composeTestRule.onNodeWithText("账号设置").assertExists()
-    composeTestRule.onNodeWithText("签到").assertExists()
+    composeTestRule.onAllNodesWithText("点击进行每日签到").assertCountEquals(0)
   }
 
   @Test
@@ -416,10 +444,10 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("添加账号").assertExists()
     composeTestRule.onAllNodesWithText("主题").assertCountEquals(2)
     composeTestRule.onNodeWithText("回复").assertExists()
-    composeTestRule.onAllNodesWithText("通知").assertCountEquals(2)
+    composeTestRule.onNodeWithText("通知").assertExists()
     composeTestRule.onNodeWithText("账号").assertExists()
     composeTestRule.onNodeWithText("账号设置").assertExists()
-    composeTestRule.onNodeWithText("签到").assertExists()
+    composeTestRule.onAllNodesWithText("点击进行每日签到").assertCountEquals(0)
     composeTestRule.onNodeWithText("设置端点").assertExists()
     composeTestRule.onNodeWithText("退出登录").assertExists()
     composeTestRule.onAllNodesWithText("Switch account").assertCountEquals(0)
@@ -505,8 +533,6 @@ class MainScreenTest {
 
     composeTestRule.onNodeWithText("Remote favorites").assertExists()
     composeTestRule.onNodeWithText("8").assertExists()
-    composeTestRule.onNodeWithText("Remote notification").assertExists()
-    composeTestRule.onNodeWithText("Remote reply alert").assertExists()
     composeTestRule.onNodeWithText("Remote boards").assertExists()
     composeTestRule.onNodeWithText("5").assertExists()
     composeTestRule.onNodeWithText("账号设置").assertExists()
@@ -568,7 +594,7 @@ class MainScreenTest {
     waitUntilTextExists("远端测试用户")
     composeTestRule.onNodeWithText("UID 4242").assertExists()
     composeTestRule.onAllNodesWithText("主题").assertCountEquals(2)
-    composeTestRule.onAllNodesWithText("通知").assertCountEquals(2)
+    composeTestRule.onNodeWithText("通知").assertExists()
   }
 
   private fun waitUntilTextExists(text: String) {
