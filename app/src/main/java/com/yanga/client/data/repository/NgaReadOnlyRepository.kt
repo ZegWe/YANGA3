@@ -28,6 +28,8 @@ import java.util.concurrent.TimeUnit
 class LoginRequiredException : IllegalStateException("Login is required for this read operation")
 
 interface NgaReadOnlyRepository {
+  suspend fun loadUser(session: LoginSessionData?, uid: String): Result<com.yanga.client.api.NgaUserProfile> = Result.failure(UnsupportedOperationException())
+
   suspend fun checkIn(session: LoginSessionData?): Result<String> = Result.failure(UnsupportedOperationException())
 
   suspend fun loadHome(): Result<HomeReadData>
@@ -102,6 +104,11 @@ class DefaultNgaReadOnlyRepository(
   }
 
   fun currentBaseUrl(): String = baseUrl
+
+  override suspend fun loadUser(session: LoginSessionData?, uid: String): Result<com.yanga.client.api.NgaUserProfile> = withContext(Dispatchers.IO) {
+    if (uid.toLongOrNull()?.let { it > 0 } != true) return@withContext Result.failure(IllegalArgumentException("用户 ID 无效"))
+    execute(api(session).profile(mapOf("uid" to uid)), com.yanga.client.api.NgaUserProfileParser::parse)
+  }
 
   override suspend fun checkIn(session: LoginSessionData?): Result<String> = withContext(Dispatchers.IO) {
     val login = session.requireLogin() ?: return@withContext Result.failure(LoginRequiredException())

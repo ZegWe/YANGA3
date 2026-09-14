@@ -61,6 +61,7 @@ fun ThreadRoute(
     onBack = onBack,
     onReplyClick = { openReply(null) },
     onReplyPost = { openReply(it) },
+    onUserClick = { navigate(MainDestinationKey.User(it)) },
     onFilterAuthor = { threadContentViewModel.filterAuthor(loginSession?.toData(), it) },
     onReact = if (loginSession == null) null else { post, support ->
       repository.reactToPost(loginSession.toData(), destination.id, post.pid.ifBlank { "0" }, support).fold(

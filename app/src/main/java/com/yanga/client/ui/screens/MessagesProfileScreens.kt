@@ -137,6 +137,7 @@ internal fun ProfileScreen(
   onThemeSettingsClick: () -> Unit = {},
   onAboutClick: () -> Unit = {},
   onCheckIn: () -> Unit = {},
+  onUserClick: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   var showEndpointDialog by remember { mutableStateOf(false) }
@@ -164,6 +165,7 @@ internal fun ProfileScreen(
       },
       modifier = Modifier.padding(horizontal = ProfileHorizontalPadding),
     )
+    TextButton(onClick = onUserClick, modifier = Modifier.padding(horizontal = ProfileHorizontalPadding)) { Text("查看用户页面") }
     ProfileCounterGrid(
       counters = state.counters,
       modifier = Modifier.padding(horizontal = ProfileHorizontalPadding),

@@ -390,6 +390,7 @@ internal fun ThreadReadingScreen(
   onFloorJump: (Int) -> Unit = {},
   onReplyClick: () -> Unit = {},
   onReplyPost: (PostPreview) -> Unit = {},
+  onUserClick: (String) -> Unit = {},
   onFilterAuthor: (PostPreview?) -> Unit = {},
   onReact: (suspend (PostPreview, Boolean) -> Result<Int?>)? = null,
   onLinkClick: (String) -> Unit = {},
@@ -514,6 +515,7 @@ internal fun ThreadReadingScreen(
           onVote = onVote,
           onOpenWeb = onOpenInBrowser,
           onReplyPost = onReplyPost,
+          onUserClick = onUserClick,
           onFilterAuthor = { onFilterAuthor(it) },
           onReact = onReact,
           onFabVisibilityChange = { fabGroupVisible = it },
@@ -586,6 +588,7 @@ private fun ThreadPageContent(
   onVote: PollSubmit?,
   onOpenWeb: () -> Unit,
   onReplyPost: (PostPreview) -> Unit,
+  onUserClick: (String) -> Unit,
   onFilterAuthor: (PostPreview) -> Unit,
   onReact: (suspend (PostPreview, Boolean) -> Result<Int?>)?,
   onFabVisibilityChange: (Boolean) -> Unit,
@@ -653,6 +656,7 @@ private fun ThreadPageContent(
               onVote = onVote,
               onOpenWeb = onOpenWeb,
               onReplyPost = onReplyPost,
+              onUserClick = onUserClick,
               onFilterAuthor = onFilterAuthor,
               onReact = onReact,
             )
@@ -735,6 +739,7 @@ private fun PostItem(
   onVote: PollSubmit? = null,
   onOpenWeb: () -> Unit = {},
   onReplyPost: (PostPreview) -> Unit = {},
+  onUserClick: (String) -> Unit = {},
   onFilterAuthor: (PostPreview) -> Unit = {},
   onReact: (suspend (PostPreview, Boolean) -> Result<Int?>)? = null,
 ) {
@@ -775,7 +780,7 @@ private fun PostItem(
         UserAvatar(
           name = post.author,
           avatarUrl = post.authorAvatarUrl,
-          modifier = Modifier.size(40.dp),
+          modifier = Modifier.size(40.dp).clickable(enabled = post.authorId.toLongOrNull()?.let { it > 0 } == true) { onUserClick(post.authorId) },
           size = 40.dp,
         )
         Column(modifier = Modifier.weight(1f)) {

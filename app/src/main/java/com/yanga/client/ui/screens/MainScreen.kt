@@ -141,6 +141,7 @@ fun MainScreen(
             onThemeSettingsClick = { navigate(MainDestinationKey.ThemeSettings) },
             onAboutClick = { navigate(MainDestinationKey.About) },
             onCheckIn = { profileViewModel.checkIn(sessionData) },
+            onUserClick = { sessionData?.let { navigate(MainDestinationKey.User(it.uid)) } ?: onLoginClick() },
             homeContent = {
               BoardListRoute(
                 loginSession = loginSession,
@@ -177,6 +178,7 @@ fun MainScreen(
           )
         }
 
+        entry<MainDestinationKey.User> { key -> UserProfileScreen(key.uid, repository, sessionData, onBack) }
         entry<MainDestinationKey.About> { AboutScreen(onBack = onBack) }
         entry<MainDestinationKey.ThemeSettings> {
           ThemeSettingsScreen(
@@ -213,6 +215,7 @@ private fun MainRootScaffold(
   onThemeSettingsClick: () -> Unit,
   onAboutClick: () -> Unit,
   onCheckIn: () -> Unit,
+  onUserClick: () -> Unit,
   homeContent: @Composable () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
@@ -235,6 +238,7 @@ private fun MainRootScaffold(
         onThemeSettingsClick = onThemeSettingsClick,
         onAboutClick = onAboutClick,
         onCheckIn = onCheckIn,
+        onUserClick = onUserClick,
         homeContent = homeContent,
         paddingValues = paddingValues,
       )
@@ -254,6 +258,7 @@ private fun MainTabContent(
   onThemeSettingsClick: () -> Unit,
   onAboutClick: () -> Unit,
   onCheckIn: () -> Unit,
+  onUserClick: () -> Unit,
   homeContent: @Composable () -> Unit,
   paddingValues: PaddingValues,
 ) {
@@ -297,6 +302,7 @@ private fun MainTabContent(
         onThemeSettingsClick = onThemeSettingsClick,
         onAboutClick = onAboutClick,
         onCheckIn = onCheckIn,
+        onUserClick = onUserClick,
         modifier = profileContentModifier,
       )
   }
