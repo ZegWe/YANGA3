@@ -11,6 +11,8 @@ data class SettingsPreview(
 )
 
 data class ProfileUiState(
+  val checkInRunning: Boolean = false,
+  val checkInMessage: String? = null,
   val session: LoadableUiState<LoginSessionData> = LoadableUiState.LoginRequired,
   val counters: LoadableUiState<List<SettingsPreview>> = LoadableUiState.LoginRequired,
   val notifications: LoadableUiState<List<SettingsPreview>> = LoadableUiState.LoginRequired,

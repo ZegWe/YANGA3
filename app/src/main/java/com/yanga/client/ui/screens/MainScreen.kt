@@ -140,6 +140,7 @@ fun MainScreen(
             onEndpointChange = { profileViewModel.setEndpoint(it) },
             onThemeSettingsClick = { navigate(MainDestinationKey.ThemeSettings) },
             onAboutClick = { navigate(MainDestinationKey.About) },
+            onCheckIn = { profileViewModel.checkIn(sessionData) },
             homeContent = {
               BoardListRoute(
                 loginSession = loginSession,
@@ -211,6 +212,7 @@ private fun MainRootScaffold(
   onEndpointChange: (String) -> Unit,
   onThemeSettingsClick: () -> Unit,
   onAboutClick: () -> Unit,
+  onCheckIn: () -> Unit,
   homeContent: @Composable () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
@@ -232,6 +234,7 @@ private fun MainRootScaffold(
         onEndpointChange = onEndpointChange,
         onThemeSettingsClick = onThemeSettingsClick,
         onAboutClick = onAboutClick,
+        onCheckIn = onCheckIn,
         homeContent = homeContent,
         paddingValues = paddingValues,
       )
@@ -250,6 +253,7 @@ private fun MainTabContent(
   onEndpointChange: (String) -> Unit,
   onThemeSettingsClick: () -> Unit,
   onAboutClick: () -> Unit,
+  onCheckIn: () -> Unit,
   homeContent: @Composable () -> Unit,
   paddingValues: PaddingValues,
 ) {
@@ -292,6 +296,7 @@ private fun MainTabContent(
         onEndpointChange = onEndpointChange,
         onThemeSettingsClick = onThemeSettingsClick,
         onAboutClick = onAboutClick,
+        onCheckIn = onCheckIn,
         modifier = profileContentModifier,
       )
   }

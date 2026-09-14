@@ -17,11 +17,26 @@ class ProfileViewModel(
   private val _state = MutableStateFlow(ProfileUiState(forumEndpoint = NgaDomains.BBS_NGA_CN))
   val state: StateFlow<ProfileUiState> = _state.asStateFlow()
 
+  private var generation = 0
+
+  fun checkIn(session: LoginSessionData?) {
+    if (session == null || _state.value.checkInRunning) return
+    val requestGeneration = generation
+    _state.update { it.copy(checkInRunning = true, checkInMessage = "签到中…") }
+    viewModelScope.launch {
+      val result = repository.checkIn(session)
+      if (requestGeneration != generation) return@launch
+      _state.update { it.copy(checkInRunning = false, checkInMessage = result.getOrElse { error -> error.message ?: "签到失败，请重试" }) }
+    }
+  }
+
   fun setEndpoint(endpoint: String) {
     _state.update { it.copy(forumEndpoint = endpoint) }
   }
 
   fun refresh(session: LoginSessionData?) {
+    val requestGeneration = ++generation
+    _state.update { it.copy(checkInRunning = false, checkInMessage = null) }
     if (session == null) {
       _state.value =
         ProfileUiState(
@@ -41,6 +56,7 @@ class ProfileViewModel(
         )
       }
       val result = repository.loadProfile(session)
+      if (requestGeneration != generation) return@launch
       _state.update { current ->
         result.fold(
           onSuccess = { data ->
