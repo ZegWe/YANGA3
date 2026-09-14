@@ -5,6 +5,8 @@ import org.json.JSONObject
 object NgaAccountParser {
   fun parseNotifications(raw: String): List<NgaNotificationSummary> {
     val root = ngaJsonRoot(raw)
+    root.opt("error")?.let { throw NgaApiException(it.toString()) }
+    if (root.length() == 0) throw NgaApiException("无法读取通知，请重试")
     val data = root.objectValue("data") ?: root
     val notifications = data.objectListValue("notifications", "noti", "notices", "list")
       .ifEmpty { root.objectListValue("notifications", "noti", "notices", "list") }

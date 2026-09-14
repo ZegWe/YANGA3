@@ -39,6 +39,24 @@ class MainScreenTest {
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
   @Test
+  fun notificationCardOpensIndependentPage() {
+    val repository = object : NgaReadOnlyRepository by fakeRepository() {
+      override suspend fun loadNotifications(session: LoginSessionData?) = Result.success(listOf(
+        NgaNotificationSummary("1", "测试通知", "这是一条回复提醒", null, 1),
+      ))
+    }
+    composeTestRule.setContent { MainScreen(repository = repository, loginSession = LoginSessionUiState("user", "42", "test")) }
+    composeTestRule.onNodeWithContentDescription("Profile", useUnmergedTree = true).performClick()
+    composeTestRule.onNodeWithText("通知").performClick()
+    waitUntilTextExists("测试通知")
+    composeTestRule.onNodeWithText("这是一条回复提醒").assertExists()
+    composeTestRule.onNodeWithContentDescription("刷新通知").assertExists()
+    composeTestRule.onAllNodesWithText("关闭").assertCountEquals(0)
+    composeTestRule.onNodeWithContentDescription("返回").performClick()
+    composeTestRule.onNodeWithText("账号设置").assertExists()
+  }
+
+  @Test
   fun profileCardsOpenDestinationsAndCheckInShowsDialog() {
     var opened = ""
     var userOpened = false

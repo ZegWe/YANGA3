@@ -141,6 +141,7 @@ fun MainScreen(
             onThemeSettingsClick = { navigate(MainDestinationKey.ThemeSettings) },
             onAboutClick = { navigate(MainDestinationKey.About) },
             onCheckIn = { profileViewModel.checkIn(sessionData) },
+            onNotifications = { navigate(MainDestinationKey.Notifications) },
             onPersonalTopics = { if (sessionData == null) onLoginClick() else navigate(MainDestinationKey.PersonalTopics(it)) },
             onProfileRefresh = { profileViewModel.refresh(sessionData) },
             onAccountSettings = { if (sessionData == null) onLoginClick() else navigate(MainDestinationKey.AccountSettings) },
@@ -181,6 +182,7 @@ fun MainScreen(
           )
         }
 
+        entry<MainDestinationKey.Notifications> { NotificationsScreen(repository, sessionData, onBack, onLoginClick) }
         entry<MainDestinationKey.PersonalTopics> { key ->
           PersonalTopicsScreen(key.kind, repository, sessionData, onBack, onLoginClick, navigate)
         }
@@ -226,6 +228,7 @@ private fun MainRootScaffold(
   onThemeSettingsClick: () -> Unit,
   onAboutClick: () -> Unit,
   onAccountSettings: () -> Unit,
+  onNotifications: () -> Unit,
   onPersonalTopics: (String) -> Unit,
   onProfileRefresh: () -> Unit,
   onCheckIn: () -> Unit,
@@ -252,6 +255,7 @@ private fun MainRootScaffold(
         onThemeSettingsClick = onThemeSettingsClick,
         onAboutClick = onAboutClick,
         onAccountSettings = onAccountSettings,
+        onNotifications = onNotifications,
         onPersonalTopics = onPersonalTopics,
         onProfileRefresh = onProfileRefresh,
         onCheckIn = onCheckIn,
@@ -275,6 +279,7 @@ private fun MainTabContent(
   onThemeSettingsClick: () -> Unit,
   onAboutClick: () -> Unit,
   onAccountSettings: () -> Unit,
+  onNotifications: () -> Unit,
   onPersonalTopics: (String) -> Unit,
   onProfileRefresh: () -> Unit,
   onCheckIn: () -> Unit,
@@ -322,6 +327,7 @@ private fun MainTabContent(
         onThemeSettingsClick = onThemeSettingsClick,
         onAboutClick = onAboutClick,
         onAccountSettings = onAccountSettings,
+        onNotifications = onNotifications,
         onPersonalTopics = onPersonalTopics,
         onProfileRefresh = onProfileRefresh,
         onCheckIn = onCheckIn,

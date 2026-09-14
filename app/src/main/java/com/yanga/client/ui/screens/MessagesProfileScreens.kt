@@ -140,6 +140,7 @@ internal fun ProfileScreen(
   onThemeSettingsClick: () -> Unit = {},
   onAboutClick: () -> Unit = {},
   onAccountSettings: () -> Unit = {},
+  onNotifications: () -> Unit = {},
   onPersonalTopics: (String) -> Unit = {},
   onProfileRefresh: () -> Unit = {},
   onCheckIn: () -> Unit = {},
@@ -149,7 +150,6 @@ internal fun ProfileScreen(
   var showEndpointDialog by remember { mutableStateOf(false) }
   var showAccountSheet by remember { mutableStateOf(false) }
   var showCheckInDialog by remember(loginSession?.uid) { mutableStateOf(false) }
-  var showNotifications by remember { mutableStateOf(false) }
 
   Column(
     modifier = modifier
@@ -181,7 +181,7 @@ internal fun ProfileScreen(
         when (icon) {
           "topic" -> onPersonalTopics("Topics")
           "reply" -> onPersonalTopics("Replies")
-          "notification" -> showNotifications = true
+          "notification" -> onNotifications()
         }
       },
       modifier = Modifier.padding(horizontal = ProfileHorizontalPadding),
@@ -243,15 +243,6 @@ internal fun ProfileScreen(
       confirmButton = { TextButton(onClick = { showCheckInDialog = false }) { Text("关闭") } },
     )
   }
-  if (showNotifications) {
-    AlertDialog(
-      onDismissRequest = { showNotifications = false },
-      title = { Text("通知") },
-      text = { Column(Modifier.verticalScroll(rememberScrollState())) { ProfileNotifications(state.notifications) } },
-      confirmButton = { TextButton(onClick = { showNotifications = false }) { Text("关闭") } },
-    )
-  }
-
   if (showEndpointDialog) {
     EndpointSelectionDialog(
       currentEndpoint = state.forumEndpoint,
@@ -865,19 +856,3 @@ private fun String.toSettingsImageVector(): ImageVector =
     else -> Icons.Outlined.Settings
   }
 
-@Composable
-private fun ProfileNotifications(notifications: LoadableUiState<List<SettingsPreview>>) {
-  Column(Modifier.padding(horizontal = ProfileHorizontalPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    when (notifications) {
-      is LoadableUiState.Content -> if (notifications.value.isEmpty()) Text("暂无通知") else notifications.value.forEach { notice ->
-        Text(notice.title, style = MaterialTheme.typography.titleSmall)
-        Text(notice.subtitle, style = MaterialTheme.typography.bodyMedium)
-        HorizontalDivider()
-      }
-      LoadableUiState.Loading -> Text("正在加载通知…")
-      LoadableUiState.LoginRequired -> Text("登录后查看通知")
-      is LoadableUiState.Error -> Text(notifications.message, color = MaterialTheme.colorScheme.error)
-      is LoadableUiState.Empty -> Text(notifications.message)
-    }
-  }
-}
