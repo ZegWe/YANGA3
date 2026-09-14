@@ -141,6 +141,8 @@ fun MainScreen(
             onThemeSettingsClick = { navigate(MainDestinationKey.ThemeSettings) },
             onAboutClick = { navigate(MainDestinationKey.About) },
             onCheckIn = { profileViewModel.checkIn(sessionData) },
+            onPersonalTopics = { if (sessionData == null) onLoginClick() else navigate(MainDestinationKey.PersonalTopics(it)) },
+            onProfileRefresh = { profileViewModel.refresh(sessionData) },
             onAccountSettings = { if (sessionData == null) onLoginClick() else navigate(MainDestinationKey.AccountSettings) },
             onUserClick = { sessionData?.let { navigate(MainDestinationKey.User(it.uid)) } ?: onLoginClick() },
             homeContent = {
@@ -179,6 +181,9 @@ fun MainScreen(
           )
         }
 
+        entry<MainDestinationKey.PersonalTopics> { key ->
+          PersonalTopicsScreen(key.kind, repository, sessionData, onBack, onLoginClick, navigate)
+        }
         entry<MainDestinationKey.AccountSettings> {
           AccountSettingsScreen(repository, sessionData, onBack, onLoginClick) {
             navigate(MainDestinationKey.Web("${profileState.forumEndpoint}/nuke.php?func=ucp&uid=${sessionData?.uid.orEmpty()}", "论坛个人中心", profileState.forumEndpoint))
@@ -221,6 +226,8 @@ private fun MainRootScaffold(
   onThemeSettingsClick: () -> Unit,
   onAboutClick: () -> Unit,
   onAccountSettings: () -> Unit,
+  onPersonalTopics: (String) -> Unit,
+  onProfileRefresh: () -> Unit,
   onCheckIn: () -> Unit,
   onUserClick: () -> Unit,
   homeContent: @Composable () -> Unit = {},
@@ -245,6 +252,8 @@ private fun MainRootScaffold(
         onThemeSettingsClick = onThemeSettingsClick,
         onAboutClick = onAboutClick,
         onAccountSettings = onAccountSettings,
+        onPersonalTopics = onPersonalTopics,
+        onProfileRefresh = onProfileRefresh,
         onCheckIn = onCheckIn,
         onUserClick = onUserClick,
         homeContent = homeContent,
@@ -266,6 +275,8 @@ private fun MainTabContent(
   onThemeSettingsClick: () -> Unit,
   onAboutClick: () -> Unit,
   onAccountSettings: () -> Unit,
+  onPersonalTopics: (String) -> Unit,
+  onProfileRefresh: () -> Unit,
   onCheckIn: () -> Unit,
   onUserClick: () -> Unit,
   homeContent: @Composable () -> Unit,
@@ -311,6 +322,8 @@ private fun MainTabContent(
         onThemeSettingsClick = onThemeSettingsClick,
         onAboutClick = onAboutClick,
         onAccountSettings = onAccountSettings,
+        onPersonalTopics = onPersonalTopics,
+        onProfileRefresh = onProfileRefresh,
         onCheckIn = onCheckIn,
         onUserClick = onUserClick,
         modifier = profileContentModifier,

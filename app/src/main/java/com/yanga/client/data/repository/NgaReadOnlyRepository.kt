@@ -28,6 +28,8 @@ import java.util.concurrent.TimeUnit
 class LoginRequiredException : IllegalStateException("Login is required for this read operation")
 
 interface NgaReadOnlyRepository {
+  suspend fun loadPersonalTopics(session: LoginSessionData?, kind: com.yanga.client.api.NgaPersonalTopicKind, page: Int): Result<com.yanga.client.api.NgaPersonalTopicPage> = Result.failure(UnsupportedOperationException())
+
   suspend fun saveSignature(session: LoginSessionData?, signature: String): Result<Unit> = Result.failure(UnsupportedOperationException())
 
   suspend fun loadUser(session: LoginSessionData?, uid: String): Result<com.yanga.client.api.NgaUserProfile> = Result.failure(UnsupportedOperationException())
@@ -106,6 +108,16 @@ class DefaultNgaReadOnlyRepository(
   }
 
   fun currentBaseUrl(): String = baseUrl
+
+  override suspend fun loadPersonalTopics(session: LoginSessionData?, kind: com.yanga.client.api.NgaPersonalTopicKind, page: Int): Result<com.yanga.client.api.NgaPersonalTopicPage> = withContext(Dispatchers.IO) {
+    val login = session.requireLogin() ?: return@withContext Result.failure(LoginRequiredException())
+    val uid = login.uid.toIntOrNull() ?: return@withContext Result.failure(IllegalArgumentException("用户 ID 无效"))
+    if (page < 1) return@withContext Result.failure(IllegalArgumentException("页码无效"))
+    val favorites = kind == com.yanga.client.api.NgaPersonalTopicKind.Favorites
+    execute(api(login).topicList(page = page, authorId = if (favorites) null else uid,
+      searchPost = if (kind == com.yanga.client.api.NgaPersonalTopicKind.Replies) 1 else null,
+      favor = if (favorites) 1 else null), com.yanga.client.api.NgaPersonalTopicParser::parse)
+  }
 
   override suspend fun saveSignature(session: LoginSessionData?, signature: String): Result<Unit> = withContext(Dispatchers.IO) {
     val login = session.requireLogin() ?: return@withContext Result.failure(LoginRequiredException())

@@ -137,6 +137,8 @@ internal fun ProfileScreen(
   onThemeSettingsClick: () -> Unit = {},
   onAboutClick: () -> Unit = {},
   onAccountSettings: () -> Unit = {},
+  onPersonalTopics: (String) -> Unit = {},
+  onProfileRefresh: () -> Unit = {},
   onCheckIn: () -> Unit = {},
   onUserClick: () -> Unit = {},
   modifier: Modifier = Modifier,
@@ -171,6 +173,13 @@ internal fun ProfileScreen(
       counters = state.counters,
       modifier = Modifier.padding(horizontal = ProfileHorizontalPadding),
     )
+    Row(modifier = Modifier.padding(horizontal = ProfileHorizontalPadding)) {
+      TextButton(onClick = { onPersonalTopics("Topics") }) { Text("我的主题") }
+      TextButton(onClick = { onPersonalTopics("Replies") }) { Text("我的回复") }
+      TextButton(onClick = { onPersonalTopics("Favorites") }) { Text("收藏") }
+    }
+    TextButton(onClick = onProfileRefresh, modifier = Modifier.padding(horizontal = ProfileHorizontalPadding)) { Text("刷新资料与通知") }
+    ProfileNotifications(state.notifications)
     SectionHeader(
       title = "账号",
       modifier = Modifier.padding(horizontal = ProfileHorizontalPadding),
@@ -826,3 +835,21 @@ private fun String.toSettingsImageVector(): ImageVector =
     "endpoint" -> Icons.Outlined.OpenInBrowser
     else -> Icons.Outlined.Settings
   }
+
+@Composable
+private fun ProfileNotifications(notifications: LoadableUiState<List<SettingsPreview>>) {
+  Column(Modifier.padding(horizontal = ProfileHorizontalPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Text("通知", style = MaterialTheme.typography.titleMedium)
+    when (notifications) {
+      is LoadableUiState.Content -> if (notifications.value.isEmpty()) Text("暂无通知") else notifications.value.forEach { notice ->
+        Text(notice.title, style = MaterialTheme.typography.titleSmall)
+        Text(notice.subtitle, style = MaterialTheme.typography.bodyMedium)
+        HorizontalDivider()
+      }
+      LoadableUiState.Loading -> Text("正在加载通知…")
+      LoadableUiState.LoginRequired -> Text("登录后查看通知")
+      is LoadableUiState.Error -> Text(notifications.message, color = MaterialTheme.colorScheme.error)
+      is LoadableUiState.Empty -> Text(notifications.message)
+    }
+  }
+}
