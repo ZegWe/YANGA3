@@ -13,6 +13,7 @@ internal class ContentImageRawCache(
   private val cacheDir: File,
   indexFile: File,
   private val userAgent: String = DEFAULT_USER_AGENT,
+  private val forumEndpoint: () -> String = { com.yanga.client.api.NgaDomains.BBS_NGA_CN },
 ) {
   private val index = ImageCacheIndex(indexFile)
 
@@ -48,7 +49,7 @@ internal class ContentImageRawCache(
         readTimeout = READ_TIMEOUT_MS
         instanceFollowRedirects = true
         setRequestProperty("User-Agent", userAgent)
-        if (URL(url).host.endsWith(".nga.cn")) setRequestProperty("Referer", "https://bbs.nga.cn/")
+        if (URL(url).host.endsWith(".nga.cn")) setRequestProperty("Referer", forumEndpoint().trimEnd('/') + "/")
       }
       try {
         if (connection.responseCode !in SUCCESS_STATUS_RANGE) {

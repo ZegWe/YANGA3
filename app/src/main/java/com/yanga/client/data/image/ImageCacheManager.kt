@@ -28,6 +28,7 @@ enum class ImageCacheKind {
 @OptIn(ExperimentalCoilApi::class)
 class ImageCacheManager(
   context: Context,
+  private val forumEndpoint: () -> String = { com.yanga.client.api.NgaDomains.BBS_NGA_CN },
 ) {
   val imageLoader: ImageLoader =
     ImageLoader.Builder(context)
@@ -58,6 +59,7 @@ class ImageCacheManager(
       cacheDir = context.filesDir.resolve(CONTENT_IMAGE_RAW_DIR_NAME),
       indexFile = context.filesDir.resolve(CONTENT_IMAGE_INDEX_FILE_NAME),
       userAgent = USER_AGENT,
+      forumEndpoint = forumEndpoint,
     )
 
   fun getDecodedBoardIcon(rawUrl: String, sizePx: Int): Bitmap? {
@@ -141,7 +143,7 @@ class ImageCacheManager(
     val model = data ?: getRawContentFile(url) ?: url
     return ImageRequest.Builder(context)
       .data(model)
-      .apply { if (runCatching { java.net.URI(url).host?.endsWith(".nga.cn") }.getOrNull() == true) setHeader("Referer", "https://bbs.nga.cn/") }
+      .apply { if (runCatching { java.net.URI(url).host?.endsWith(".nga.cn") }.getOrNull() == true) setHeader("Referer", forumEndpoint().trimEnd('/') + "/") }
       .apply { if (sizePx != null) size(sizePx) }
       .memoryCacheKey(url)
       .memoryCachePolicy(CachePolicy.ENABLED)

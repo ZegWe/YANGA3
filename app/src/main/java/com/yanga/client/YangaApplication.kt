@@ -32,7 +32,10 @@ class YangaApplication : Application(), ImageLoaderFactory {
 
   override fun onCreate() {
     super.onCreate()
-    imageCacheManager = ImageCacheManager(this)
+    imageCacheManager = ImageCacheManager(this) {
+      if (::repository.isInitialized) repository.currentBaseUrl()
+      else com.yanga.client.api.NgaDomains.BBS_NGA_CN
+    }
     val preferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     subBoardFilterStore = SharedPreferencesSubBoardFilterStore(preferences)
     val boardSectionDirectory = LocalBoardListStore(applicationContext, preferences)

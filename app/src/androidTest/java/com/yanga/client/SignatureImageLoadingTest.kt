@@ -1,7 +1,6 @@
 package com.yanga.client
 
 import androidx.test.platform.app.InstrumentationRegistry
-import com.yanga.client.data.image.ImageCacheManager
 import coil.request.SuccessResult
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -10,6 +9,21 @@ import org.junit.Test
 
 /** Opt-in real-network regression: -e liveNgaImages true. No account credentials required. */
 class SignatureImageLoadingTest {
+  @Test fun imageRefererFollowsSelectedForum() {
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val app = context.applicationContext as YangaApplication
+    val original = app.repository.currentBaseUrl()
+    try {
+      for (endpoint in listOf("https://bbs.nga.cn", "https://ngabbs.com", "https://nga.178.com")) {
+        app.repository.setBaseUrl(endpoint)
+        val request = app.imageCacheManager.buildContentImageRequest(context, "https://img.nga.cn/attachments/example.png")
+        assertEquals("$endpoint/", request.headers["Referer"])
+      }
+    } finally {
+      app.repository.setBaseUrl(original)
+    }
+  }
+
   @Test fun loadsLegacySignaturePngsAndGifs() = runBlocking {
     assumeTrue(InstrumentationRegistry.getArguments().getString("liveNgaImages") == "true")
     val context = InstrumentationRegistry.getInstrumentation().targetContext
