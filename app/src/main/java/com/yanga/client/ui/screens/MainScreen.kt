@@ -45,7 +45,7 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
-import androidx.navigation3.ui.NavDisplay
+import com.yanga.client.ui.navigation.PredictivePageNavDisplay
 
 @Composable
 fun MainScreen(
@@ -85,7 +85,7 @@ fun MainScreen(
     profileViewModel.refresh(sessionData)
   }
 
-  NavDisplay(
+  PredictivePageNavDisplay(
     backStack = backStack,
     entryDecorators = listOf(
       rememberSaveableStateHolderNavEntryDecorator(),
@@ -119,17 +119,6 @@ fun MainScreen(
             targetOffsetX = MainNavigationSlideSpec::popExitOffset,
           )
       }
-    },
-    predictivePopTransitionSpec = {
-      // NavDisplay seeks this transition with the gesture and restores it on cancellation.
-      slideInHorizontally(
-        animationSpec = tween(MainNavigationSlideSpec.DurationMillis),
-        initialOffsetX = MainNavigationSlideSpec::popEnterOffset,
-      ) togetherWith
-        slideOutHorizontally(
-          animationSpec = tween(MainNavigationSlideSpec.DurationMillis),
-          targetOffsetX = MainNavigationSlideSpec::popExitOffset,
-        )
     },
     onBack = {
       if (backStack.count() > 1) {
