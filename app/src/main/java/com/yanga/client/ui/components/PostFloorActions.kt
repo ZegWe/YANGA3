@@ -29,16 +29,16 @@ internal fun PostFloorActions(
   var message by remember { mutableStateOf<String?>(null) }
   val scope = rememberCoroutineScope()
   fun react(support: Boolean) {
-    if (busy || (onReact != null && reaction == if (support) 1 else -1)) return
+    if (busy) return
     if (onReact == null) { message = "请先登录后再赞踩"; return }
     busy = true
     message = null
     scope.launch {
       try {
         onReact(post, support).fold(
-          onSuccess = { score ->
-            reaction = if (support) 1 else -1
-            if (score == null) message = "已提交，请刷新查看最新赞数"
+          onSuccess = {
+            val clicked = if (support) 1 else -1
+            reaction = if (reaction == clicked) 0 else clicked
           },
           onFailure = { message = it.message ?: "操作失败，请稍后重试" },
         )
@@ -78,6 +78,13 @@ internal fun PostFloorActions(
         Icon(Icons.AutoMirrored.Outlined.Reply, contentDescription = "回复", Modifier.size(20.dp))
       }
     }
-    message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    message?.let { error ->
+      AlertDialog(
+        onDismissRequest = { message = null },
+        title = { Text("赞踩未完成") },
+        text = { Text(error) },
+        confirmButton = { TextButton(onClick = { message = null }) { Text("知道了") } },
+      )
+    }
   }
 }

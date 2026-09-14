@@ -72,12 +72,26 @@ class PostFloorActionsTest {
     compose.onNodeWithContentDescription("点踩").performClick()
     compose.onNodeWithText("6").assertExists()
     compose.onNodeWithContentDescription("点赞").assertIsNotSelected()
+    compose.onNodeWithContentDescription("点踩").assertIsSelected().performClick()
+    compose.onNodeWithContentDescription("点踩").assertIsNotSelected()
+    compose.onNodeWithContentDescription("点赞").performClick()
+    compose.onNodeWithContentDescription("点踩").performClick()
+    compose.onNodeWithContentDescription("点赞").assertIsNotSelected()
     compose.onNodeWithContentDescription("点踩").assertIsSelected()
     compose.onNodeWithContentDescription("回复").performClick()
     compose.runOnIdle {
-      assertEquals(listOf(true, false), votes)
+      assertEquals(listOf(true, true, false, false, true, false), votes)
       assertEquals("21", replyPid)
     }
+  }
+
+  @Test fun successfulReactionWithoutFreshScoreUsesOnlyIconState() {
+    compose.setContent { MaterialTheme { PostFloorActions(post, {}, { _, _ -> Result.success(null) }) } }
+    compose.onNodeWithContentDescription("点赞").performClick()
+    compose.onNodeWithContentDescription("点赞").assertIsSelected()
+    compose.onNodeWithText("已提交，请刷新查看最新赞数").assertDoesNotExist()
+    compose.onNodeWithContentDescription("点赞").performClick()
+    compose.onNodeWithContentDescription("点赞").assertIsNotSelected()
   }
 
   @Test fun rejectedReactionDoesNotChangeCountAndCanBeRetried() {
@@ -87,6 +101,7 @@ class PostFloorActionsTest {
     }) } }
     compose.onNodeWithContentDescription("点赞").performClick()
     compose.onNodeWithText("服务端拒绝").assertExists()
+    compose.onNodeWithText("知道了").performClick()
     compose.onNodeWithContentDescription("点赞").assertIsNotSelected()
     compose.onNodeWithText("7").assertExists()
     compose.onNodeWithContentDescription("点赞").assertIsNotSelected()
