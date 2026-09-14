@@ -20,6 +20,7 @@ sealed interface MainDestinationKey : NavKey {
   @Serializable data class Search(val board: BoardDestination? = null, val instanceId: String = java.util.UUID.randomUUID().toString()) : MainDestinationKey
   @Serializable data class Web(val url: String, val title: String, val baseUrl: String, val instanceId: String = java.util.UUID.randomUUID().toString()) : MainDestinationKey
   @Serializable data class PersonalTopics(val kind: String) : MainDestinationKey
+  @Serializable data class UserTopics(val uid: String, val username: String) : MainDestinationKey
   @Serializable data object Notifications : MainDestinationKey
   @Serializable data object AccountSettings : MainDestinationKey
   @Serializable data class User(val uid: String) : MainDestinationKey

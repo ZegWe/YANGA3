@@ -199,7 +199,12 @@ fun MainScreen(
             navigate(MainDestinationKey.Web("${profileState.forumEndpoint}/nuke.php?func=ucp&uid=${sessionData?.uid.orEmpty()}", "论坛个人中心", profileState.forumEndpoint))
           }
         }
-        entry<MainDestinationKey.User> { key -> UserProfileScreen(key.uid, repository, sessionData, onBack) }
+        entry<MainDestinationKey.UserTopics> { key ->
+          PersonalTopicsScreen("Topics", repository, sessionData, onBack, onLoginClick, navigate, key.uid, key.username)
+        }
+        entry<MainDestinationKey.User> { key ->
+          UserProfileScreen(key.uid, repository, sessionData, onBack, onTopics = { uid, username -> navigate(MainDestinationKey.UserTopics(uid, username)) })
+        }
         entry<MainDestinationKey.About> { AboutScreen(onBack = onBack) }
         entry<MainDestinationKey.ThemeSettings> {
           ThemeSettingsScreen(

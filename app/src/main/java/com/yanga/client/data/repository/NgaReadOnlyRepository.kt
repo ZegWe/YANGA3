@@ -30,6 +30,8 @@ class LoginRequiredException : IllegalStateException("Login is required for this
 interface NgaReadOnlyRepository {
   suspend fun loadNotifications(session: LoginSessionData?): Result<List<com.yanga.client.api.NgaNotificationSummary>> = Result.failure(UnsupportedOperationException())
 
+  suspend fun loadUserTopics(session: LoginSessionData?, uid: String, page: Int): Result<com.yanga.client.api.NgaPersonalTopicPage> = Result.failure(UnsupportedOperationException())
+
   suspend fun loadPersonalTopics(session: LoginSessionData?, kind: com.yanga.client.api.NgaPersonalTopicKind, page: Int): Result<com.yanga.client.api.NgaPersonalTopicPage> = Result.failure(UnsupportedOperationException())
 
   suspend fun saveSignature(session: LoginSessionData?, signature: String): Result<Unit> = Result.failure(UnsupportedOperationException())
@@ -114,6 +116,13 @@ class DefaultNgaReadOnlyRepository(
   override suspend fun loadNotifications(session: LoginSessionData?): Result<List<com.yanga.client.api.NgaNotificationSummary>> = withContext(Dispatchers.IO) {
     val login = session.requireLogin() ?: return@withContext Result.failure(LoginRequiredException())
     execute(api(login).notifications(), NgaAccountParser::parseNotifications)
+  }
+
+  override suspend fun loadUserTopics(session: LoginSessionData?, uid: String, page: Int): Result<com.yanga.client.api.NgaPersonalTopicPage> = withContext(Dispatchers.IO) {
+    val authorId = uid.toIntOrNull()?.takeIf { it > 0 }
+      ?: return@withContext Result.failure(IllegalArgumentException("用户 ID 无效"))
+    if (page < 1) return@withContext Result.failure(IllegalArgumentException("页码无效"))
+    execute(api(session).topicList(page = page, authorId = authorId), com.yanga.client.api.NgaPersonalTopicParser::parse)
   }
 
   override suspend fun loadPersonalTopics(session: LoginSessionData?, kind: com.yanga.client.api.NgaPersonalTopicKind, page: Int): Result<com.yanga.client.api.NgaPersonalTopicPage> = withContext(Dispatchers.IO) {

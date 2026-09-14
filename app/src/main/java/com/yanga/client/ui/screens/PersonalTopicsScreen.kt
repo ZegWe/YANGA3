@@ -21,25 +21,27 @@ import com.yanga.client.data.LoginSessionData
 import com.yanga.client.data.NgaReadOnlyRepository
 
 @Composable
-internal fun PersonalTopicsScreen(kindName: String, repository: NgaReadOnlyRepository, session: LoginSessionData?, onBack: () -> Unit, onLogin: () -> Unit, navigate: (MainDestinationKey) -> Unit) {
+internal fun PersonalTopicsScreen(kindName: String, repository: NgaReadOnlyRepository, session: LoginSessionData?, onBack: () -> Unit, onLogin: () -> Unit, navigate: (MainDestinationKey) -> Unit, authorUid: String? = null, authorName: String = "") {
   val kind = NgaPersonalTopicKind.entries.firstOrNull { it.name == kindName } ?: NgaPersonalTopicKind.Topics
-  var page by rememberSaveable(kindName, session?.uid) { mutableIntStateOf(1) }
+  val title = if (authorUid == null) kind.label else "${authorName.ifBlank { authorUid }}的主题"
+  var page by rememberSaveable(kindName, session?.uid, authorUid) { mutableIntStateOf(1) }
   var retry by remember { mutableIntStateOf(0) }
-  var result by remember(kindName, page, session) { mutableStateOf<Result<NgaPersonalTopicPage>?>(null) }
-  LaunchedEffect(kind, page, session, retry) {
+  var result by remember(kindName, page, session, authorUid) { mutableStateOf<Result<NgaPersonalTopicPage>?>(null) }
+  LaunchedEffect(kind, page, session, retry, authorUid) {
     result = null
-    if (session != null) result = repository.loadPersonalTopics(session, kind, page)
+    if (authorUid != null) result = repository.loadUserTopics(session, authorUid, page)
+    else if (session != null) result = repository.loadPersonalTopics(session, kind, page)
   }
-  ProfilePageScaffold(title = kind.label, onBack = onBack, actions = {
-    IconButton(enabled = session != null && result != null, onClick = { retry++ }) { Icon(Icons.Outlined.Refresh, "刷新本页") }
+  ProfilePageScaffold(title = title, onBack = onBack, actions = {
+    IconButton(enabled = (session != null || authorUid != null) && result != null, onClick = { retry++ }) { Icon(Icons.Outlined.Refresh, "刷新本页") }
   }) { padding ->
     Column(Modifier.fillMaxSize().padding(padding)) {
       val current = result
       val data = current?.getOrNull()
-      key(kind, page, session) {
+      key(kind, page, session, authorUid) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
           when {
-            session == null -> item { ProfileSectionCard {
+            session == null && authorUid == null -> item { ProfileSectionCard {
               Icon(Icons.Outlined.Forum, null, tint = MaterialTheme.colorScheme.primary)
               Text("登录后查看${kind.label}", style = MaterialTheme.typography.titleLarge)
               Button(onClick = onLogin) { Text("登录 NGA") }
@@ -53,7 +55,7 @@ internal fun PersonalTopicsScreen(kindName: String, repository: NgaReadOnlyRepos
             data?.items?.isEmpty() == true -> item { ProfileSectionCard {
               Icon(Icons.Outlined.Forum, null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
               Text(if (page == 1) "暂无内容" else "已到末页", style = MaterialTheme.typography.titleLarge)
-              Text(if (page == 1) "${kind.label}会显示在这里" else "可以返回上一页继续浏览", color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Text(if (page == 1) "${title}会显示在这里" else "可以返回上一页继续浏览", color = MaterialTheme.colorScheme.onSurfaceVariant)
             } }
           }
           items(data?.items.orEmpty()) { topic ->
@@ -74,7 +76,7 @@ internal fun PersonalTopicsScreen(kindName: String, repository: NgaReadOnlyRepos
           }
         }
       }
-      if (session != null) Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 2.dp) {
+      if (session != null || authorUid != null) Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 2.dp) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
           FilledTonalIconButton(enabled = page > 1, onClick = { page-- }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "上一页") }
           Text("第 $page 页", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)

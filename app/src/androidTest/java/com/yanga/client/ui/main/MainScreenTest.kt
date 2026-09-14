@@ -39,6 +39,38 @@ class MainScreenTest {
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
   @Test
+  fun userPostCountOpensThatUsersTopics() {
+    var requestedUid = ""
+    val repository = object : NgaReadOnlyRepository by fakeRepository() {
+      override suspend fun loadUser(session: LoginSessionData?, uid: String) = Result.success(
+        com.yanga.client.api.NgaUserProfile(uid, "其他用户", null, "", 20, null),
+      )
+      override suspend fun loadUserTopics(session: LoginSessionData?, uid: String, page: Int): Result<com.yanga.client.api.NgaPersonalTopicPage> {
+        requestedUid = uid
+        return Result.success(com.yanga.client.api.NgaPersonalTopicPage(listOf(com.yanga.client.api.NgaPersonalTopic("100", null, "其他用户的帖子", "")), false))
+      }
+    }
+    composeTestRule.setContent { MainScreen(repository = repository, loginSession = LoginSessionUiState("自己", "42", "test"), pendingDestination = MainDestinationKey.User("99")) }
+    waitUntilTextExists("其他用户")
+    composeTestRule.onNodeWithContentDescription("查看用户发帖").performClick()
+    waitUntilTextExists("其他用户的帖子")
+    composeTestRule.runOnIdle { org.junit.Assert.assertEquals("99", requestedUid) }
+    composeTestRule.onNodeWithText("其他用户的主题").assertExists()
+  }
+
+  @Test
+  fun checkedInStateUsesCheckIconAndStillShowsFeedback() {
+    composeTestRule.setContent { ProfileScreen(
+      loginSession = LoginSessionUiState("user", "42", "test"),
+      state = ProfileUiState(session = LoadableUiState.Content(LoginSessionData(username = "user", uid = "42", cookie = "test")), checkedIn = true, checkInMessage = "今天已经签到"),
+      onLoginClick = {}, onLogout = {},
+    ) }
+    composeTestRule.onAllNodesWithContentDescription("未签到").assertCountEquals(0)
+    composeTestRule.onNodeWithContentDescription("已签到").performClick()
+    composeTestRule.onNodeWithText("今天已经签到").assertExists()
+  }
+
+  @Test
   fun notificationCardOpensIndependentPage() {
     val repository = object : NgaReadOnlyRepository by fakeRepository() {
       override suspend fun loadNotifications(session: LoginSessionData?) = Result.success(listOf(

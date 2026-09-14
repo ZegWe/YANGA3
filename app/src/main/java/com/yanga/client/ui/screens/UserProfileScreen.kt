@@ -1,6 +1,9 @@
 package com.yanga.client.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -22,7 +25,7 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-internal fun UserProfileScreen(uid: String, repository: NgaReadOnlyRepository, session: LoginSessionData?, onBack: () -> Unit) {
+internal fun UserProfileScreen(uid: String, repository: NgaReadOnlyRepository, session: LoginSessionData?, onBack: () -> Unit, onTopics: (String, String) -> Unit = { _, _ -> }) {
   var result by remember(uid, session) { mutableStateOf<Result<NgaUserProfile>?>(null) }
   var retry by remember { mutableIntStateOf(0) }
   LaunchedEffect(uid, session, retry) { result = null; result = repository.loadUser(session, uid) }
@@ -54,7 +57,7 @@ internal fun UserProfileScreen(uid: String, repository: NgaReadOnlyRepository, s
         ProfileSectionCard {
           Text("社区资料", style = MaterialTheme.typography.titleMedium)
           Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.weight(1f).clickable { onTopics(user.uid, user.username) }.semantics { contentDescription = "查看用户发帖" }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
               Text(user.postCount?.toString() ?: "--", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
               Text("发帖数", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }

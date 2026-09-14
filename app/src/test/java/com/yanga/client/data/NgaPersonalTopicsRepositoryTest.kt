@@ -22,5 +22,11 @@ class NgaPersonalTopicsRepositoryTest {
     assertEquals("1", requests[2].query["favor"])
     assertNull(requests[2].query["authorid"])
     requests.forEach { assertEquals("3", it.query["page"]); assertEquals("test-cookie", it.headers["Cookie"]) }
+    repository.loadUserTopics(session, "99", 2).getOrThrow()
+    assertEquals("99", requests.last().query["authorid"])
+    assertEquals("2", requests.last().query["page"])
+    assertNull(requests.last().query["searchpost"])
+    assertTrue(repository.loadUserTopics(session, "-1", 1).isFailure)
+
   }
 }
