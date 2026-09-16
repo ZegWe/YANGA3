@@ -125,6 +125,15 @@ class PostBodyFormatsTest {
     compose.onNodeWithText("提交投票").assertDoesNotExist()
   }
 
+  @Test fun reopenedPollShowsConfirmedSelectionWithoutSubmitButton() {
+    val poll = NgaPoll("42", listOf(NgaPollOption(11, "甲", 1), NgaPollOption(22, "乙", 0)), 1, votedOptionIds = listOf(11))
+    compose.setContent {
+      MaterialTheme { PostPollCard(poll, onVote = { _, _ -> error("Already voted") }) }
+    }
+    compose.onNodeWithText("已提交投票").assertExists()
+    compose.onNodeWithText("提交投票").assertDoesNotExist()
+  }
+
   @Test fun expiredPollShowsResultsWithoutSubmission() {
     compose.setContent {
       MaterialTheme { PostPollCard(NgaPoll("42", listOf(NgaPollOption(11, "是大年", 208), NgaPollOption(22, "不是大年", 31)), 1, endsAt = 1, participants = 239)) }

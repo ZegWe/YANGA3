@@ -144,10 +144,12 @@ fun ThreadRoute(
       repository.submitPoll(session, poll, ids).fold(
         onSuccess = {
           // A successful vote must not be retried just because reloading results failed.
+          threadContentViewModel.updatePollResults(poll.copy(votedOptionIds = ids))
           val fresh = repository.loadThread(session, poll.tid, threadState.page.toIntOrNull() ?: 1)
             .getOrNull()?.posts?.firstNotNullOfOrNull { it.poll }
-          fresh?.let(threadContentViewModel::updatePollResults)
-          Result.success(fresh)
+          val voted = fresh?.copy(votedOptionIds = ids)
+          voted?.let(threadContentViewModel::updatePollResults)
+          Result.success(voted)
         },
         onFailure = { Result.failure(it) },
       )

@@ -22,8 +22,8 @@ internal typealias PollSubmit = suspend (NgaPoll, List<Int>) -> Result<NgaPoll?>
 @Composable
 internal fun PostPollCard(poll: NgaPoll, onVote: PollSubmit? = null, onOpenWeb: () -> Unit = {}) {
   var displayed by remember(poll) { mutableStateOf(poll) }
-  var selected by rememberSaveable(poll.tid, poll.options.map { it.id }) { mutableStateOf(arrayListOf<Int>()) }
-  var submitted by rememberSaveable(poll.tid) { mutableStateOf(false) }
+  var selected by rememberSaveable(poll.tid, poll.options.map { it.id }, poll.votedOptionIds) { mutableStateOf(ArrayList(poll.votedOptionIds.orEmpty())) }
+  var submitted by rememberSaveable(poll.tid, poll.hasVoted) { mutableStateOf(poll.hasVoted) }
   var submitting by remember { mutableStateOf(false) }
   var message by remember { mutableStateOf<String?>(null) }
   var now by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
