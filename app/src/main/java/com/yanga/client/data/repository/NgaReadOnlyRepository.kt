@@ -105,7 +105,6 @@ class DefaultNgaReadOnlyRepository(
   private var baseUrl: String = com.yanga.client.api.NgaDomains.BBS_NGA_CN,
   private val favoriteBoardsStore: FavoriteBoardsStore? = null,
   private val boardSectionDirectory: BoardSectionDirectory? = null,
-  private val pollVoteStore: PollVoteStore = PollVoteStore(),
 ) : NgaReadOnlyRepository {
   private val logTag = "YangaSubBoardRpc"
   fun setBaseUrl(url: String) {
@@ -342,30 +341,24 @@ class DefaultNgaReadOnlyRepository(
   }
 
   override suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int): Result<NgaThreadRead> = withContext(Dispatchers.IO) {
-    executeThreadRead(api(session).articleRead(tid = tid.toIntOrNull(), page = page), session)
+    executeThreadRead(api(session).articleRead(tid = tid.toIntOrNull(), page = page))
   }
 
   override suspend fun loadThreadByAuthor(session: LoginSessionData?, tid: String, page: Int, authorId: String): Result<NgaThreadRead> = withContext(Dispatchers.IO) {
     runCatching { require(authorId.toIntOrNull()?.let { it > 0 } == true) { "匿名作者暂不支持跨页筛选" } }.fold(
-      onSuccess = { executeThreadRead(api(session).articleRead(tid = tid.toIntOrNull(), page = page, authorId = authorId.toInt()), session) },
+      onSuccess = { executeThreadRead(api(session).articleRead(tid = tid.toIntOrNull(), page = page, authorId = authorId.toInt())) },
       onFailure = { Result.failure(it) },
     )
   }
 
-  private fun executeThreadRead(request: NgaRequest, session: LoginSessionData?): Result<NgaThreadRead> =
+  private fun executeThreadRead(request: NgaRequest): Result<NgaThreadRead> =
     execute(request, NgaThreadParser::parseRead).map { thread ->
       if (thread.posts.isEmpty()) return@map thread
       // JSON read responses omit the board moderator list used by the web renderer.
       val htmlRequest = request.copy(query = request.query - setOf("__output", "noprefix", "v2"))
       val mods = executeText(htmlRequest).getOrNull()?.let { com.yanga.client.api.NgaPostColors.moderators(it) }.orEmpty()
       thread.copy(posts = thread.posts.map { post ->
-        post.copy(
-          bodyColor = com.yanga.client.api.NgaPostColors.color(post.authorMemberId, post.authorId in mods),
-          poll = post.poll?.let { poll ->
-            val ids = session?.uid?.let { pollVoteStore.selection(it, poll.tid) }
-            if (ids == null) poll else poll.copy(votedOptionIds = ids)
-          },
-        )
+        post.copy(bodyColor = com.yanga.client.api.NgaPostColors.color(post.authorMemberId, post.authorId in mods))
       })
     }
 
@@ -383,11 +376,10 @@ class DefaultNgaReadOnlyRepository(
       val tid = poll.tid.toIntOrNull()?.takeIf { it > 0 }
         ?: return@withContext Result.failure(IllegalArgumentException("投票主题无效"))
       execute(api(login).vote(tid, ids), com.yanga.client.api.NgaPollParser::requireSuccessfulSubmission)
-        .onSuccess { pollVoteStore.record(login.uid, poll.tid, ids) }
     }
 
   override suspend fun loadThreadPost(session: LoginSessionData?, pid: String): Result<NgaThreadPost> = withContext(Dispatchers.IO) {
-    executeThreadRead(api(session).articleRead(pid = pid.toIntOrNull()), session).mapCatching { thread ->
+    executeThreadRead(api(session).articleRead(pid = pid.toIntOrNull())).mapCatching { thread ->
       thread.posts.firstOrNull { it.pid == pid }
         ?: thread.posts.firstOrNull()
         ?: throw IllegalStateException("Post $pid not found")

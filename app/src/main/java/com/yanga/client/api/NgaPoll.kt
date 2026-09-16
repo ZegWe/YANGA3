@@ -10,14 +10,11 @@ data class NgaPoll(
   val participants: Long? = null,
   val isBet: Boolean = false,
   val settled: Boolean = false,
-  val votedOptionIds: List<Int>? = null,
 ) {
-  val hasVoted: Boolean get() = votedOptionIds != null
   val totalVotes: Long? get() = if (options.all { it.votes != null }) options.sumOf { it.votes!! } else null
   fun isClosed(now: Long = System.currentTimeMillis() / 1000): Boolean = settled || (endsAt?.let { it <= now } == true)
   fun validationError(ids: List<Int>, now: Long = System.currentTimeMillis() / 1000): String? = when {
     isBet -> "此类型请在网页中查看"
-    hasVoted -> "已提交投票"
     isClosed(now) -> "投票已结束"
     ids.isEmpty() -> "请至少选择一项"
     ids.distinct().size != ids.size || ids.any { id -> options.none { it.id == id } } -> "投票选项无效"

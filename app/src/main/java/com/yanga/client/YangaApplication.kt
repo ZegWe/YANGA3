@@ -43,7 +43,6 @@ class YangaApplication : Application(), ImageLoaderFactory {
       DefaultNgaReadOnlyRepository(
         favoriteBoardsStore = SharedPreferencesFavoriteBoardsStore(preferences),
         boardSectionDirectory = boardSectionDirectory,
-        pollVoteStore = com.yanga.client.data.PollVoteStore(getSharedPreferences("poll_votes", Context.MODE_PRIVATE)),
       )
     boardsCatalog =
       BoardsCatalog(
