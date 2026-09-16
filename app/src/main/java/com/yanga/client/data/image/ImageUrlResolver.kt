@@ -1,7 +1,5 @@
 package com.yanga.client.data.image
 
-import com.yanga.client.api.NgaStaticUrls
-
 object ImageUrlResolver {
   /** Resolve persisted legacy URLs at the request boundary, including signatures. */
   fun resolveForRequest(raw: String): String {
@@ -25,7 +23,7 @@ object ImageUrlResolver {
     val base = attachmentBase?.trim()?.trimEnd('/')?.takeIf { it.isNotBlank() }
       ?: return resolve(raw)
     val path = raw.trim().removePrefix("./").removePrefix("/")
-    if (!path.startsWith("mon_")) return resolve(raw)
+    if (!path.startsWith("mon_") && !raw.trim().startsWith("./")) return resolve(raw)
     val absoluteBase = when {
       base.startsWith("//") -> "https:$base"
       base.startsWith("https://") || base.startsWith("http://") -> base
@@ -53,7 +51,7 @@ object ImageUrlResolver {
     }
 
     return when {
-      trimmed.startsWith("./") -> NgaStaticUrls.expandRelativeImage(trimmed)
+      trimmed.startsWith("./") -> "https://img.nga.178.com/attachments/${trimmed.removePrefix("./")}"
       trimmed.startsWith("/mon_") -> "https://img.nga.178.com/attachments${trimmed}"
       trimmed.startsWith("mon_") -> "https://img.nga.178.com/attachments/$trimmed"
       trimmed.startsWith("//img6.nga.178.com/attachments/") ->

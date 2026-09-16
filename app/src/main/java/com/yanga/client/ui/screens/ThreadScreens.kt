@@ -112,6 +112,7 @@ import com.yanga.client.data.image.imageCacheManager
 import androidx.compose.material3.HorizontalDivider
 import com.yanga.client.ui.components.CachedAsyncImage
 import com.yanga.client.ui.components.CachedPostImage
+import com.yanga.client.ui.components.PostVideoPlayer
 import com.yanga.client.ui.components.PostAudioPlayer
 import com.yanga.client.ui.components.PrefetchUserAvatars
 import com.yanga.client.ui.components.SubBoardDirectorySheet
@@ -837,10 +838,12 @@ private fun PostItem(
                 PostNestedParts(children, imageUrls, onLinkClick, onImageClick)
               }
             }
+            is PostContentBlock.Video -> PostVideoPlayer(block.part, onLinkClick)
             is PostContentBlock.Audio -> {
             PostAudioPlayer(
               url = block.part.url,
               label = block.part.label,
+              onOpenLink = onLinkClick,
             )
           }
         }
@@ -884,6 +887,13 @@ private fun PostItem(
         PostSectionDivider()
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
           post.attachments.forEach { attachment ->
+            when (AttachmentFileType.category(attachment.name, attachment.url)) {
+              AttachmentFileCategory.Audio -> PostAudioPlayer(attachment.url, attachment.name, onOpenLink = onLinkClick)
+              AttachmentFileCategory.Video -> PostVideoPlayer(
+                PostContentPart.Video(attachment.url, attachment.name, direct = true), onLinkClick,
+              )
+              else -> Unit
+            }
             AttachmentRow(
               attachment = attachment,
               onClick = { onAttachmentClick(attachment) },
@@ -1022,10 +1032,12 @@ private fun PostEmbeddedReplyItem(
                 PostNestedParts(children, imageUrls, onLinkClick, onImageClick)
               }
             }
+            is PostContentBlock.Video -> PostVideoPlayer(block.part, onLinkClick)
             is PostContentBlock.Audio -> {
               PostAudioPlayer(
                 url = block.part.url,
                 label = block.part.label,
+                onOpenLink = onLinkClick,
               )
             }
           }
@@ -1091,10 +1103,12 @@ private fun PostQuoteBlock(
                 PostNestedParts(children, imageUrls, onLinkClick, onImageClick)
               }
             }
+            is PostContentBlock.Video -> PostVideoPlayer(block.part, onLinkClick)
             is PostContentBlock.Audio -> {
             PostAudioPlayer(
               url = block.part.url,
               label = block.part.label,
+              onOpenLink = onLinkClick,
             )
           }
           is PostContentBlock.Quote -> {
@@ -1129,7 +1143,7 @@ private fun AttachmentRow(
         .clickable(onClick = onClick)
         .semantics { contentDescription = "Attachment ${attachment.name}" },
     color = MaterialTheme.colorScheme.surfaceContainer,
-    shape = MaterialTheme.shapes.small,
+    shape = MaterialTheme.shapes.large,
     border =
       androidx.compose.foundation.BorderStroke(
         1.dp,
@@ -1137,7 +1151,7 @@ private fun AttachmentRow(
       ),
   ) {
     Row(
-      modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+      modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -1243,25 +1257,14 @@ private fun ImagePreviewDialog(
         )
       }
       if (headerVisible) {
-        Row(
-          modifier =
-            Modifier
-              .align(Alignment.TopStart)
-              .fillMaxWidth()
-              .background(Color.Black.copy(alpha = 0.56f))
-              .padding(top = 24.dp),
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
-          IconButton(
-            onClick = onDismiss,
-            modifier = Modifier.semantics { contentDescription = "Close image preview" },
-          ) {
-            Icon(
-              imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-              contentDescription = null,
-              tint = Color.White,
-            )
-          }
+        com.yanga.client.ui.components.MediaViewerTheme {
+          com.yanga.client.ui.components.MediaViewerHeader(
+            title = "图片",
+            subtitle = "${pagerState.currentPage + 1} / ${imageUrls.size}",
+            closeDescription = "Close image preview",
+            onClose = onDismiss,
+            modifier = Modifier.align(Alignment.TopCenter),
+          )
         }
       }
     }
@@ -1510,7 +1513,8 @@ private fun PostNestedParts(
         url = block.part.url,
         onClick = { onImageClick(imageUrls, imageUrls.indexOf(block.part.url).coerceAtLeast(0)) },
       )
-      is PostContentBlock.Audio -> PostAudioPlayer(block.part.url, block.part.label)
+      is PostContentBlock.Video -> PostVideoPlayer(block.part, onLinkClick)
+      is PostContentBlock.Audio -> PostAudioPlayer(block.part.url, block.part.label, onOpenLink = onLinkClick)
       is PostContentBlock.Structured -> StructuredPostContent(block.part) {
         PostNestedParts(it, imageUrls, onLinkClick, onImageClick)
       }

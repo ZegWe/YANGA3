@@ -135,7 +135,7 @@ fun CachedPostImage(
         Modifier
           .fillMaxWidth()
           .height(imageHeight)
-          .clip(MaterialTheme.shapes.medium)
+          .clip(MaterialTheme.shapes.large)
           .background(MaterialTheme.colorScheme.surfaceContainerLow)
           .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
           .semantics { contentDescription = "Post image" },

@@ -3,6 +3,8 @@ package com.yanga.client.ui.content
 import com.yanga.client.api.NgaStaticUrls
 import com.yanga.client.data.image.ImageUrlResolver
 
+private val mediaTagStart = Regex("\\[(flash|media|audio|video)(?:[=\\s\\]])", RegexOption.IGNORE_CASE)
+
 data class PostTextStyleRange(
   val start: Int,
   val end: Int,
@@ -59,6 +61,8 @@ sealed class PostContentPart {
     val url: String,
     val label: String,
   ) : PostContentPart()
+
+  data class Video(val url: String, val label: String, val direct: Boolean) : PostContentPart()
 }
 
 object PostContentParser {
@@ -164,9 +168,13 @@ private class BbContentParser(private val source: String, private val depth: Int
           flushText()
           parseRelativeImagePath()?.let { parts += it }
         }
-        startsWithIgnoreCase("[flash") -> {
+        source[pos] == '[' && mediaTagStart.matchAt(source, pos) != null -> {
           flushText()
-          parseFlashTag()?.let { parts += it }
+          parts += parseMediaTag()
+        }
+        startsWithIgnoreCase("<video") || startsWithIgnoreCase("<audio") -> {
+          flushText()
+          parts += parseHtmlMedia()
         }
         else -> {
           textBuffer.append(source[pos])
@@ -345,38 +353,50 @@ private class BbContentParser(private val source: String, private val depth: Int
     return PostContentPart.Image(normalizeContentImageUrl(src))
   }
 
-  private fun parseFlashTag(): PostContentPart? {
-    if (!startsWithIgnoreCase("[flash")) return null
+  private fun parseMediaTag(): PostContentPart {
+    val start = pos
     val headerEnd = source.indexOf(']', pos)
     if (headerEnd == -1) {
       pos = source.length
-      return null
+      return PostContentPart.Text(source.substring(start))
     }
-    val header = source.substring(pos + 1, headerEnd)
+    val header = source.substring(pos + 1, headerEnd).lowercase()
+    val tag = header.substringBefore('=').substringBefore(' ').trim()
     pos = headerEnd + 1
-    val flashType =
-      header
-        .substringAfter("flash=", header)
-        .substringBefore(',')
-        .trim()
-        .lowercase()
-    val closeTag = indexOfIgnoreCase("[/flash]", pos)
+    val type = if (tag == "audio" || tag == "video") tag else header.substringAfter('=', "").substringBefore(',').trim()
+    val closing = "[/$tag]"
+    val closeTag = indexOfIgnoreCase(closing, pos)
     if (closeTag == -1) {
-      return null
+      return PostContentPart.Text(source.substring(start, pos))
     }
     val rawUrl = source.substring(pos, closeTag).trim()
-    pos = closeTag + "[/flash]".length
-    if (rawUrl.isBlank()) return null
+    pos = closeTag + closing.length
+    return mediaPart(rawUrl, type) ?: PostContentPart.Text(source.substring(start, pos))
+  }
 
-    return when (flashType) {
-      "audio" -> {
-        val url = normalizeContentMediaUrl(rawUrl)
-        PostContentPart.Audio(
-          url = url,
-          label = ImageUrlResolver.fileName(url),
-        )
-      }
-      else -> null
+  private fun parseHtmlMedia(): PostContentPart {
+    val start = pos
+    val type = if (startsWithIgnoreCase("<audio")) "audio" else "video"
+    val headerEnd = source.indexOf('>', pos)
+    if (headerEnd < 0) { pos = source.length; return PostContentPart.Text(source.substring(start)) }
+    val close = indexOfIgnoreCase("</$type>", headerEnd + 1)
+    pos = if (close < 0) headerEnd + 1 else close + type.length + 3
+    val raw = source.substring(start, pos)
+    val url = extractSrcAttribute(source.substring(start, headerEnd + 1))
+      ?: Regex("<source\\b[^>]*>", RegexOption.IGNORE_CASE).find(raw)?.value?.let(::extractSrcAttribute)
+    return url?.let { mediaPart(it, type) } ?: PostContentPart.Text(raw)
+  }
+
+  private fun mediaPart(raw: String, type: String): PostContentPart? {
+    val url = normalizeContentMediaUrl(raw)
+    val uri = runCatching { java.net.URI(url) }.getOrNull() ?: return null
+    if (uri.scheme?.lowercase() !in setOf("http", "https") || uri.host.isNullOrBlank()) return null
+    val extension = uri.path.orEmpty().substringAfterLast('.', "").lowercase()
+    val label = ImageUrlResolver.fileName(url)
+    return if (type == "audio" || extension in setOf("mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "wma")) {
+      PostContentPart.Audio(url, label)
+    } else {
+      PostContentPart.Video(url, label, extension in setOf("mp4", "webm", "m4v", "mov", "3gp", "mkv", "m3u8", "avi", "flv"))
     }
   }
 

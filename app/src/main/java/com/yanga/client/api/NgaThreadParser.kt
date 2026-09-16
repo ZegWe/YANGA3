@@ -55,7 +55,7 @@ data class NgaThreadAttachment(
 object NgaThreadParser {
   private fun resolveAttachmentContent(content: String, attachmentBase: String?): String =
     if (attachmentBase.isNullOrBlank()) content else
-    Regex("""(\[(?:img|flash|audio|video)[^\]]*\]\s*)((?:\./|/)?mon_[^\s\[<>]+)""", RegexOption.IGNORE_CASE)
+    Regex("""(\[(?:img|flash|media|audio|video)[^\]]*\]\s*)((?:\./|/?mon_)[^\s\[<>]+)""", RegexOption.IGNORE_CASE)
       .replace(content) { match ->
         match.groupValues[1] + ImageUrlResolver.resolve(match.groupValues[2], attachmentBase)
       }
