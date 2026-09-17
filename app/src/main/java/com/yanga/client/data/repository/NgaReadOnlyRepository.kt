@@ -34,6 +34,9 @@ interface NgaReadOnlyRepository {
 
   suspend fun loadPersonalTopics(session: LoginSessionData?, kind: com.yanga.client.api.NgaPersonalTopicKind, page: Int): Result<com.yanga.client.api.NgaPersonalTopicPage> = Result.failure(UnsupportedOperationException())
 
+  suspend fun saveAvatar(session: LoginSessionData?, iconUrl: String): Result<Unit> = Result.failure(UnsupportedOperationException())
+  suspend fun uploadAvatar(session: LoginSessionData?, png: ByteArray): Result<String> = Result.failure(UnsupportedOperationException())
+
   suspend fun saveSignature(session: LoginSessionData?, signature: String): Result<Unit> = Result.failure(UnsupportedOperationException())
 
   suspend fun loadUser(session: LoginSessionData?, uid: String): Result<com.yanga.client.api.NgaUserProfile> = Result.failure(UnsupportedOperationException())
@@ -133,6 +136,21 @@ class DefaultNgaReadOnlyRepository(
     execute(api(login).topicList(page = page, authorId = if (favorites) null else uid,
       searchPost = if (kind == com.yanga.client.api.NgaPersonalTopicKind.Replies) 1 else null,
       favor = if (favorites) 1 else null), com.yanga.client.api.NgaPersonalTopicParser::parse)
+  }
+
+  override suspend fun saveAvatar(session: LoginSessionData?, iconUrl: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val login = session.requireLogin() ?: return@withContext Result.failure(LoginRequiredException())
+    if (iconUrl.isBlank()) return@withContext Result.failure(IllegalArgumentException("请先上传头像图片"))
+    execute(api(login).saveUploadedAvatar(login.uid, iconUrl), com.yanga.client.api.NgaAvatarUpload::requireSaved)
+  }
+
+  override suspend fun uploadAvatar(session: LoginSessionData?, png: ByteArray): Result<String> = withContext(Dispatchers.IO) {
+    val login = session.requireLogin() ?: return@withContext Result.failure(LoginRequiredException())
+    if (png.isEmpty() || png.size > 1024 * 1024) return@withContext Result.failure(IllegalArgumentException("头像图片大小无效"))
+    runCatching {
+      val ticket = execute(api(login).avatarEdit(login.uid), com.yanga.client.api.NgaAvatarUpload::ticket).getOrThrow()
+      execute(com.yanga.client.api.NgaAvatarUpload.request(ticket, login.uid, png), com.yanga.client.api.NgaAvatarUpload::parse).getOrThrow()
+    }
   }
 
   override suspend fun saveSignature(session: LoginSessionData?, signature: String): Result<Unit> = withContext(Dispatchers.IO) {

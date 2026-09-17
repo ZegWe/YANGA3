@@ -29,6 +29,7 @@ data class NgaRequest(
   val query: Map<String, String> = emptyMap(),
   val headers: Map<String, String> = emptyMap(),
   val body: NgaFormBody = NgaFormBody(),
+  val binaryBody: ByteArray? = null,
 ) {
   val bodyMap: Map<String, String>
     get() = body.asMap()

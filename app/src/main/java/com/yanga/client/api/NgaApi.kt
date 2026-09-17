@@ -336,7 +336,7 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
   fun avatarUploadMetadata(fileName: String): NgaRequest =
     NgaRequest(
       method = NgaHttpMethod.POST,
-      url = "http://app.myauth.us/api/attach.php",
+      url = "https://app.myauth.us/api/attach.php",
       headers = commonHeaders() + ("Content-Type" to "multipart/form-data"),
       body = formBody {
         addRaw("v2", "1")
@@ -351,10 +351,26 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
       },
     )
 
+  fun avatarEdit(uid: String): NgaRequest = get("nuke.php", linkedMapOf(
+    "__lib" to "set_avatar", "__act" to "get", "uid" to uid,
+    "edit" to "1", "raw" to "3", "__output" to "8",
+  ))
+
+  fun saveUploadedAvatar(uid: String, avatar: String): NgaRequest = post(
+    "nuke.php", body = formBody {
+      addRaw("__lib", "set_avatar")
+      addRaw("__act", "set")
+      addRaw("uid", uid)
+      addRaw("avatar", NgaEncoding.urlEncodeGbk(avatar))
+      addRaw("raw", "3")
+      addRaw("__output", "8")
+    },
+  )
+
   fun avatarChange(iconUrl: String, checksum: String? = null): NgaRequest =
     NgaRequest(
       method = NgaHttpMethod.POST,
-      url = "http://nga.178.com/nuke.php",
+      url = "https://nga.178.com/nuke.php",
       headers = commonHeaders(),
       body = formBody {
         addRaw("lite", "js")

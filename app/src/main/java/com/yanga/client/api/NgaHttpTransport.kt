@@ -24,10 +24,11 @@ class HttpUrlConnectionNgaTransport(
 
     if (request.method == NgaHttpMethod.POST) {
       connection.doOutput = true
-      val body = request.body.fields.joinToString("&")
+      val body = request.binaryBody ?: request.body.fields.joinToString("&").toByteArray(Charset.forName("GBK"))
       if (body.isNotEmpty()) {
+        connection.setFixedLengthStreamingMode(body.size)
         connection.outputStream.use { output ->
-          output.write(body.toByteArray(Charset.forName("GBK")))
+          output.write(body)
         }
       }
     }

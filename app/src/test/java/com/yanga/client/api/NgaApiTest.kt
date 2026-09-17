@@ -435,13 +435,13 @@ class NgaApiTest {
   @Test
   fun avatarUploadAndChangeRequestsMatchLegacyEndpoints() {
     val upload = api.avatarUploadMetadata(fileName = "avatar.jpg")
-    assertEquals("http://app.myauth.us/api/attach.php", upload.url)
+    assertEquals("https://app.myauth.us/api/attach.php", upload.url)
     assertEquals("-7", upload.bodyMap["fid"])
     assertEquals("avatar.jpg", upload.bodyMap["attachment_file1_url_utf8_name"])
     assertEquals("upload", upload.bodyMap["func"])
 
     val change = api.avatarChange(iconUrl = "http://img.example/头像.jpg", checksum = "sum")
-    assertEquals("http://nga.178.com/nuke.php", change.url)
+    assertEquals("https://nga.178.com/nuke.php", change.url)
     assertEquals("js", change.bodyMap["lite"])
     assertEquals("", change.bodyMap["noprefix"])
     assertEquals("avatar", change.bodyMap["func"])
