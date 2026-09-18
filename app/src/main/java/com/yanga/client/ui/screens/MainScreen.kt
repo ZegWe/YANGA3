@@ -6,7 +6,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -211,11 +210,6 @@ fun MainScreen(
             preferences = themePreferences,
             onPreferencesChange = onThemePreferencesChange,
             onBack = { popBackStack(backStack) },
-            modifier = modifier
-              .fillMaxSize()
-              .background(MaterialTheme.colorScheme.background)
-              .safeDrawingPadding()
-              .padding(horizontal = 20.dp, vertical = 16.dp),
           )
         }
       },

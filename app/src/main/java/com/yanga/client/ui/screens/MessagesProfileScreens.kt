@@ -22,7 +22,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
@@ -275,46 +274,37 @@ internal fun ThemeSettingsScreen(
   modifier: Modifier = Modifier,
 ) {
   val isDarkTheme = preferences.darkMode.resolveDarkTheme(isSystemInDarkTheme())
-  LazyColumn(
-    modifier = modifier.fillMaxSize(),
-    verticalArrangement = Arrangement.spacedBy(16.dp),
-  ) {
-    item {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        IconButton(onClick = onBack) {
-          Icon(imageVector = Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
-        }
-        Text(text = "主题设置", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+  ProfilePageScaffold(title = "主题设置", onBack = onBack) { padding ->
+    LazyColumn(
+      modifier = modifier.fillMaxSize().padding(padding),
+      contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+      verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+      item { SectionHeader(title = "深色模式") }
+      items(DarkModePreference.entries) { mode ->
+        ThemeOptionRow(
+          title = mode.label,
+          selected = preferences.darkMode == mode,
+          onClick = { onPreferencesChange(preferences.copy(darkMode = mode)) },
+        )
       }
-    }
-    item { SectionHeader(title = "深色模式") }
-    items(DarkModePreference.entries) { mode ->
-      ThemeOptionRow(
-        title = mode.label,
-        selected = preferences.darkMode == mode,
-        onClick = { onPreferencesChange(preferences.copy(darkMode = mode)) },
-      )
-    }
-    item { SectionHeader(title = "主题色") }
-    item {
-      ThemeColorSwatchPicker(
-        selectedColor = preferences.color,
-        isDarkTheme = isDarkTheme,
-        onSelectColor = { onPreferencesChange(preferences.copy(color = it)) },
-        onDynamicColorChange = { enabled ->
-          val color =
-            if (enabled) {
-              ThemeColorPreference.System
-            } else {
-              ThemeColorPreference.Fixed(FixedThemeColor.entries.first())
-            }
-          onPreferencesChange(preferences.copy(color = color))
-        },
-      )
+      item { SectionHeader(title = "主题色") }
+      item {
+        ThemeColorSwatchPicker(
+          selectedColor = preferences.color,
+          isDarkTheme = isDarkTheme,
+          onSelectColor = { onPreferencesChange(preferences.copy(color = it)) },
+          onDynamicColorChange = { enabled ->
+            val color =
+              if (enabled) {
+                ThemeColorPreference.System
+              } else {
+                ThemeColorPreference.Fixed(FixedThemeColor.entries.first())
+              }
+            onPreferencesChange(preferences.copy(color = color))
+          },
+        )
+      }
     }
   }
 }
