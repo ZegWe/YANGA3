@@ -49,4 +49,20 @@ class NgaReplyRepositoryTest {
     assertTrue(repo.submitReply(session, "10", "0", "内容").isFailure)
     assertEquals(2, transport.requests.size)
   }
+
+  @Test fun acceptsStructuredAndArraySuccessButNotAnErrorStatus() = runTest {
+    val transport = Transport()
+    val repo = DefaultNgaReadOnlyRepository(transport)
+    listOf(
+      """window.script_muti_get_var_store={"data":{"__MESSAGE":{"0":"提示","1":"<br/>发贴完毕","3":200}}};""",
+      """{"data":["回复成功"]}""",
+    ).forEach {
+      transport.response = it
+      assertTrue(repo.submitReply(session, "10", "0", "内容").isSuccess)
+    }
+    transport.response = """{"data":{"__MESSAGE":{"1":"主题已锁定","3":403}}}"""
+    assertEquals("主题已锁定", repo.submitReply(session, "10", "0", "内容").exceptionOrNull()?.message)
+    transport.response = """{"data":{"__MESSAGE":{"1":"发贴完毕","3":500}}}"""
+    assertTrue(repo.submitReply(session, "10", "0", "内容").isFailure)
+  }
 }

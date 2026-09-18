@@ -157,7 +157,62 @@ class ThreadContentViewModelTest {
     assertEquals(-2, (model.state.value!!.posts as LoadableUiState.Content).value.single().score)
   }
 
+  @Test fun refreshPreservesPostsAndFilterAndReportsFailure() = runTest(dispatcher) {
+    val repo = FakeRepository()
+    val model = ThreadContentViewModel(repo)
+    model.openThread(null, ThreadDestination("123", "Thread"))
+    advanceUntilIdle()
+    val post = (model.state.value!!.posts as LoadableUiState.Content).value.single()
+    model.filterAuthor(null, post)
+    advanceUntilIdle()
+    val previous = model.state.value!!.posts
+    repo.fail = true
+    model.refresh(null)
+    assertTrue(model.state.value!!.isRefreshing)
+    assertEquals(previous, model.state.value!!.posts)
+    advanceUntilIdle()
+    assertEquals(previous, model.state.value!!.posts)
+    assertEquals("42", model.state.value!!.filteredAuthorId)
+    assertTrue(!model.state.value!!.isRefreshing)
+    assertTrue(model.state.value!!.refreshError != null)
+    repo.fail = false
+    model.refresh(null)
+    advanceUntilIdle()
+    assertEquals(null, model.state.value!!.refreshError)
+    assertEquals(3, repo.filteredPages.size)
+  }
+
+  @Test fun replyOnLatestPageReloadsAndFollowsNewLastPage() = runTest(dispatcher) {
+    val repo = FakeRepository()
+    val model = ThreadContentViewModel(repo)
+    model.openThread(null, ThreadDestination("123", "Thread", page = 2))
+    advanceUntilIdle()
+    repo.maxPage = 3
+    model.refreshAfterReply(null)
+    advanceUntilIdle()
+    assertEquals(listOf(2, 2, 3), repo.loadedPages)
+    assertEquals("3", model.state.value!!.page)
+  }
+
+  @Test fun replyOnOlderPagePreservesPositionButInvalidatesCachedLatestPage() = runTest(dispatcher) {
+    val repo = FakeRepository()
+    val model = ThreadContentViewModel(repo)
+    model.openThread(null, ThreadDestination("123", "Thread", page = 2))
+    advanceUntilIdle()
+    model.openPage(null, 1)
+    advanceUntilIdle()
+    model.refreshAfterReply(null)
+    advanceUntilIdle()
+    assertEquals("1", model.state.value!!.page)
+    assertEquals(listOf(2, 1), repo.loadedPages)
+    model.openPage(null, 2)
+    advanceUntilIdle()
+    assertEquals(listOf(2, 1, 2), repo.loadedPages)
+  }
+
   private class FakeRepository(private val poll: com.yanga.client.api.NgaPoll? = null) : NgaReadOnlyRepository {
+    var maxPage = 2
+    var fail = false
     val loadedPages = mutableListOf<Int>()
     val filteredPages = mutableListOf<Pair<String, Int>>()
     override suspend fun loadThreadByAuthor(session: LoginSessionData?, tid: String, page: Int, authorId: String): Result<NgaThreadRead> {
@@ -189,6 +244,7 @@ class ThreadContentViewModelTest {
 
     override suspend fun loadThread(session: LoginSessionData?, tid: String, page: Int): Result<NgaThreadRead> {
       loadedPages += page
+      if (fail) return Result.failure(java.io.IOException("offline"))
       return Result.success(
         NgaThreadRead(
           tid = tid,
@@ -196,7 +252,7 @@ class ThreadContentViewModelTest {
           fid = "7",
           page = page,
           replyCount = 39,
-          maxPage = 2,
+          maxPage = maxPage,
           posts =
             listOf(
               NgaThreadPost(

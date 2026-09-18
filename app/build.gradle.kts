@@ -73,6 +73,7 @@ kotlin {
 
 dependencies {
   implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+  implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
   androidTestImplementation(composeBom)

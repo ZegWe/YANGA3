@@ -74,6 +74,7 @@ fun ThreadRoute(
   )
   ThreadReadingScreen(
     state = threadState,
+    onRefresh = { threadContentViewModel.refresh(loginSession?.toData()) },
     onBack = onBack,
     onReplyClick = { replyModel.open(null) },
     onReplyPost = { replyModel.open(it) },

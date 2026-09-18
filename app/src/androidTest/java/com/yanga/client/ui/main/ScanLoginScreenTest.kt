@@ -36,12 +36,23 @@ class ScanLoginScreenTest {
     compose.onNodeWithText("打开相机扫码").assertExists()
   }
 
+  @Test fun fallbackDisplaysMaterialScannerAndBackAction() {
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    instrumentation.uiAutomation.executeShellCommand(
+      "pm grant ${instrumentation.targetContext.packageName} android.permission.CAMERA",
+    ).use { descriptor -> java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() } }
+    compose.setContent { LocalQrScannerScreen({}, {}) }
+    compose.onNodeWithText("对准 NGA 登录二维码").assertExists()
+    compose.onNodeWithText("识别后进入官方页面确认授权").assertExists()
+    compose.onNodeWithText("扫一扫").assertExists()
+  }
+
   @Test fun cameraScannerCanBeOpenedAndCancelled() {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     instrumentation.uiAutomation.executeShellCommand(
       "pm grant ${instrumentation.targetContext.packageName} android.permission.CAMERA",
     ).use { descriptor -> java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() } }
-    val monitor = instrumentation.addMonitor("com.journeyapps.barcodescanner.CaptureActivity", null, false)
+    val monitor = instrumentation.addMonitor("com.yanga.client.QrScannerActivity", null, false)
     try {
       compose.setContent { ScanLoginScreen(LoginSessionUiState("测试用户", "42", "cookie"), {}, {}) }
       compose.onNodeWithText("打开相机扫码").performClick()

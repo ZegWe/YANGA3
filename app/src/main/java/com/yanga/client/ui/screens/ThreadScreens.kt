@@ -69,6 +69,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -86,6 +92,7 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -381,10 +388,11 @@ internal fun BoardTopicListScreen(
   }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ThreadReadingScreen(
   state: ThreadUiState,
+  onRefresh: () -> Unit = {},
   onBack: () -> Unit,
   onOpenInBrowser: () -> Unit = {},
   onPageChange: (Int) -> Unit = {},
@@ -399,6 +407,9 @@ internal fun ThreadReadingScreen(
   onVote: PollSubmit? = null,
   modifier: Modifier = Modifier,
 ) {
+  val refreshState = rememberPullToRefreshState()
+  val snackbar = remember { SnackbarHostState() }
+  LaunchedEffect(state.refreshError) { state.refreshError?.let { snackbar.showSnackbar(it) } }
   var menuExpanded by remember { mutableStateOf(false) }
   var isFavorited by remember { mutableStateOf(false) }
   var showQuickJumpSheet by remember { mutableStateOf(false) }
@@ -434,6 +445,7 @@ internal fun ThreadReadingScreen(
 
   Scaffold(
     modifier = modifier.fillMaxSize(),
+    snackbarHost = { SnackbarHost(snackbar) },
     topBar = {
       Column {
         TopAppBar(
@@ -492,11 +504,18 @@ internal fun ThreadReadingScreen(
       }
     }
   ) { paddingValues ->
-    Box(
-      modifier =
-        Modifier
-          .padding(paddingValues)
-          .fillMaxSize(),
+    PullToRefreshBox(
+      isRefreshing = state.isRefreshing,
+      onRefresh = onRefresh,
+      state = refreshState,
+      modifier = Modifier.padding(paddingValues).fillMaxSize(),
+      indicator = {
+        PullToRefreshDefaults.LoadingIndicator(
+          state = refreshState,
+          isRefreshing = state.isRefreshing,
+          modifier = Modifier.align(Alignment.TopCenter),
+        )
+      },
     ) {
       HorizontalPager(
         state = pagerState,
@@ -640,7 +659,7 @@ private fun ThreadPageContent(
 
       LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().testTag("thread-posts-$pageNumber"),
         contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
       ) {
@@ -674,7 +693,7 @@ private fun ThreadPageContent(
     } else null
     if (message != null) {
       Box(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
         contentAlignment = Alignment.Center,
       ) {
         Text(

@@ -39,12 +39,19 @@ class ThreadContentViewModel(
   fun matchesThread(threadId: String): Boolean = activeThreadId == threadId
 
   fun refreshAfterReply(session: LoginSessionData?) {
-    val destination = activeDestination ?: return
-    val page = _state.value?.page?.toIntOrNull() ?: destination.page
-    requestGeneration++
     pageCache.clear()
-    _state.value = null
-    openThread(session, destination.copy(page = page, targetPostId = null, targetFloorNumber = null))
+    val current = _state.value ?: return
+    if (current.page == current.maxPage) refresh(session, followLatest = true)
+    else _state.value = current.copy(cachedPostsByPage = emptyMap())
+  }
+
+  fun refresh(session: LoginSessionData?, followLatest: Boolean = false) {
+    val destination = activeDestination ?: return
+    val current = _state.value ?: return
+    if (current.isRefreshing && !followLatest) return
+    pageCache.clear()
+    openThread(session, destination.copy(page = current.page.toIntOrNull() ?: 1,
+      targetPostId = null, targetFloorNumber = null), forceRefresh = true, followLatest = followLatest)
   }
 
   fun updatePollResults(poll: com.yanga.client.api.NgaPoll) {
@@ -83,7 +90,7 @@ class ThreadContentViewModel(
     openThread(session = session, destination = ThreadDestination(id = topic.id, title = topic.title))
   }
 
-  fun openThread(session: LoginSessionData?, destination: ThreadDestination) {
+  fun openThread(session: LoginSessionData?, destination: ThreadDestination, forceRefresh: Boolean = false, followLatest: Boolean = false) {
     val threadId = destination.id
     val page = destination.page
     val fallbackTitle = destination.title
@@ -101,7 +108,7 @@ class ThreadContentViewModel(
       pageCache.clear()
     }
     if (
-      activeThreadId == threadId &&
+      !forceRefresh && activeThreadId == threadId &&
         cached != null &&
         cached.page.toIntOrNull() == page &&
         cached.posts is LoadableUiState.Content
@@ -116,7 +123,7 @@ class ThreadContentViewModel(
         )
       return
     }
-    pageCache[page]?.let { cachedPage ->
+    pageCache[page]?.takeUnless { forceRefresh }?.let { cachedPage ->
       loadingThreadId = null
       loadingPage = null
       activeThreadId = threadId
@@ -137,7 +144,9 @@ class ThreadContentViewModel(
       cached
         ?.copy(
           page = page.toString(),
-          posts = LoadableUiState.Loading,
+          posts = if (forceRefresh && cached.posts is LoadableUiState.Content) cached.posts else LoadableUiState.Loading,
+          isRefreshing = forceRefresh,
+          refreshError = null,
           targetPostId = destination.targetPostId,
           targetFloorNumber = destination.targetFloorNumber,
           targetScrollRequestId = scrollRequestId,
@@ -184,7 +193,9 @@ class ThreadContentViewModel(
               loadedState.withCachedPosts()
             },
             onFailure = {
-              ThreadUiState(
+              if (forceRefresh && current.posts is LoadableUiState.Content) {
+                current.copy(isRefreshing = false, refreshError = "刷新失败，请稍后重试")
+              } else ThreadUiState(
                 filteredAuthorId = filteredAuthorId,
                 filteredAuthorName = filteredAuthorName,
                 title = fallbackTitle,
@@ -202,6 +213,9 @@ class ThreadContentViewModel(
         } else {
           current
         }
+      }
+      if (followLatest && generation == requestGeneration) {
+        result.getOrNull()?.maxPage?.takeIf { it > page }?.let { openPage(session, it) }
       }
     }
   }

@@ -21,8 +21,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
+import android.app.Activity
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import com.yanga.client.QrScannerActivity
 import com.yanga.client.ui.navigation.WebViewRoute
 import com.yanga.client.web.NgaQrLoginLink
 
@@ -31,20 +33,13 @@ import com.yanga.client.web.NgaQrLoginLink
 internal fun ScanLoginScreen(session: LoginSessionUiState?, onLogin: () -> Unit, onBack: () -> Unit) {
   var scannedUrl by rememberSaveable { mutableStateOf<String?>(null) }
   var error by rememberSaveable { mutableStateOf<String?>(null) }
-  val scanner = rememberLauncherForActivityResult(ScanContract()) { result ->
-    result.contents?.let { raw ->
+  val context = LocalContext.current
+  val scanner = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    result.data?.getStringExtra(QrScannerActivity.RESULT_TEXT)?.takeIf { result.resultCode == Activity.RESULT_OK }?.let { raw ->
       val link = NgaQrLoginLink.parse(raw)
       if (link == null) error = "这不是支持的 NGA 登录二维码，请扫描另一台设备上的 NGA 登录二维码"
       else { scannedUrl = link.url; error = null }
     }
-  }
-  val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-    if (!granted) error = "未获得相机权限，请允许相机权限后重试，或在系统设置中开启"
-    else runCatching {
-      scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-        .setPrompt("扫描另一台设备上的 NGA 登录二维码")
-        .setBeepEnabled(false).setOrientationLocked(false))
-    }.onFailure { error = "无法打开相机，请检查相机是否可用后重试" }
   }
   val link = scannedUrl?.let(NgaQrLoginLink::parse)
   BackHandler(enabled = link != null) { scannedUrl = null }
@@ -97,7 +92,11 @@ internal fun ScanLoginScreen(session: LoginSessionUiState?, onLogin: () -> Unit,
         Button(
           onClick = {
             if (session == null) onLogin()
-            else { error = null; cameraPermission.launch(android.Manifest.permission.CAMERA) }
+            else {
+              error = null
+              runCatching { scanner.launch(Intent(context, QrScannerActivity::class.java)) }
+                .onFailure { error = "无法打开扫码工具，请重试" }
+            }
           },
           modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
           contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),

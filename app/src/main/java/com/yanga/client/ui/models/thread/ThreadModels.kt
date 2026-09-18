@@ -35,6 +35,8 @@ data class PostAttachmentPreview(
 )
 
 data class ThreadUiState(
+  val isRefreshing: Boolean = false,
+  val refreshError: String? = null,
   val title: String = "",
   val page: String = "1",
   val maxPage: String = "1",
