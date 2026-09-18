@@ -164,6 +164,15 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
     stid?.let { addRaw("stid", it) }
   }
 
+  fun reply(tid: String, pid: String, content: String): NgaRequest =
+    post("post.php", query = linkedMapOf("__output" to "8"), body = formBody {
+      addRaw("action", "reply")
+      addRaw("step", "2")
+      addRaw("tid", tid)
+      addRaw("pid", pid)
+      addRaw("post_content", NgaEncoding.urlEncodeGbk(content))
+    })
+
   fun attachmentUploadMetadata(fid: Int, auth: String, fileName: String): NgaRequest =
     NgaRequest(
       method = NgaHttpMethod.POST,

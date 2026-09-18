@@ -38,6 +38,15 @@ class ThreadContentViewModel(
 
   fun matchesThread(threadId: String): Boolean = activeThreadId == threadId
 
+  fun refreshAfterReply(session: LoginSessionData?) {
+    val destination = activeDestination ?: return
+    val page = _state.value?.page?.toIntOrNull() ?: destination.page
+    requestGeneration++
+    pageCache.clear()
+    _state.value = null
+    openThread(session, destination.copy(page = page, targetPostId = null, targetFloorNumber = null))
+  }
+
   fun updatePollResults(poll: com.yanga.client.api.NgaPoll) {
     if (activeThreadId != poll.tid) return
     fun ThreadUiState.updated(): ThreadUiState {

@@ -42,6 +42,16 @@ fun ThreadRoute(
   val context = LocalContext.current
   val threadContentViewModel = viewModel<ThreadContentViewModel> { ThreadContentViewModel(repository) }
   val threadContentState by threadContentViewModel.state.collectAsState()
+  val replyModel = viewModel<com.yanga.client.ui.ReplyViewModel>()
+  val replyVisible by replyModel.visible.collectAsState()
+  val replySent by replyModel.sent.collectAsState()
+  LaunchedEffect(replySent) {
+    if (replySent) {
+      replyModel.sent.value = false
+      Toast.makeText(context, "回复已发送", Toast.LENGTH_SHORT).show()
+      threadContentViewModel.refreshAfterReply(loginSession?.toData())
+    }
+  }
 
   LaunchedEffect(destination.id, destination.page, loginSession?.cookie) {
     threadContentViewModel.ensureThreadOpened(loginSession?.toData(), destination)
@@ -50,17 +60,23 @@ fun ThreadRoute(
   val threadState =
     threadContentState?.takeIf { threadContentViewModel.matchesThread(destination.id) }
       ?: ThreadUiState(title = destination.title)
-  fun openReply(post: com.yanga.client.ui.PostPreview?) {
+  fun openWebReply() {
     val url = Uri.parse(baseUrl).buildUpon().encodedPath("/post.php").clearQuery()
       .appendQueryParameter("action", "reply").appendQueryParameter("tid", destination.id)
-      .appendQueryParameter("pid", post?.pid?.ifBlank { "0" } ?: "0").build().toString()
-    navigate(MainDestinationKey.Web(url = url, title = post?.let { "回复 ${it.author}" } ?: "回复主题", baseUrl = baseUrl))
+      .appendQueryParameter("pid", replyModel.pid.value).build().toString()
+    replyModel.close()
+    navigate(MainDestinationKey.Web(url = url, title = replyModel.target.value, baseUrl = baseUrl))
   }
+  if (replyVisible) com.yanga.client.ui.ReplyComposer(
+    title = threadState.title, model = replyModel, loggedIn = !loginSession?.cookie.isNullOrBlank(),
+    onSend = { replyModel.submit(repository, loginSession?.toData(), destination.id) },
+    onWeb = ::openWebReply,
+  )
   ThreadReadingScreen(
     state = threadState,
     onBack = onBack,
-    onReplyClick = { openReply(null) },
-    onReplyPost = { openReply(it) },
+    onReplyClick = { replyModel.open(null) },
+    onReplyPost = { replyModel.open(it) },
     onUserClick = { navigate(MainDestinationKey.User(it)) },
     onFilterAuthor = { threadContentViewModel.filterAuthor(loginSession?.toData(), it) },
     onReact = if (loginSession == null) null else { post, support ->

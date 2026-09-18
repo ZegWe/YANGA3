@@ -28,6 +28,8 @@ import java.util.concurrent.TimeUnit
 class LoginRequiredException : IllegalStateException("Login is required for this read operation")
 
 interface NgaReadOnlyRepository {
+  suspend fun submitReply(session: LoginSessionData?, tid: String, pid: String, content: String): Result<Unit> =
+    Result.failure(UnsupportedOperationException("回帖暂不可用"))
   suspend fun loadNotifications(session: LoginSessionData?): Result<List<com.yanga.client.api.NgaNotificationSummary>> = Result.failure(UnsupportedOperationException())
 
   suspend fun loadUserTopics(session: LoginSessionData?, uid: String, page: Int): Result<com.yanga.client.api.NgaPersonalTopicPage> = Result.failure(UnsupportedOperationException())
@@ -110,6 +112,13 @@ class DefaultNgaReadOnlyRepository(
   private val boardSectionDirectory: BoardSectionDirectory? = null,
 ) : NgaReadOnlyRepository {
   private val logTag = "YangaSubBoardRpc"
+  override suspend fun submitReply(session: LoginSessionData?, tid: String, pid: String, content: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val login = session.requireLogin() ?: return@withContext Result.failure(IllegalStateException("请先登录后再回帖"))
+    if (tid.toIntOrNull()?.let { it > 0 } != true || pid.toIntOrNull()?.let { it >= 0 } != true || content.isBlank()) {
+      return@withContext Result.failure(IllegalArgumentException("主题、楼层或回复内容无效"))
+    }
+    execute(api(login).reply(tid, pid, content), com.yanga.client.api.NgaReplyParser::requireSuccess)
+  }
   fun setBaseUrl(url: String) {
     baseUrl = url
   }
