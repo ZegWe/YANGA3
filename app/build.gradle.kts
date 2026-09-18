@@ -72,6 +72,7 @@ kotlin {
 }
 
 dependencies {
+  implementation("com.journeyapps:zxing-android-embedded:4.3.0")
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
   androidTestImplementation(composeBom)

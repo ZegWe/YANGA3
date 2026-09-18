@@ -15,6 +15,7 @@ import kotlinx.serialization.Serializable
 sealed interface MainDestinationKey : NavKey {
   @Serializable data object Home : MainDestinationKey
   @Serializable data object Login : MainDestinationKey
+  @Serializable data object Scan : MainDestinationKey
   @Serializable data class Board(val destination: BoardDestination, val instanceId: String = java.util.UUID.randomUUID().toString()) : MainDestinationKey
   @Serializable data class Thread(val destination: ThreadDestination, val instanceId: String = java.util.UUID.randomUUID().toString()) : MainDestinationKey
   @Serializable data class Search(val board: BoardDestination? = null, val instanceId: String = java.util.UUID.randomUUID().toString()) : MainDestinationKey

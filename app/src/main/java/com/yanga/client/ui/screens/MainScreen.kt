@@ -147,6 +147,7 @@ fun MainScreen(
             onEndpointChange = { profileViewModel.setEndpoint(it) },
             onThemeSettingsClick = { navigate(MainDestinationKey.ThemeSettings) },
             onAboutClick = { navigate(MainDestinationKey.About) },
+            onScanClick = { navigate(MainDestinationKey.Scan) },
             onCheckIn = { profileViewModel.checkIn(sessionData) },
             onNotifications = { navigate(MainDestinationKey.Notifications) },
             onPersonalTopics = { if (sessionData == null) onLoginClick() else navigate(MainDestinationKey.PersonalTopics(it)) },
@@ -178,6 +179,7 @@ fun MainScreen(
         entry<MainDestinationKey.Web> { key ->
           WebViewRoute(key.url, key.title, key.baseUrl, loginSession?.cookie.orEmpty(), onBack)
         }
+        entry<MainDestinationKey.Scan> { ScanLoginScreen(loginSession, onLoginClick, onBack) }
         entry<MainDestinationKey.Login> {
           PasswordLoginScreen(
             onLoginComplete = { session ->
@@ -234,6 +236,7 @@ private fun MainRootScaffold(
   onEndpointChange: (String) -> Unit,
   onThemeSettingsClick: () -> Unit,
   onAboutClick: () -> Unit,
+  onScanClick: () -> Unit,
   onAccountSettings: () -> Unit,
   onNotifications: () -> Unit,
   onPersonalTopics: (String) -> Unit,
@@ -261,6 +264,7 @@ private fun MainRootScaffold(
         onEndpointChange = onEndpointChange,
         onThemeSettingsClick = onThemeSettingsClick,
         onAboutClick = onAboutClick,
+        onScanClick = onScanClick,
         onAccountSettings = onAccountSettings,
         onNotifications = onNotifications,
         onPersonalTopics = onPersonalTopics,
@@ -285,6 +289,7 @@ private fun MainTabContent(
   onEndpointChange: (String) -> Unit,
   onThemeSettingsClick: () -> Unit,
   onAboutClick: () -> Unit,
+  onScanClick: () -> Unit,
   onAccountSettings: () -> Unit,
   onNotifications: () -> Unit,
   onPersonalTopics: (String) -> Unit,
@@ -333,6 +338,7 @@ private fun MainTabContent(
         onEndpointChange = onEndpointChange,
         onThemeSettingsClick = onThemeSettingsClick,
         onAboutClick = onAboutClick,
+        onScanClick = onScanClick,
         onAccountSettings = onAccountSettings,
         onNotifications = onNotifications,
         onPersonalTopics = onPersonalTopics,

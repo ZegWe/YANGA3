@@ -1,6 +1,12 @@
 package com.yanga.client.ui
 
 import android.graphics.BitmapFactory
+import android.webkit.CookieManager
+import androidx.activity.compose.BackHandler
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.yanga.client.api.NgaLoginCookies
+import com.yanga.client.ui.navigation.WebViewRoute
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
@@ -61,6 +67,29 @@ internal fun PasswordLoginScreen(
   val pageId = remember { "P${Random.nextLong(100_000_000_000_000, 999_999_999_999_999)}" }
   var loading by remember { mutableStateOf(false) }
   var error by remember { mutableStateOf<String?>(null) }
+  var webLogin by rememberSaveable { mutableStateOf(false) }
+
+  BackHandler(enabled = webLogin) { webLogin = false }
+  if (webLogin) {
+    WebViewRoute(
+      pageUrl = "https://bbs.nga.cn/nuke.php?__lib=login&__act=login_ui",
+      fallbackTitle = "网页登录",
+      cookieBaseUrl = "https://bbs.nga.cn",
+      cookieHeader = "",
+      onBack = { webLogin = false },
+      onLoginCookies = { cookie ->
+        val session = runCatching { NgaLoginCookies.parse(cookie) }.getOrNull()
+        if (session != null && (session.uid.toLongOrNull() ?: 0) > 0) {
+          CookieManager.getInstance().flush()
+          onLoginComplete(LoginSessionUiState(username = session.username, uid = session.uid, cookie = cookie))
+          true
+        } else {
+          false
+        }
+      },
+    )
+    return
+  }
 
   Column(
     modifier = modifier
@@ -84,6 +113,9 @@ internal fun PasswordLoginScreen(
       )
       if (loading) {
         CircularProgressIndicator(modifier = Modifier.size(24.dp))
+      }
+      TextButton(onClick = { webLogin = true }, enabled = !loading) {
+        Text("网页登录", maxLines = 1)
       }
     }
 

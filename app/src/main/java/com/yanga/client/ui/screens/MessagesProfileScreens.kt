@@ -50,6 +50,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -138,6 +139,7 @@ internal fun ProfileScreen(
   onEndpointChange: (String) -> Unit = {},
   onThemeSettingsClick: () -> Unit = {},
   onAboutClick: () -> Unit = {},
+  onScanClick: () -> Unit = {},
   onAccountSettings: () -> Unit = {},
   onNotifications: () -> Unit = {},
   onPersonalTopics: (String) -> Unit = {},
@@ -190,6 +192,7 @@ internal fun ProfileScreen(
       title = "账号",
       modifier = Modifier.padding(horizontal = ProfileHorizontalPadding),
     )
+    SettingsRow(row = SettingsPreview("scan", "扫一扫", "扫码授权其他设备登录"), onClick = onScanClick)
     SettingsRow(row = SettingsPreview("account", "账号设置", "签名、头像与账号安全"), onClick = onAccountSettings)
     SettingsRow(row = SettingsPreview("check_in", "收藏", "查看收藏的主题与回复"), onClick = { onPersonalTopics("Favorites") })
     SectionHeader(
@@ -841,6 +844,7 @@ private fun SettingsIcon(icon: String, modifier: Modifier = Modifier) {
 
 private fun String.toSettingsImageVector(): ImageVector =
   when (this) {
+    "scan" -> Icons.Outlined.QrCodeScanner
     "account" -> Icons.Outlined.Person
     "check_in" -> Icons.Outlined.StarBorder
     "theme" -> Icons.Outlined.Palette
