@@ -24,7 +24,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.outlined.Add
@@ -153,11 +152,6 @@ internal fun ProfileScreen(
   var showEndpointDialog by remember { mutableStateOf(false) }
   var showAccountSheet by remember { mutableStateOf(false) }
   var showCheckInDialog by remember(loginSession?.uid) { mutableStateOf(false) }
-
-  LifecycleResumeEffect(loginSession) {
-    onProfileRefresh()
-    onPauseOrDispose { }
-  }
 
   Column(
     modifier = modifier
