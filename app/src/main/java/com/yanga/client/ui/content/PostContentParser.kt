@@ -20,6 +20,7 @@ data class PostTextStyleRange(
 )
 
 sealed class PostContentPart {
+  data class Album(val title: String, val images: List<Image>) : PostContentPart()
   data class ListBlock(val items: List<List<PostContentPart>>, val marker: String? = null) : PostContentPart()
   data class Collapse(val title: String, val parts: List<PostContentPart>) : PostContentPart()
   data class Code(val text: String, val language: String = "") : PostContentPart()
@@ -73,6 +74,7 @@ object PostContentParser {
     parts.forEach { part ->
       when (part) {
         is PostContentPart.Attachment -> add(part.url)
+        is PostContentPart.Album -> Unit
         is PostContentPart.Quote -> addAll(collectAttachmentUrls(part.parts))
         is PostContentPart.Collapse -> addAll(collectAttachmentUrls(part.parts))
         is PostContentPart.Heading -> addAll(collectAttachmentUrls(part.parts))
@@ -83,8 +85,8 @@ object PostContentParser {
     }
   }
 
-  fun parse(content: String): List<PostContentPart> {
-    val normalized = ContentNormalizer.prepare(content)
+  fun parse(content: String, diceContext: PostDiceContext? = null): List<PostContentPart> {
+    val normalized = ContentNormalizer.prepare(PostDiceRolls.render(content, diceContext))
     if (normalized.isBlank()) return emptyList()
 
     val parts = BbContentParser(normalized).parseDocument()
@@ -96,6 +98,7 @@ object PostContentParser {
       for (part in parts) {
         when (part) {
           is PostContentPart.Image -> add(part.url)
+          is PostContentPart.Album -> part.images.forEach { add(it.url) }
           is PostContentPart.Quote -> addAll(collectImageUrls(part.parts))
           is PostContentPart.ListBlock -> part.items.forEach { addAll(collectImageUrls(it)) }
           is PostContentPart.Heading -> addAll(collectImageUrls(part.parts))
@@ -160,6 +163,10 @@ private class BbContentParser(private val source: String, private val depth: Int
         startsWithIgnoreCase("[quote]") -> {
           flushText()
           parts += parseQuote()
+        }
+        startsWithIgnoreCase("[album=") -> {
+          flushText()
+          parts += parseAlbum()
         }
         startsWithIgnoreCase("[attach]") -> {
           flushText()
@@ -230,6 +237,25 @@ private class BbContentParser(private val source: String, private val depth: Int
     if (depth == 0) consume("[/quote]")
     val innerParts = child(inner)
     return PostContentPart.Quote(innerParts)
+  }
+
+  private fun parseAlbum(): PostContentPart {
+    val start = pos
+    val headerEnd = source.indexOf(']', pos)
+    if (headerEnd < 0) { pos = source.length; return PostContentPart.Text(source.substring(start)) }
+    val close = indexOfIgnoreCase("[/album]", headerEnd + 1)
+    if (close < 0) { pos = headerEnd + 1; return PostContentPart.Text(source.substring(start, pos)) }
+    val title = source.substring(pos + "[album=".length, headerEnd).trim().ifBlank { "相册" }
+    val raw = source.substring(headerEnd + 1, close)
+    pos = close + "[/album]".length
+    val urls = raw.lines().map { line -> line.trim().removePrefix("[img]").removeSuffix("[/img]").trim() }
+      .filter(String::isNotBlank)
+    if (urls.isEmpty() || urls.any { value ->
+        val normalized = normalizeContentImageUrl(value)
+        val uri = runCatching { java.net.URI(normalized) }.getOrNull()
+        uri?.scheme?.lowercase() !in setOf("http", "https") || uri?.host.isNullOrBlank()
+      }) return PostContentPart.Text(source.substring(start, pos))
+    return PostContentPart.Album(title, urls.map { PostContentPart.Image(normalizeContentImageUrl(it)) })
   }
 
   private fun child(text: String): List<PostContentPart> = BbContentParser(text, depth + 1).parseDocument()

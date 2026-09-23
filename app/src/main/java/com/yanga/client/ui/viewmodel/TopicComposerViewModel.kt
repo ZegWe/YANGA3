@@ -30,6 +30,40 @@ import kotlinx.coroutines.withContext
 data class PendingTopicAttachment(val uri: String, val name: String, val rotation: Int = 0, val square: Boolean = false, val error: String? = null, val image: Boolean = false) : java.io.Serializable
 
 class TopicComposerViewModel(private val saved: SavedStateHandle) : ViewModel() {
+  var replyTarget by mutableStateOf(saved.get<com.yanga.client.api.ReplyTarget>("replyTarget"))
+    private set
+  val isReply get() = replyTarget != null
+  fun openReply(context: Context, account: String, tid: String, post: PostPreview?) {
+    if (busy) return
+    bindDraft(context, account, 0, ":reply:$tid")
+    if (title.isBlank() && content.text.isBlank() && attachments.isEmpty() && pending.isEmpty() && options == TopicPostOptions()) {
+      replyTarget = com.yanga.client.api.ReplyTarget(tid, post?.pid?.ifBlank { "0" } ?: "0",
+        post?.let { "回复 #${it.floorNumber} ${it.author}" } ?: "回复主题", post?.content.orEmpty())
+      saved["replyTarget"] = replyTarget
+    }
+    persistDraft()
+    open()
+  }
+  fun changeReplyMode(mode: com.yanga.client.api.ReplyMode) {
+    if (busy) return
+    replyTarget = replyTarget?.copy(mode = mode)
+    saved["replyTarget"] = replyTarget
+    persistDraft()
+  }
+  fun replyBody(): String {
+    val target = replyTarget ?: return content.text
+    val link = if (target.pid == "0") "[tid=${target.tid}]${target.label}[/tid]"
+      else "[pid=${target.pid},${target.tid}]${target.label}[/pid]"
+    return if (target.mode == com.yanga.client.api.ReplyMode.Quote && target.quote.isNotBlank())
+      "[quote]$link\n${target.quote}\n[/quote]\n${content.text}"
+    else content.text
+  }
+  fun editReplyQuote(value: String) {
+    if (busy) return
+    replyTarget = replyTarget?.copy(quote = value)
+    saved["replyTarget"] = replyTarget
+    persistDraft()
+  }
   var visible by mutableStateOf(saved.get<Boolean>("visible") ?: false)
     private set
   var title by mutableStateOf(saved.get<String>("title").orEmpty())
@@ -59,7 +93,8 @@ class TopicComposerViewModel(private val saved: SavedStateHandle) : ViewModel() 
   var pending: List<PendingTopicAttachment> by mutableStateOf(saved.get<ArrayList<PendingTopicAttachment>>("pending") ?: emptyList())
     private set
   private var draftStore: TopicDraftStore? = null
-  private var draftKey: String? = null
+  private var draftKey: String? = saved["draftKey"]
+  private var preparationRequest = 0
   private val undo = ArrayDeque<TextFieldValue>()
   private val redo = ArrayDeque<TextFieldValue>()
   var historyVersion by mutableStateOf(0)
@@ -67,30 +102,39 @@ class TopicComposerViewModel(private val saved: SavedStateHandle) : ViewModel() 
   val canUndo get() = historyVersion >= 0 && undo.isNotEmpty()
   val canRedo get() = historyVersion >= 0 && redo.isNotEmpty()
 
-  fun bindDraft(context: Context, account: String, fid: Int) {
-    val key = "$account:$fid"
-    if (draftKey == key) return
+  fun bindDraft(context: Context, account: String, fid: Int, scope: String = "") {
+    val key = "$account:$fid$scope"
+    if (draftKey == key && draftStore != null) return
     val previous = draftKey
     if (previous != null) persistDraft()
-    if (previous != null && !previous.startsWith("guest:")) {
+    if (previous != null && previous != key && (!previous.startsWith("guest:") || scope.isNotEmpty())) {
       title = ""; content = TextFieldValue(); attachments = emptyList(); pending = emptyList()
       options = TopicPostOptions(); uploadOptions = TopicUploadOptions()
       saved["title"] = ""; saved["content"] = ""; saved["owner"] = null
       saved["attachments"] = arrayListOf<TopicAttachment>(); saved["pending"] = arrayListOf<PendingTopicAttachment>()
       saved["options"] = options; saved["uploadOptions"] = uploadOptions
       undo.clear(); redo.clear(); historyVersion++
+      replyTarget = null; saved["replyTarget"] = null
     }
     draftKey = key
-    draftStore = TopicDraftStore(context.applicationContext, account, fid)
+    saved["draftKey"] = key
+    draftStore = TopicDraftStore(context.applicationContext, account, fid, scope)
     if (title.isBlank() && content.text.isBlank() && attachments.isEmpty()) restoreDraft()
+    if (scope.startsWith(":reply:") && replyTarget == null) {
+      replyTarget = com.yanga.client.api.ReplyTarget(scope.removePrefix(":reply:"))
+      saved["replyTarget"] = replyTarget
+    }
   }
   private fun persistDraft() {
     draftStore?.save(TopicDraft(title, content.text, attachments, saved.get<String>("owner"), options, uploadOptions))
+    draftStore?.saveReplyTarget(replyTarget)
   }
   fun restoreDraft() {
     val draft = draftStore?.load() ?: return
     title = draft.title; content = TextFieldValue(draft.content); attachments = draft.attachments
     options = draft.options; uploadOptions = draft.uploadOptions; saved["owner"] = draft.owner
+    replyTarget = draftStore?.loadReplyTarget()
+    saved["replyTarget"] = replyTarget
     saved["title"] = title; saved["content"] = content.text; saved["attachments"] = ArrayList(attachments)
     saved["options"] = options; saved["uploadOptions"] = uploadOptions
     undo.clear(); redo.clear(); historyVersion++
@@ -107,15 +151,16 @@ class TopicComposerViewModel(private val saved: SavedStateHandle) : ViewModel() 
   fun updateOptions(value: TopicPostOptions) { options = value; saved["options"] = value; persistDraft() }
   fun updateUploadOptions(value: TopicUploadOptions) { uploadOptions = value; saved["uploadOptions"] = value; persistDraft() }
   fun prepare(repository: NgaReadOnlyRepository, session: LoginSessionData?, fid: Int) {
-    if (preparing) return
+    val target = replyTarget
+    val request = ++preparationRequest
     preparing = true; preparationError = null; preparation = null
     viewModelScope.launch {
       try {
-        repository.prepareTopic(session, fid).fold(
-          onSuccess = { preparation = it; if (title.isBlank() && it.defaultSubject.isNotBlank()) editTitle(it.defaultSubject) },
-          onFailure = { preparationError = it.message ?: "发帖设置加载失败" },
+        (target?.let { repository.prepareReply(session, it) } ?: repository.prepareTopic(session, fid)).fold(
+          onSuccess = { if (request == preparationRequest) { preparation = it; if (!isReply && title.isBlank() && it.defaultSubject.isNotBlank()) editTitle(it.defaultSubject) } },
+          onFailure = { if (request == preparationRequest) preparationError = it.message ?: "发布设置加载失败" },
         )
-      } finally { preparing = false }
+      } finally { if (request == preparationRequest) preparing = false }
     }
   }
   fun chooseCategory(value: String) {
@@ -228,7 +273,8 @@ class TopicComposerViewModel(private val saved: SavedStateHandle) : ViewModel() 
                 bytes = com.yanga.client.ui.content.ComposerImageEdit.transform(bytes, item.rotation, item.square)
                 name = name.substringBeforeLast('.') + ".png"; mime = "image/png"
               }
-              if (settings == TopicUploadOptions()) repository.uploadTopicAttachment(session, fid, name, mime, bytes).getOrThrow()
+              if (replyTarget != null) repository.uploadReplyAttachment(session, replyTarget!!, name, mime, bytes, settings).getOrThrow()
+              else if (settings == TopicUploadOptions()) repository.uploadTopicAttachment(session, fid, name, mime, bytes).getOrThrow()
               else repository.uploadTopicAttachmentWithOptions(session, fid, name, mime, bytes, settings).getOrThrow()
             }
             saved["owner"] = session?.uid
@@ -247,16 +293,17 @@ class TopicComposerViewModel(private val saved: SavedStateHandle) : ViewModel() 
   }
 
   fun submit(repository: NgaReadOnlyRepository, session: LoginSessionData?, fid: Int) {
-    if (busy || title.isBlank() || content.text.isBlank()) return
+    if (busy || (!isReply && title.isBlank()) || content.text.isBlank()) return
     busy = true; status = "正在发布…"; error = null
     viewModelScope.launch {
       try {
         checkOwner(session)
         require(pending.isEmpty()) { "还有待上传的附件，请先上传或移除" }
-        require(content.text.length >= 3) { "正文至少需要三个字符" }
+        require(content.text.trim().length >= 3) { "正文至少需要三个字符" }
         options.validationError(preparation?.moderator == true)?.let { error(it) }
-        if (preparation?.categoryRequired == true) require(preparation!!.categories.any { title.trimStart().startsWith("[${it.trim().trim('[', ']')}]") }) { "请先选择主题分类" }
-        if (options == TopicPostOptions()) repository.submitTopic(session, fid, title.trim(), content.text, attachments).getOrThrow()
+        if (!isReply && preparation?.categoryRequired == true) require(preparation!!.categories.any { title.trimStart().startsWith("[${it.trim().trim('[', ']')}]") }) { "请先选择主题分类" }
+        if (replyTarget != null) repository.submitRichReply(session, replyTarget!!, title.trim(), replyBody(), attachments, options).getOrThrow()
+        else if (options == TopicPostOptions()) repository.submitTopic(session, fid, title.trim(), content.text, attachments).getOrThrow()
         else repository.submitTopicWithOptions(session, fid, title.trim(), content.text, attachments, options).getOrThrow()
         busy = false
         clearDraft()

@@ -177,6 +177,28 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
 
   fun topicCategories(fid: Int): NgaRequest = get("nuke.php", linkedMapOf("__lib" to "topic_key", "__act" to "get", "fid" to fid.toString(), "__output" to "8"))
 
+  fun replyInfo(target: ReplyTarget): NgaRequest = post("post.php", query = linkedMapOf<String, String>().apply {
+    put("__output", "8"); put("action", target.action); put("tid", target.tid); put("pid", target.pid)
+    if (target.mode == ReplyMode.Comment) put("comment", "1")
+  })
+
+  fun reply(target: ReplyTarget, subject: String, content: String, attachments: List<TopicAttachment>, options: TopicPostOptions): NgaRequest =
+    post("post.php", query = linkedMapOf("__output" to "8"), body = formBody {
+      addRaw("action", target.action); addRaw("step", "2"); addRaw("tid", target.tid); addRaw("pid", target.pid)
+      if (target.mode == ReplyMode.Comment) addRaw("comment", "1")
+      addRaw("post_content", NgaEncoding.urlEncodeGbk(content))
+      if (subject.isNotBlank()) addRaw("post_subject", NgaEncoding.urlEncodeGbk(subject))
+      if (options.anonymous) addRaw("anony", "1")
+      if (options.hidden) addRaw("hidden", "1")
+      if (attachments.isNotEmpty()) {
+        addRaw("attachments", attachments.joinToString("") { "%09" + NgaEncoding.urlEncodeGbk(it.id) })
+        addRaw("attachments_check", attachments.joinToString("") { "%09" + NgaEncoding.urlEncodeGbk(it.check) })
+      }
+      val mentions = Regex("\\[@([^]\\r\\n]{2,30})]").findAll(content)
+        .map { it.groupValues[1].trim() }.filter(String::isNotBlank).distinct().take(5).joinToString("\t")
+      if (mentions.isNotBlank()) addRaw("mention", NgaEncoding.urlEncodeGbk(mentions))
+    })
+
   fun reply(tid: String, pid: String, content: String): NgaRequest =
     post("post.php", query = linkedMapOf("__output" to "8"), body = formBody {
       addRaw("action", "reply")

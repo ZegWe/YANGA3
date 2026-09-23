@@ -111,11 +111,12 @@ internal fun ComposerOptionsPanel(model: TopicComposerViewModel) {
   var expanded by remember { mutableStateOf(false) }
   OutlinedCard(Modifier.fillMaxWidth()) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-      TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "收起发布设置" else "发布设置 · 投票与权限") }
+      TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "收起发布设置" else if (model.isReply) "回复设置 · 匿名与可见性" else "发布设置 · 投票与权限") }
       if (expanded) {
-        ComposerCheck("匿名发帖", options.anonymous, enabled) { model.updateOptions(options.copy(anonymous = it)) }
-        if (options.anonymous) Text("网页提示：匿名主题需 5000 铜币，违规会加重处罚。", style = MaterialTheme.typography.bodySmall)
+        ComposerCheck(if (model.isReply) "匿名回复" else "匿名发帖", options.anonymous, enabled) { model.updateOptions(options.copy(anonymous = it)) }
+        if (options.anonymous) Text(if (model.isReply) "匿名资格和费用以论坛规则为准。" else "网页提示：匿名主题需 5000 铜币，违规会加重处罚。", style = MaterialTheme.typography.bodySmall)
         ComposerCheck("隐藏内容，仅版主可见", options.hidden, enabled) { model.updateOptions(options.copy(hidden = it)) }
+        if (!model.isReply) {
         ComposerCheck("只有作者和版主可回复", options.selfReply, enabled) { model.updateOptions(options.copy(selfReply = it)) }
         ComposerCheck("每个用户只能回复一次", options.replyOnce, enabled) { model.updateOptions(options.copy(replyOnce = it)) }
         if (options.replyOnce) Text("适用于前 2000 个回复，主题作者不受限制。", style = MaterialTheme.typography.bodySmall)
@@ -140,6 +141,7 @@ internal fun ComposerOptionsPanel(model: TopicComposerViewModel) {
             model.updateOptions(options.copy(voteVisibility = it.toInt()))
           }
           options.validationError(model.preparation?.moderator == true)?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        }
         }
       }
     }

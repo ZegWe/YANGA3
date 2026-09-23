@@ -33,6 +33,12 @@ internal fun StructuredPostContent(
 ) {
   ProvideTextStyle(MaterialTheme.typography.bodyLarge) {
     when (part) {
+      is PostContentPart.Album -> OutlinedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Text(part.title, style = MaterialTheme.typography.titleSmall)
+          renderParts(part.images)
+        }
+      }
       is PostContentPart.Attachment -> {
         val context = androidx.compose.ui.platform.LocalContext.current
         val attachment = PostAttachmentPreview(name = part.name, url = part.url)

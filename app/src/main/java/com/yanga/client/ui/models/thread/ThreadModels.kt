@@ -12,6 +12,7 @@ data class PostEmbeddedReplyPreview(
 
 data class PostPreview(
   val pid: String = "",
+  val tid: String = "",
   val floorNumber: Int = 0,
   val author: String,
   val authorAvatarUrl: String? = null,

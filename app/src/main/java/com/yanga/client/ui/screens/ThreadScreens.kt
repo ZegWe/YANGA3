@@ -127,6 +127,7 @@ import com.yanga.client.ui.components.TopicListItem
 import com.yanga.client.ui.components.UserAvatar
 import com.yanga.client.ui.content.PostContentPart
 import com.yanga.client.ui.content.PostContentParser
+import com.yanga.client.ui.content.PostDiceContext
 import com.yanga.client.ui.content.PostTextStyleRange
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -764,7 +765,9 @@ private fun PostItem(
   onFilterAuthor: (PostPreview) -> Unit = {},
   onReact: (suspend (PostPreview, Boolean) -> Result<com.yanga.client.api.NgaReactionResult>)? = null,
 ) {
-  val contentParts = remember(post.content) { PostContentParser.parse(post.content) }
+  val contentParts = remember(post.content, post.authorId, post.tid, post.pid) {
+    PostContentParser.parse(post.content, PostDiceContext(post.authorId, post.tid, post.pid))
+  }
   val remainingAttachments = remember(post.attachments, contentParts) {
     val inlineUrls = PostContentParser.collectAttachmentUrls(contentParts)
     post.attachments.filterNot { it.url in inlineUrls }
@@ -965,7 +968,9 @@ private fun PostEmbeddedReplyItem(
   onImageClick: (List<String>, Int) -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  val contentParts = remember(reply.content) { PostContentParser.parse(reply.content) }
+  val contentParts = remember(reply.content, reply.authorId, reply.tid, reply.pid) {
+    PostContentParser.parse(reply.content, PostDiceContext(reply.authorId, reply.tid, reply.pid))
+  }
   val contentBlocks = remember(contentParts) { groupPostContentParts(contentParts) }
   val imageUrls = remember(reply) { embeddedReplyPreviewImageUrls(reply) }
   val originalPostUrl = remember(reply) { embeddedReplyOriginalPostUrl(reply) }

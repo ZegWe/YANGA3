@@ -37,6 +37,8 @@ fun TopicComposer(
   onWeb: () -> Unit,
 ) {
   val context = LocalContext.current
+  val replying = model.isReply
+  val actionLabel = if (replying) "回帖" else "发帖"
   val loggedIn = !loginSession?.cookie.isNullOrBlank()
   var webPrompt by remember { mutableStateOf(false) }
   var tools by remember { mutableStateOf(false) }
@@ -47,7 +49,8 @@ fun TopicComposer(
   var imageEditing by remember { mutableStateOf<PendingTopicAttachment?>(null) }
   var uploadSettings by remember { mutableStateOf(false) }
   var clipboardError by remember { mutableStateOf<String?>(null) }
-  val canPublish = loggedIn && !model.busy && model.title.isNotBlank() && model.content.text.length >= 3 && model.pending.isEmpty()
+  var editQuote by remember { mutableStateOf(false) }
+  val canPublish = loggedIn && !model.busy && (replying || model.title.isNotBlank()) && model.content.text.trim().length >= 3 && model.pending.isEmpty()
   fun publish() { if (canPublish) model.submit(repository, loginSession?.toData(), fid) }
   val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
     uris.forEach { uri -> runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
@@ -62,7 +65,7 @@ fun TopicComposer(
         if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.Enter) { publish(); true } else false
       },
       topBar = {
-        TopAppBar(title = { Text("发帖") }, navigationIcon = {
+        TopAppBar(title = { Text(actionLabel) }, navigationIcon = {
           IconButton(onClick = model::close, enabled = !model.busy) {
             Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回并保留草稿")
           }
@@ -72,10 +75,10 @@ fun TopicComposer(
             DropdownMenu(menu, onDismissRequest = { menu = false }) {
               DropdownMenuItem(text = { Text("恢复已保存草稿") }, onClick = { model.restoreDraft(); menu = false })
               DropdownMenuItem(text = { Text("清空草稿") }, onClick = { clearPrompt = true; menu = false })
-              DropdownMenuItem(text = { Text("网页发帖") }, onClick = { webPrompt = true; menu = false })
+              DropdownMenuItem(text = { Text("网页$actionLabel") }, onClick = { webPrompt = true; menu = false })
             }
           }
-          Button(onClick = ::publish, enabled = canPublish) { Text("发布") }
+          Button(onClick = ::publish, enabled = canPublish) { Text(if (replying) "发送" else "发布") }
           Spacer(Modifier.width(12.dp))
         })
       },
@@ -83,6 +86,27 @@ fun TopicComposer(
       Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(boardName, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        model.replyTarget?.let { target ->
+          OutlinedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              Text(target.label, style = MaterialTheme.typography.titleSmall)
+              Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.yanga.client.api.ReplyMode.entries.forEach { mode ->
+                  FilterChip(selected = target.mode == mode, onClick = { model.changeReplyMode(mode) },
+                    label = { Text(mode.label) }, enabled = !model.busy && (mode != com.yanga.client.api.ReplyMode.Quote || target.quote.isNotBlank()))
+                }
+              }
+              if (target.mode == com.yanga.client.api.ReplyMode.Quote) {
+                TextButton(onClick = { editQuote = !editQuote }, enabled = !model.busy) { Text(if (editQuote) "收起引用编辑" else "编辑引用内容") }
+                if (editQuote) OutlinedTextField(target.quote, model::editReplyQuote, enabled = !model.busy,
+                  label = { Text("引用原文（可删减）") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+                else Text(target.quote, maxLines = 5, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                  style = MaterialTheme.typography.bodySmall)
+              }
+              if (target.mode == com.yanga.client.api.ReplyMode.Comment) Text("评论显示在所选楼层的贴条区，是否允许由论坛权限决定。", style = MaterialTheme.typography.bodySmall)
+            }
+          }
+        }
         if (!loggedIn) {
           Card(Modifier.fillMaxWidth()) {
             Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -94,7 +118,7 @@ fun TopicComposer(
         if (model.preparing) LinearProgressIndicator(Modifier.fillMaxWidth())
         model.preparation?.let { info ->
           if (info.warning.isNotBlank()) Text(info.warning, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-          if (info.categories.isNotEmpty()) ComposerChoice(
+          if (!replying && info.categories.isNotEmpty()) ComposerChoice(
             if (info.categoryRequired) "主题分类（必选）" else "主题分类", "请选择", info.categories.map { it to it }, !model.busy,
           ) { model.chooseCategory(it) }
         }
@@ -103,7 +127,7 @@ fun TopicComposer(
           TextButton(onClick = { model.prepare(repository, loginSession?.toData(), fid) }, enabled = loggedIn && !model.preparing) { Text("重新读取版块设置") }
         }
         OutlinedTextField(value = model.title, onValueChange = model::editTitle, enabled = !model.busy,
-          label = { Text("标题") }, placeholder = { Text("用一句话概括你的主题") },
+          label = { Text(if (replying) "标题（可选）" else "标题") }, placeholder = { Text(if (replying) "为回复添加标题" else "用一句话概括你的主题") },
           modifier = Modifier.fillMaxWidth(), singleLine = true, shape = MaterialTheme.shapes.large)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           listOf("源码", "可视化", "预览").forEach { mode ->
@@ -113,8 +137,19 @@ fun TopicComposer(
         if (editorMode == "预览") {
           OutlinedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-              Text(model.title.ifBlank { "未填写标题" }, style = MaterialTheme.typography.titleLarge)
-              SignatureContent(model.content.text.ifBlank { "正文预览" })
+              Text(model.title.ifBlank { if (replying) boardName else "未填写标题" }, style = MaterialTheme.typography.titleLarge)
+              SignatureContent(model.replyBody().ifBlank { "正文预览" })
+              if (model.pending.any { it.image }) {
+                HorizontalDivider()
+                Text("待上传图片 · 发布前需先上传", style = MaterialTheme.typography.titleSmall)
+                model.pending.filter { it.image }.forEach { file ->
+                  Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AsyncImage(model = android.net.Uri.parse(file.uri), contentDescription = "待上传图片 ${file.name}",
+                      modifier = Modifier.size(88.dp).graphicsLayer { rotationZ = file.rotation.toFloat() })
+                    Text(file.name, style = MaterialTheme.typography.bodyMedium)
+                  }
+                }
+              }
               if (model.options.voteType != com.yanga.client.api.TopicVoteType.None) {
                 HorizontalDivider()
                 Text("投票预览 · ${model.options.voteType.label}", style = MaterialTheme.typography.titleSmall)
@@ -133,7 +168,7 @@ fun TopicComposer(
             TextButton(onClick = model::redoEdit, enabled = !model.busy && model.canRedo) { Text("重做") }
           }
           OutlinedTextField(value = model.content, onValueChange = model::editContent, enabled = !model.busy,
-            label = { Text("正文") }, placeholder = { Text("分享你的想法…") },
+            label = { Text(if (replying) "回复内容" else "正文") }, placeholder = { Text("分享你的想法…") },
             visualTransformation = if (editorMode == "可视化") remember { ComposerVisualTransformation() } else VisualTransformation.None,
             modifier = Modifier.fillMaxWidth().heightIn(min = 260.dp), minLines = 8, shape = MaterialTheme.shapes.large)
           if (editorMode == "可视化") Text("直接查看文字样式；复杂排版可切换预览。", style = MaterialTheme.typography.bodySmall)
@@ -157,7 +192,6 @@ fun TopicComposer(
             else { clipboardError = null; model.stage(context.contentResolver, uris) }
           }, enabled = loggedIn && !model.busy) { Text("粘贴附件") }
           TextButton(onClick = model::insertAlbum, enabled = !model.busy && model.attachments.any { it.image }) { Text("插入相册") }
-          TextButton(onClick = { webPrompt = true }, enabled = !model.busy) { Text("网页发帖") }
         }
         clipboardError?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         if (uploadSettings) ComposerAttachmentSettings(model)
@@ -213,11 +247,11 @@ fun TopicComposer(
       text = { Text("标题、正文、投票和附件引用都会移除。") },
       confirmButton = { TextButton(onClick = { model.clearDraft(); clearPrompt = false }) { Text("清空") } },
       dismissButton = { TextButton(onClick = { clearPrompt = false }) { Text("取消") } })
-    if (webPrompt) AlertDialog(onDismissRequest = { webPrompt = false }, title = { Text("改用网页发帖") },
+    if (webPrompt) AlertDialog(onDismissRequest = { webPrompt = false }, title = { Text("改用网页$actionLabel") },
       text = { Text("原生草稿会保留。可复制标题和正文后前往网页粘贴；附件需要在网页重新添加。") },
       confirmButton = { TextButton(onClick = {
         val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("发帖草稿", model.title + "\n\n" + model.content.text))
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("${actionLabel}草稿", model.title + "\n\n" + model.replyBody()))
         webPrompt = false
         onWeb()
       }) { Text("复制并打开网页") } },

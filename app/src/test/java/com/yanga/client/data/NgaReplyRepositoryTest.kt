@@ -6,6 +6,69 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NgaReplyRepositoryTest {
+  @Test fun replyUploadObtainsReplyPermissionInsteadOfNewTopicPermission() = runTest {
+    val requests = mutableListOf<NgaRequest>()
+    val repo = DefaultNgaReadOnlyRepository(object : NgaHttpTransport {
+      override fun execute(request: NgaRequest): Result<NgaHttpResponse> {
+        requests += request
+        val response = when (requests.size) {
+          1 -> """{"data":{"auth":"reply-ticket"}}"""
+          2 -> """{"data":{"__T":{"tid":10,"fid":321}}}"""
+          else -> """{"data":{"attachments":"id","attachments_check":"check","url":"mon_202609/321/test.png"}}"""
+        }
+        return Result.success(NgaHttpResponse(200, response))
+      }
+    })
+    val result = repo.uploadReplyAttachment(session, ReplyTarget("10", "25", mode = ReplyMode.Quote), "test.png", "image/png", byteArrayOf(1, 2, 3), TopicUploadOptions(watermark = "cn"))
+    assertTrue(result.isSuccess)
+    assertEquals("quote", requests[0].query["action"])
+    assertEquals("25", requests[0].query["pid"])
+    assertEquals("10", requests[0].query["tid"])
+    val multipart = requests.last().binaryBody!!.toString(Charsets.UTF_8)
+    assertTrue(multipart.contains("reply-ticket"))
+    assertTrue(multipart.contains("321"))
+    assertTrue(multipart.contains("cn"))
+    assertEquals("id", result.getOrThrow().id)
+  }
+  @Test fun richReplyEncodesTargetOptionsAttachmentsAndMentions() = runTest {
+    val transport = Transport()
+    val repo = DefaultNgaReadOnlyRepository(transport)
+    val attachment = TopicAttachment("图", "id&1", "check+2", "https://img.nga.cn/a.png", true)
+    val target = ReplyTarget("10", "25", mode = ReplyMode.Quote)
+    assertTrue(repo.submitRichReply(session, target, "回复标题", "中文 & + [@用户甲]", listOf(attachment), TopicPostOptions(anonymous = true, hidden = true)).isSuccess)
+    val body = transport.requests.single().bodyMap
+    assertEquals("quote", body["action"])
+    assertEquals("25", body["pid"])
+    assertEquals("10", body["tid"])
+    assertEquals("1", body["anony"])
+    assertEquals("1", body["hidden"])
+    assertEquals("回复标题", NgaEncoding.urlDecodeGbk(body.getValue("post_subject")))
+    assertEquals("中文 & + [@用户甲]", NgaEncoding.urlDecodeGbk(body.getValue("post_content")))
+    assertEquals("\tid&1", NgaEncoding.urlDecodeGbk(body.getValue("attachments")))
+    assertEquals("\tcheck+2", NgaEncoding.urlDecodeGbk(body.getValue("attachments_check")))
+    assertEquals("用户甲", NgaEncoding.urlDecodeGbk(body.getValue("mention")))
+    assertFalse(body.containsKey("newvote"))
+  }
+
+  @Test fun commentPreparationAndSubmissionUseSameTargetAndMode() = runTest {
+    val target = ReplyTarget("10", "0", mode = ReplyMode.Comment)
+    val info = NgaApi().replyInfo(target)
+    assertEquals("reply", info.query["action"])
+    assertEquals("1", info.query["comment"])
+    assertEquals("0", info.query["pid"])
+    val transport = Transport()
+    val repo = DefaultNgaReadOnlyRepository(transport)
+    assertTrue(repo.submitRichReply(session, target, "", "贴条评论", emptyList(), TopicPostOptions()).isSuccess)
+    val body = transport.requests.single().bodyMap
+    assertEquals("reply", body["action"])
+    assertEquals("1", body["comment"])
+    assertFalse(body.containsKey("post_subject"))
+    assertFalse(body.containsKey("attachments"))
+    assertTrue(repo.submitRichReply(null, target, "", "内容测试", emptyList(), TopicPostOptions()).isFailure)
+    assertTrue(repo.submitRichReply(session, target.copy(tid = "bad"), "", "内容测试", emptyList(), TopicPostOptions()).isFailure)
+    assertTrue(repo.submitRichReply(session, target, "", "  ", emptyList(), TopicPostOptions()).isFailure)
+    assertEquals(1, transport.requests.size)
+  }
   private val session = LoginSessionData("Test", "1", "cookie")
   private class Transport : NgaHttpTransport {
     val requests = mutableListOf<NgaRequest>()

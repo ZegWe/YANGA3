@@ -28,6 +28,9 @@ import java.util.concurrent.TimeUnit
 class LoginRequiredException : IllegalStateException("Login is required for this read operation")
 
 interface NgaReadOnlyRepository {
+  suspend fun prepareReply(session: LoginSessionData?, target: com.yanga.client.api.ReplyTarget): Result<com.yanga.client.api.TopicPostPreparation> = Result.failure(UnsupportedOperationException("回复设置暂不可用"))
+  suspend fun submitRichReply(session: LoginSessionData?, target: com.yanga.client.api.ReplyTarget, subject: String, content: String, attachments: List<com.yanga.client.api.TopicAttachment>, options: com.yanga.client.api.TopicPostOptions): Result<Unit> = Result.failure(UnsupportedOperationException("回复暂不可用"))
+  suspend fun uploadReplyAttachment(session: LoginSessionData?, target: com.yanga.client.api.ReplyTarget, name: String, mime: String, bytes: ByteArray, options: com.yanga.client.api.TopicUploadOptions): Result<com.yanga.client.api.TopicAttachment> = Result.failure(UnsupportedOperationException("回复附件暂不可用"))
   suspend fun prepareTopic(session: LoginSessionData?, fid: Int): Result<com.yanga.client.api.TopicPostPreparation> = Result.failure(UnsupportedOperationException("暂不支持读取发帖设置"))
   suspend fun submitTopicWithOptions(session: LoginSessionData?, fid: Int, subject: String, content: String, attachments: List<com.yanga.client.api.TopicAttachment>, options: com.yanga.client.api.TopicPostOptions): Result<Unit> =
     if (options == com.yanga.client.api.TopicPostOptions()) submitTopic(session, fid, subject, content, attachments) else Result.failure(UnsupportedOperationException("暂不支持高级发帖设置"))
@@ -122,6 +125,28 @@ class DefaultNgaReadOnlyRepository(
   private val boardSectionDirectory: BoardSectionDirectory? = null,
 ) : NgaReadOnlyRepository {
   private val logTag = "YangaSubBoardRpc"
+  override suspend fun prepareReply(session: LoginSessionData?, target: com.yanga.client.api.ReplyTarget): Result<com.yanga.client.api.TopicPostPreparation> = withContext(Dispatchers.IO) {
+    val login = session.requireLogin() ?: return@withContext Result.failure(IllegalStateException("请先登录"))
+    execute(api(login).replyInfo(target), com.yanga.client.api.TopicPostPreparationParser::parse)
+  }
+
+  override suspend fun submitRichReply(session: LoginSessionData?, target: com.yanga.client.api.ReplyTarget, subject: String, content: String, attachments: List<com.yanga.client.api.TopicAttachment>, options: com.yanga.client.api.TopicPostOptions): Result<Unit> = withContext(Dispatchers.IO) {
+    val login = session.requireLogin() ?: return@withContext Result.failure(IllegalStateException("请先登录后再回帖"))
+    if (target.tid.toLongOrNull()?.let { it > 0 } != true || target.pid.toLongOrNull()?.let { it >= 0 } != true || content.trim().length < 3)
+      return@withContext Result.failure(IllegalArgumentException("主题、楼层或回复内容无效"))
+    execute(api(login).reply(target, subject, content, attachments, options), com.yanga.client.api.NgaReplyParser::requireSuccess)
+  }
+
+  override suspend fun uploadReplyAttachment(session: LoginSessionData?, target: com.yanga.client.api.ReplyTarget, name: String, mime: String, bytes: ByteArray, options: com.yanga.client.api.TopicUploadOptions): Result<com.yanga.client.api.TopicAttachment> = withContext(Dispatchers.IO) {
+    val login = session.requireLogin() ?: return@withContext Result.failure(IllegalStateException("请先登录后再上传附件"))
+    runCatching {
+      val api = api(login)
+      val auth = execute(api.replyInfo(target), com.yanga.client.api.NgaTopicPosting::auth).getOrThrow()
+      val fid = loadThread(login, target.tid, 1).getOrThrow().fid.toInt()
+      val request = com.yanga.client.api.NgaTopicPosting.uploadRequest(api, fid, auth, name, mime, bytes, options)
+      execute(request) { com.yanga.client.api.NgaTopicPosting.uploaded(it, name, mime.startsWith("image/")) }.getOrThrow()
+    }
+  }
   override suspend fun submitReply(session: LoginSessionData?, tid: String, pid: String, content: String): Result<Unit> = withContext(Dispatchers.IO) {
     val login = session.requireLogin() ?: return@withContext Result.failure(IllegalStateException("请先登录后再回帖"))
     if (tid.toIntOrNull()?.let { it > 0 } != true || pid.toIntOrNull()?.let { it >= 0 } != true || content.isBlank()) {

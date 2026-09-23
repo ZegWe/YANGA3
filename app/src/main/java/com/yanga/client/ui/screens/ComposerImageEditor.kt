@@ -10,9 +10,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -66,54 +70,79 @@ internal fun ComposerImageEditor(file: PendingTopicAttachment, onSave: (PendingT
       runCatching { load(uri) }.fold(onSuccess = { drawing.sticker = it; mode = "贴画" }, onFailure = { error = it.message })
     }
   }
-  Dialog(onDismissRequest = { if (!saving) onClose() }, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = !saving)) {
-    Scaffold(topBar = { TopAppBar(title = { Text("编辑图片") }, navigationIcon = {
-      TextButton(onClick = onClose, enabled = !saving) { Text("取消") }
-    }, actions = {
-      TextButton(enabled = bitmap != null && !saving, onClick = {
-        saving = true
-        val result = drawing.render()
-        scope.launch {
-          runCatching {
-            withContext(Dispatchers.IO) {
-              val output = File(context.cacheDir, "topic-edit-${UUID.randomUUID()}.png")
-              output.outputStream().use { require(result.compress(Bitmap.CompressFormat.PNG, 100, it)) }
-              output
+  fun save() {
+    if (bitmap == null || saving) return
+    saving = true
+    val result = drawing.render()
+    scope.launch {
+      val saved = runCatching {
+        withContext(Dispatchers.IO) {
+          val output = File(context.cacheDir, "topic-edit-${UUID.randomUUID()}.png")
+          output.outputStream().use { require(result.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+          output
+        }
+      }
+      result.recycle()
+      saving = false
+      saved.fold(
+        onSuccess = { onSave(file.copy(uri = Uri.fromFile(it).toString(), name = file.name.substringBeforeLast('.') + ".png", rotation = 0, square = false, error = null)) },
+        onFailure = { error = it.message },
+      )
+    }
+  }
+  Dialog(onDismissRequest = { if (!saving) onClose() }, properties = DialogProperties(
+    usePlatformDefaultWidth = false, dismissOnBackPress = !saving, dismissOnClickOutside = false,
+  )) {
+    Scaffold(
+      modifier = Modifier.fillMaxSize().imePadding(),
+      topBar = {
+        TopAppBar(
+          title = { Text("编辑图片") },
+          navigationIcon = {
+            IconButton(onClick = onClose, enabled = !saving) {
+              Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回并放弃图片编辑")
             }
-          }.fold(onSuccess = {
-            onSave(file.copy(uri = Uri.fromFile(it).toString(), name = file.name.substringBeforeLast('.') + ".png", rotation = 0, square = false, error = null))
-          }, onFailure = { error = it.message })
-          result.recycle(); saving = false
-        }
-      }) { Text("保存") }
-    }) }) { padding ->
-      Column(Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.horizontalScroll(rememberScrollState())) {
-          listOf("画线", "箭头", "文字", "贴画").forEach { tool ->
-            FilterChip(mode == tool, onClick = { mode = tool }, label = { Text(tool) }, enabled = !saving)
-            Spacer(Modifier.width(8.dp))
-          }
-          TextButton(onClick = { drawing.undo() }, enabled = revision > 0 && !saving) { Text("撤销") }
-        }
-        Row(Modifier.horizontalScroll(rememberScrollState())) {
-          listOf("red" to "红", "blue" to "蓝", "green" to "绿", "yellow" to "黄", "white" to "白", "black" to "黑").forEach { (value, name) ->
-            FilterChip(color == value, onClick = { color = value }, label = { Text(name) }, enabled = !saving)
-          }
-        }
-        Text("笔画 / 文字 / 贴画大小", style = MaterialTheme.typography.labelMedium)
-        Slider(value = size, onValueChange = { size = it }, valueRange = 3f..40f, enabled = !saving)
-        if (mode == "文字") OutlinedTextField(label, { label = it }, label = { Text("点击图片放置文字") }, enabled = !saving)
-        if (mode == "贴画") TextButton(onClick = { stickerPicker.launch("image/*") }, enabled = !saving) { Text("选择贴画图片，然后点击放置") }
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+          },
+          actions = {
+            TextButton(onClick = drawing::undo, enabled = revision > 0 && !saving) { Text("撤销") }
+            Button(onClick = ::save, enabled = bitmap != null && !saving) { Text("保存") }
+            Spacer(Modifier.width(12.dp))
+          },
+        )
+      },
+    ) { padding ->
+      Column(Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.weight(1f).fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
           bitmap?.let { image ->
             AndroidView(factory = { drawing }, update = {
               it.mode = mode; it.penColor = Color.parseColor(color); it.penSize = size; it.label = label; it.isEnabled = !saving
             }, modifier = Modifier.fillMaxWidth().aspectRatio(image.width.toFloat() / image.height, matchHeightConstraintsFirst = true))
           }
           if (bitmap == null && error == null) CircularProgressIndicator()
+          if (saving) CircularProgressIndicator()
         }
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        Text("保存为静态 PNG，最长边不超过 2048 像素；原文件不变。", style = MaterialTheme.typography.bodySmall)
+        Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, tonalElevation = 2.dp) {
+          Column(Modifier.fillMaxWidth().heightIn(max = 280.dp).verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("标注工具", style = MaterialTheme.typography.titleSmall)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              listOf("画线", "箭头", "文字", "贴画").forEach { tool ->
+                FilterChip(mode == tool, onClick = { mode = tool }, label = { Text(tool) }, enabled = !saving)
+              }
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              listOf("red" to "红", "blue" to "蓝", "green" to "绿", "yellow" to "黄", "white" to "白", "black" to "黑").forEach { (value, name) ->
+                FilterChip(color == value, onClick = { color = value }, label = { Text(name) }, enabled = !saving)
+              }
+            }
+            Text("笔画 / 文字 / 贴画大小", style = MaterialTheme.typography.labelMedium)
+            Slider(value = size, onValueChange = { size = it }, valueRange = 3f..40f, enabled = !saving)
+            if (mode == "文字") OutlinedTextField(label, { label = it }, label = { Text("点击图片放置文字") }, enabled = !saving)
+            if (mode == "贴画") TextButton(onClick = { stickerPicker.launch("image/*") }, enabled = !saving) { Text("选择贴画图片，然后点击放置") }
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            Text("保存为静态 PNG，最长边不超过 2048 像素；原文件不变。", style = MaterialTheme.typography.bodySmall)
+          }
+        }
       }
     }
   }

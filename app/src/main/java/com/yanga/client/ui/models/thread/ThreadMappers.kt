@@ -6,6 +6,7 @@ import com.yanga.client.api.NgaThreadPost
 internal fun NgaThreadPost.toPreview(): PostPreview =
   PostPreview(
     pid = pid,
+    tid = tid,
     floorNumber = lou,
     author = author,
     authorAvatarUrl = authorAvatarUrl,

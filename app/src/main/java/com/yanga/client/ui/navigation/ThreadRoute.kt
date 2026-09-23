@@ -42,12 +42,12 @@ fun ThreadRoute(
   val context = LocalContext.current
   val threadContentViewModel = viewModel<ThreadContentViewModel> { ThreadContentViewModel(repository) }
   val threadContentState by threadContentViewModel.state.collectAsState()
-  val replyModel = viewModel<com.yanga.client.ui.ReplyViewModel>()
-  val replyVisible by replyModel.visible.collectAsState()
-  val replySent by replyModel.sent.collectAsState()
+  val replyModel = viewModel<com.yanga.client.ui.TopicComposerViewModel>(key = "reply:${destination.id}")
+  val replyVisible = replyModel.visible
+  val replySent = replyModel.sent
   LaunchedEffect(replySent) {
     if (replySent) {
-      replyModel.sent.value = false
+      replyModel.sent = false
       Toast.makeText(context, "回复已发送", Toast.LENGTH_SHORT).show()
       threadContentViewModel.refreshAfterReply(loginSession?.toData())
     }
@@ -62,22 +62,28 @@ fun ThreadRoute(
       ?: ThreadUiState(title = destination.title)
   fun openWebReply() {
     val url = Uri.parse(baseUrl).buildUpon().encodedPath("/post.php").clearQuery()
-      .appendQueryParameter("action", "reply").appendQueryParameter("tid", destination.id)
-      .appendQueryParameter("pid", replyModel.pid.value).build().toString()
+      .appendQueryParameter("action", replyModel.replyTarget?.action ?: "reply").appendQueryParameter("tid", destination.id)
+      .appendQueryParameter("pid", replyModel.replyTarget?.pid ?: "0")
+      .apply { if (replyModel.replyTarget?.mode == com.yanga.client.api.ReplyMode.Comment) appendQueryParameter("comment", "1") }.build().toString()
     replyModel.close()
-    navigate(MainDestinationKey.Web(url = url, title = replyModel.target.value, baseUrl = baseUrl))
+    navigate(MainDestinationKey.Web(url = url, title = replyModel.replyTarget?.label ?: "回复主题", baseUrl = baseUrl))
+  }
+  LaunchedEffect(replyVisible, loginSession?.uid, loginSession?.cookie, replyModel.replyTarget?.mode) {
+    if (replyVisible) {
+      replyModel.bindDraft(context, loginSession?.uid ?: "guest", 0, ":reply:${destination.id}")
+      if (!loginSession?.cookie.isNullOrBlank()) replyModel.prepare(repository, loginSession.toData(), 0)
+    }
   }
   if (replyVisible) com.yanga.client.ui.ReplyComposer(
-    title = threadState.title, model = replyModel, loggedIn = !loginSession?.cookie.isNullOrBlank(),
-    onSend = { replyModel.submit(repository, loginSession?.toData(), destination.id) },
-    onWeb = ::openWebReply,
+    title = threadState.title, model = replyModel, repository = repository, loginSession = loginSession,
+    onLogin = { replyModel.close(); navigate(MainDestinationKey.Login) }, onWeb = ::openWebReply,
   )
   ThreadReadingScreen(
     state = threadState,
     onRefresh = { threadContentViewModel.refresh(loginSession?.toData()) },
     onBack = onBack,
-    onReplyClick = { replyModel.open(null) },
-    onReplyPost = { replyModel.open(it) },
+    onReplyClick = { replyModel.openReply(context, loginSession?.uid ?: "guest", destination.id, null) },
+    onReplyPost = { replyModel.openReply(context, loginSession?.uid ?: "guest", destination.id, it) },
     onUserClick = { navigate(MainDestinationKey.User(it)) },
     onFilterAuthor = { threadContentViewModel.filterAuthor(loginSession?.toData(), it) },
     onReact = if (loginSession == null) null else { post, support ->

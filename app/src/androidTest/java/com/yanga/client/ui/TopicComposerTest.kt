@@ -17,8 +17,53 @@ import org.junit.Rule
 import org.junit.Test
 
 class TopicComposerTest {
+  @Test fun selectedImageAppearsInPreviewBeforeUpload() {
+    val model = TopicComposerViewModel(SavedStateHandle())
+    compose.setContent { YangaTheme { TopicComposer("DOTA2", 321, model, DefaultNgaReadOnlyRepository(), login, {}, {}) } }
+    compose.runOnIdle {
+      val file = java.io.File(compose.activity.cacheDir, "composer-preview-image.png")
+      android.graphics.Bitmap.createBitmap(4, 4, android.graphics.Bitmap.Config.ARGB_8888).apply {
+        java.io.FileOutputStream(file).use { compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        recycle()
+      }
+      model.stage(compose.activity.contentResolver, listOf(Uri.fromFile(file)))
+    }
+    compose.waitUntil(10_000) { model.pending.any { it.image } }
+    compose.onNodeWithText("预览").performScrollTo().performClick()
+    compose.onNodeWithText("待上传图片 · 发布前需先上传").assertExists()
+    compose.onNodeWithContentDescription("待上传图片 composer-preview-image.png").assertExists()
+  }
   @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
   private val login = LoginSessionUiState(username = "Test", uid = "1", cookie = "test=1")
+
+  @Test fun imageEditorUsesMd3AppBarAndSavesEditedCopy() {
+    val original = java.io.File(compose.activity.cacheDir, "image-editor-bar.png")
+    android.graphics.Bitmap.createBitmap(12, 12, android.graphics.Bitmap.Config.ARGB_8888).apply {
+      java.io.FileOutputStream(original).use { compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+      recycle()
+    }
+    val input = PendingTopicAttachment(Uri.fromFile(original).toString(), original.name, image = true)
+    var saved: PendingTopicAttachment? = null
+    var closed = false
+    compose.setContent { YangaTheme { ComposerImageEditor(input, onSave = { saved = it }, onClose = { closed = true }) } }
+    compose.onNodeWithContentDescription("返回并放弃图片编辑").assertExists()
+    compose.onNodeWithText("取消").assertDoesNotExist()
+    compose.onNodeWithText("撤销").assertIsNotEnabled()
+    compose.onNodeWithText("标注工具").assertExists()
+    compose.waitUntil(10_000) {
+      compose.onAllNodesWithText("保存").fetchSemanticsNodes().any {
+        !it.config.contains(androidx.compose.ui.semantics.SemanticsProperties.Disabled)
+      }
+    }
+    compose.onNodeWithText("保存").performClick()
+    compose.waitUntil(10_000) { saved != null }
+    compose.runOnIdle {
+      assertTrue(java.io.File(requireNotNull(Uri.parse(saved!!.uri).path)).exists())
+      assertTrue(original.exists())
+    }
+    compose.onNodeWithContentDescription("返回并放弃图片编辑").performClick()
+    compose.runOnIdle { assertTrue(closed) }
+  }
 
   @Test fun uploadInsertsAtCursorAndRemovalUpdatesBody() {
     val model = TopicComposerViewModel(SavedStateHandle())

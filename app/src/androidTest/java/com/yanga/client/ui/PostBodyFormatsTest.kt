@@ -17,6 +17,21 @@ import org.junit.Test
 class PostBodyFormatsTest {
   @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+  @Test fun publishedPostShowsDiceResultInBody() {
+    compose.setContent {
+      MaterialTheme {
+        ThreadReadingScreen(
+          state = ThreadUiState(posts = LoadableUiState.Content(listOf(
+            PostPreview(pid = "25", tid = "10", authorId = "1", author = "Test", floor = "2 楼", time = "", avatarInitial = "T",
+              content = "投掷结果：[dice]d6[/dice]"),
+          ))), onBack = {},
+        )
+      }
+    }
+    compose.onNodeWithText("d6(4)", substring = true).assertExists()
+    compose.onNodeWithText("[dice]", substring = true).assertDoesNotExist()
+  }
+
   @Test fun signatureUsesFormattedPostRenderer() {
     compose.setContent { MaterialTheme {
       SignatureContent("[b]签名加粗[/b][color=red]红色文字[/color]<br/>[collapse=展开签名]隐藏内容[/collapse]")
