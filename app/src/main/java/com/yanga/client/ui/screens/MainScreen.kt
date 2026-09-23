@@ -168,7 +168,7 @@ fun MainScreen(
           )
         }
         entry<MainDestinationKey.Board> { key ->
-          BoardTopicListRoute(key.destination, repository, app, loginSession, onBack, navigate)
+          BoardTopicListRoute(key.destination, repository, app, loginSession, onBack, navigate, profileState.forumEndpoint)
         }
         entry<MainDestinationKey.Thread> { key ->
           ThreadRoute(key.destination, repository, profileState.forumEndpoint, loginSession, onBack, navigate)

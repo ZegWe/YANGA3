@@ -146,6 +146,7 @@ internal fun BoardTopicListScreen(
   onOpenSubBoard: (SubBoardOption) -> Unit = {},
   onTopicFilterChange: (BoardTopicFilter) -> Unit = {},
   onSearchClick: () -> Unit = {},
+  onCreateTopic: () -> Unit = {},
   onRefresh: () -> Unit = {},
   onLoadNextPage: () -> Unit = {},
   modifier: Modifier = Modifier,
@@ -223,8 +224,8 @@ internal fun BoardTopicListScreen(
       )
     },
     floatingActionButton = {
-      FloatingActionButton(onClick = {}) {
-        Icon(Icons.Filled.Add, contentDescription = "Add")
+      FloatingActionButton(onClick = onCreateTopic) {
+        Icon(Icons.Filled.Add, contentDescription = "发帖")
       }
     }
   ) { paddingValues ->
@@ -764,6 +765,10 @@ private fun PostItem(
   onReact: (suspend (PostPreview, Boolean) -> Result<com.yanga.client.api.NgaReactionResult>)? = null,
 ) {
   val contentParts = remember(post.content) { PostContentParser.parse(post.content) }
+  val remainingAttachments = remember(post.attachments, contentParts) {
+    val inlineUrls = PostContentParser.collectAttachmentUrls(contentParts)
+    post.attachments.filterNot { it.url in inlineUrls }
+  }
   val contentBlocks = remember(contentParts) { groupPostContentParts(contentParts) }
   val imageUrls = remember(post) { postPreviewImageUrls(post) }
 
@@ -902,10 +907,10 @@ private fun PostItem(
         }
       }
 
-      if (post.attachments.isNotEmpty()) {
+      if (remainingAttachments.isNotEmpty()) {
         PostSectionDivider()
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          post.attachments.forEach { attachment ->
+          remainingAttachments.forEach { attachment ->
             when (AttachmentFileType.category(attachment.name, attachment.url)) {
               AttachmentFileCategory.Audio -> PostAudioPlayer(attachment.url, attachment.name, onOpenLink = onLinkClick)
               AttachmentFileCategory.Video -> PostVideoPlayer(
@@ -1146,7 +1151,7 @@ private fun PostQuoteBlock(
 }
 
 @Composable
-private fun AttachmentRow(
+internal fun AttachmentRow(
   attachment: PostAttachmentPreview,
   onClick: () -> Unit,
   modifier: Modifier = Modifier,
@@ -1191,7 +1196,7 @@ private fun AttachmentRow(
 }
 
 @Composable
-private fun AttachmentDownloadDialog(
+internal fun AttachmentDownloadDialog(
   attachment: PostAttachmentPreview,
   onDismiss: () -> Unit,
   onConfirm: () -> Unit,

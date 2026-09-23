@@ -173,7 +173,7 @@ fun ThreadRoute(
   )
 }
 
-private fun downloadAttachment(context: Context, attachment: PostAttachmentPreview) {
+internal fun downloadAttachment(context: Context, attachment: PostAttachmentPreview) {
   val uri = runCatching { Uri.parse(attachment.url) }.getOrNull()
   if (uri == null || uri.scheme.isNullOrBlank()) {
     Toast.makeText(context, "附件链接无效", Toast.LENGTH_SHORT).show()

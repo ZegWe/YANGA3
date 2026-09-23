@@ -164,6 +164,20 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
     stid?.let { addRaw("stid", it) }
   }
 
+  fun newTopic(fid: Int, subject: String, content: String, attachments: List<TopicAttachment>, options: TopicPostOptions = TopicPostOptions()): NgaRequest =
+    post("post.php", query = linkedMapOf("__output" to "8"), body = topicPostBody(
+      content = content, fid = fid, subject = subject, action = "new",
+      attachments = attachments.takeIf { it.isNotEmpty() }?.joinToString("", transform = { "%09" + NgaEncoding.urlEncodeGbk(it.id) }),
+      attachmentsCheck = attachments.takeIf { it.isNotEmpty() }?.joinToString("", transform = { "%09" + NgaEncoding.urlEncodeGbk(it.check) }),
+    ).let { body ->
+      val mentions = Regex("\\[@([^]\\r\\n]{2,30})]").findAll(content)
+        .map { it.groupValues[1].trim() }.filter(String::isNotBlank).distinct().take(5).joinToString("\t")
+      NgaFormBody(body.fields + options.fields().map { (key, value) -> "$key=$value" } +
+        if (mentions.isBlank()) emptyList() else listOf("mention=${NgaEncoding.urlEncodeGbk(mentions)}"))
+    })
+
+  fun topicCategories(fid: Int): NgaRequest = get("nuke.php", linkedMapOf("__lib" to "topic_key", "__act" to "get", "fid" to fid.toString(), "__output" to "8"))
+
   fun reply(tid: String, pid: String, content: String): NgaRequest =
     post("post.php", query = linkedMapOf("__output" to "8"), body = formBody {
       addRaw("action", "reply")

@@ -484,6 +484,32 @@ class ThreadReadingScreenTest {
 
     assertEquals("https://img.nga.178.com/attachments/mon_202606/01/sample.png", downloadUrl)
   }
+
+  @Test
+  fun inlineZipAttachmentShowsOneDownloadRowInsteadOfImage() {
+    composeTestRule.setContent {
+      ThreadReadingScreen(
+        state = ThreadUiState(
+          title = "附件回归验证",
+          posts = LoadableUiState.Content(listOf(PostPreview(
+            author = "reader", floor = "楼主", time = "now", avatarInitial = "R",
+            content = "[attach]./mon_202609/8xQ66-gh0iK6.zip[/attach]",
+            attachments = listOf(PostAttachmentPreview(
+              name = "8xQ66-gh0iK6.zip",
+              url = "https://img.nga.178.com/attachments/mon_202609/8xQ66-gh0iK6.zip",
+            )),
+          ))),
+        ),
+        onBack = {},
+      )
+    }
+    assertEquals(1, composeTestRule.onAllNodesWithContentDescription("Attachment 8xQ66-gh0iK6.zip").fetchSemanticsNodes().size)
+    assertEquals(0, composeTestRule.onAllNodesWithContentDescription("Post image").fetchSemanticsNodes().size)
+    composeTestRule.onNodeWithText("8xQ66-gh0iK6.zip").performClick()
+    composeTestRule.onNodeWithText("下载附件").assertExists()
+    composeTestRule.onNodeWithText("保存 8xQ66-gh0iK6.zip 到 Downloads？").assertExists()
+    composeTestRule.onNodeWithText("取消").performClick()
+  }
 }
 
 private fun SemanticsNodeInteraction.clickFirstCharacter() {

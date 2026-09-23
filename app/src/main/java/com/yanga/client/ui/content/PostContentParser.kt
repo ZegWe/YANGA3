@@ -2,6 +2,8 @@ package com.yanga.client.ui.content
 
 import com.yanga.client.api.NgaStaticUrls
 import com.yanga.client.data.image.ImageUrlResolver
+import com.yanga.client.ui.AttachmentFileCategory
+import com.yanga.client.ui.AttachmentFileType
 
 private val mediaTagStart = Regex("\\[(flash|media|audio|video)(?:[=\\s\\]])", RegexOption.IGNORE_CASE)
 
@@ -50,6 +52,7 @@ sealed class PostContentPart {
   }
 
   data class Image(val url: String) : PostContentPart()
+  data class Attachment(val url: String, val name: String) : PostContentPart()
 
   data class Emoticon(
     val code: String,
@@ -66,6 +69,20 @@ sealed class PostContentPart {
 }
 
 object PostContentParser {
+  fun collectAttachmentUrls(parts: List<PostContentPart>): Set<String> = buildSet {
+    parts.forEach { part ->
+      when (part) {
+        is PostContentPart.Attachment -> add(part.url)
+        is PostContentPart.Quote -> addAll(collectAttachmentUrls(part.parts))
+        is PostContentPart.Collapse -> addAll(collectAttachmentUrls(part.parts))
+        is PostContentPart.Heading -> addAll(collectAttachmentUrls(part.parts))
+        is PostContentPart.ListBlock -> part.items.forEach { addAll(collectAttachmentUrls(it)) }
+        is PostContentPart.Table -> part.rows.flatten().forEach { addAll(collectAttachmentUrls(it)) }
+        else -> Unit
+      }
+    }
+  }
+
   fun parse(content: String): List<PostContentPart> {
     val normalized = ContentNormalizer.prepare(content)
     if (normalized.isBlank()) return emptyList()
@@ -143,6 +160,10 @@ private class BbContentParser(private val source: String, private val depth: Int
         startsWithIgnoreCase("[quote]") -> {
           flushText()
           parts += parseQuote()
+        }
+        startsWithIgnoreCase("[attach]") -> {
+          flushText()
+          parts += parseAttachmentTag()
         }
         startsWithIgnoreCase("[img") -> {
           flushText()
@@ -400,7 +421,33 @@ private class BbContentParser(private val source: String, private val depth: Int
     }
   }
 
-  private fun parseRelativeImagePath(): PostContentPart.Image? {
+  private fun parseAttachmentTag(): PostContentPart {
+    val start = pos
+    consume("[attach]")
+    val close = indexOfIgnoreCase("[/attach]", pos)
+    if (close < 0) {
+      pos = source.length
+      return PostContentPart.Text(source.substring(start))
+    }
+    val raw = source.substring(pos, close).trim()
+    pos = close + "[/attach]".length
+    return attachmentPart(raw) ?: PostContentPart.Text(source.substring(start, pos))
+  }
+
+  private fun attachmentPart(raw: String): PostContentPart? {
+    val url = ImageUrlResolver.resolve(raw)
+    val uri = runCatching { java.net.URI(url) }.getOrNull() ?: return null
+    if (uri.scheme?.lowercase() !in setOf("http", "https") || uri.host.isNullOrBlank()) return null
+    val name = ImageUrlResolver.fileName(url)
+    return when (AttachmentFileType.category(name, url)) {
+      AttachmentFileCategory.Image -> PostContentPart.Image(normalizeContentImageUrl(url))
+      AttachmentFileCategory.Audio -> PostContentPart.Audio(url, name)
+      AttachmentFileCategory.Video -> PostContentPart.Video(url, name, direct = true)
+      else -> PostContentPart.Attachment(url, name)
+    }
+  }
+
+  private fun parseRelativeImagePath(): PostContentPart? {
     if (!startsWith("./mon_")) return null
     val start = pos
     while (pos < source.length) {
@@ -410,7 +457,7 @@ private class BbContentParser(private val source: String, private val depth: Int
     }
     val path = source.substring(start, pos)
     if (path.isBlank()) return null
-    return PostContentPart.Image(normalizeContentImageUrl(path))
+    return attachmentPart(path) ?: PostContentPart.Text(path)
   }
 
   private fun atEnd(): Boolean = pos >= source.length
@@ -792,7 +839,7 @@ private data class ActiveStyle(
   val linkUrl: String? = null,
 )
 
-private object NgaEmoticons {
+internal object NgaEmoticons {
   private val ac =
     mapOf(
       "blink" to "ac0.png",
@@ -1058,4 +1105,5 @@ private object NgaEmoticons {
   private val groups = mapOf("ac" to ac, "a2" to a2, "ng" to ng, "pg" to pg, "pst" to pst, "dt" to dt)
 
   fun resolve(category: String, code: String): String? = groups[category.lowercase()]?.get(code)
+  fun catalog(): Map<String, Map<String, String>> = groups
 }

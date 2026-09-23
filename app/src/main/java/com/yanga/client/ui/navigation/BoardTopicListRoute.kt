@@ -28,6 +28,7 @@ fun BoardTopicListRoute(
   loginSession: LoginSessionUiState?,
   onBack: () -> Unit,
   navigate: (MainDestinationKey) -> Unit,
+  baseUrl: String = "https://bbs.nga.cn",
 ) {
   val boardContentViewModel =
     viewModel<BoardContentViewModel> {
@@ -49,6 +50,32 @@ fun BoardTopicListRoute(
         category = destination.category,
         isFavorite = destination.isFavorite,
       )
+  val context = androidx.compose.ui.platform.LocalContext.current
+  val topicComposer = viewModel<com.yanga.client.ui.TopicComposerViewModel>()
+  LaunchedEffect(topicComposer.visible, loginSession?.uid, baseUrl) {
+    if (topicComposer.visible) {
+      topicComposer.bindDraft(context, loginSession?.uid ?: "guest", destination.id.toIntOrNull() ?: 0)
+      if (!loginSession?.cookie.isNullOrBlank()) topicComposer.prepare(repository, sessionData, destination.id.toIntOrNull() ?: 0)
+    }
+  }
+  LaunchedEffect(topicComposer.sent) {
+    if (topicComposer.sent) {
+      topicComposer.sent = false
+      boardContentViewModel.refresh()
+      android.widget.Toast.makeText(context, "发布成功", android.widget.Toast.LENGTH_SHORT).show()
+    }
+  }
+  if (topicComposer.visible) com.yanga.client.ui.TopicComposer(
+    boardName = destination.name, fid = destination.id.toIntOrNull() ?: 0,
+    model = topicComposer, repository = repository, loginSession = loginSession,
+    onLogin = { topicComposer.close(); navigate(MainDestinationKey.Login) },
+    onWeb = {
+      topicComposer.close()
+      val url = android.net.Uri.parse(baseUrl).buildUpon().encodedPath("/post.php").clearQuery()
+        .appendQueryParameter("action", "new").appendQueryParameter("fid", destination.id).build().toString()
+      navigate(MainDestinationKey.Web(url, "发帖 · ${destination.name}", baseUrl))
+    },
+  )
   BoardTopicListScreen(
     state = boardState,
     onBack = onBack,
@@ -80,6 +107,7 @@ fun BoardTopicListRoute(
     onSearchClick = {
       navigate(MainDestinationKey.Search(destination))
     },
+    onCreateTopic = topicComposer::open,
     onRefresh = boardContentViewModel::refresh,
     onLoadNextPage = boardContentViewModel::loadNextPage,
     modifier = Modifier.fillMaxSize(),

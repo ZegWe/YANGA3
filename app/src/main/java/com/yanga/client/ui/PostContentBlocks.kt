@@ -61,7 +61,7 @@ internal fun groupPostContentParts(parts: List<PostContentPart>): List<PostConte
         flushInlineItems()
         blocks += PostContentBlock.Video(part)
       }
-      is PostContentPart.ListBlock, is PostContentPart.Collapse, is PostContentPart.Code,
+      is PostContentPart.Attachment, is PostContentPart.ListBlock, is PostContentPart.Collapse, is PostContentPart.Code,
       is PostContentPart.Heading, is PostContentPart.Table, PostContentPart.Rule -> {
         flushInlineItems()
         blocks += PostContentBlock.Structured(part)

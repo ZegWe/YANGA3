@@ -28,6 +28,14 @@ import java.util.concurrent.TimeUnit
 class LoginRequiredException : IllegalStateException("Login is required for this read operation")
 
 interface NgaReadOnlyRepository {
+  suspend fun prepareTopic(session: LoginSessionData?, fid: Int): Result<com.yanga.client.api.TopicPostPreparation> = Result.failure(UnsupportedOperationException("暂不支持读取发帖设置"))
+  suspend fun submitTopicWithOptions(session: LoginSessionData?, fid: Int, subject: String, content: String, attachments: List<com.yanga.client.api.TopicAttachment>, options: com.yanga.client.api.TopicPostOptions): Result<Unit> =
+    if (options == com.yanga.client.api.TopicPostOptions()) submitTopic(session, fid, subject, content, attachments) else Result.failure(UnsupportedOperationException("暂不支持高级发帖设置"))
+  suspend fun uploadTopicAttachmentWithOptions(session: LoginSessionData?, fid: Int, name: String, mime: String, bytes: ByteArray, options: com.yanga.client.api.TopicUploadOptions): Result<com.yanga.client.api.TopicAttachment> =
+    uploadTopicAttachment(session, fid, name, mime, bytes)
+  suspend fun submitTopic(session: LoginSessionData?, fid: Int, subject: String, content: String, attachments: List<com.yanga.client.api.TopicAttachment>): Result<Unit> = Result.failure(UnsupportedOperationException("发帖暂不可用"))
+  suspend fun uploadTopicAttachment(session: LoginSessionData?, fid: Int, name: String, mime: String, bytes: ByteArray): Result<com.yanga.client.api.TopicAttachment> = Result.failure(UnsupportedOperationException("附件上传暂不可用"))
+
   suspend fun submitReply(session: LoginSessionData?, tid: String, pid: String, content: String): Result<Unit> =
     Result.failure(UnsupportedOperationException("回帖暂不可用"))
   suspend fun loadNotifications(session: LoginSessionData?): Result<List<com.yanga.client.api.NgaNotificationSummary>> = Result.failure(UnsupportedOperationException())
@@ -119,6 +127,48 @@ class DefaultNgaReadOnlyRepository(
     }
     execute(api(login).reply(tid, pid, content), com.yanga.client.api.NgaReplyParser::requireSuccess)
   }
+  override suspend fun submitTopic(session: LoginSessionData?, fid: Int, subject: String, content: String, attachments: List<com.yanga.client.api.TopicAttachment>): Result<Unit> = withContext(Dispatchers.IO) {
+    val login = session.requireLogin() ?: return@withContext Result.failure(IllegalStateException("请先登录后再发帖"))
+    if (fid == 0 || subject.isBlank() || content.isBlank()) return@withContext Result.failure(IllegalArgumentException("请填写标题和正文"))
+    execute(api(login).newTopic(fid, subject, content, attachments), com.yanga.client.api.NgaReplyParser::requireSuccess)
+  }
+
+  override suspend fun uploadTopicAttachment(session: LoginSessionData?, fid: Int, name: String, mime: String, bytes: ByteArray): Result<com.yanga.client.api.TopicAttachment> = withContext(Dispatchers.IO) {
+    val login = session.requireLogin() ?: return@withContext Result.failure(IllegalStateException("请先登录后再上传附件"))
+    runCatching {
+      val api = api(login)
+      val auth = execute(api.topicPostInfo(fid, action = "new"), com.yanga.client.api.NgaTopicPosting::auth).getOrThrow()
+      val request = com.yanga.client.api.NgaTopicPosting.uploadRequest(api, fid, auth, name, mime, bytes)
+      execute(request) { com.yanga.client.api.NgaTopicPosting.uploaded(it, name, mime.startsWith("image/")) }.getOrThrow()
+    }
+  }
+
+  override suspend fun prepareTopic(session: LoginSessionData?, fid: Int): Result<com.yanga.client.api.TopicPostPreparation> = withContext(Dispatchers.IO) {
+    val login = session.requireLogin() ?: return@withContext Result.failure(IllegalStateException("请先登录后读取发帖设置"))
+    runCatching {
+      val api = api(login)
+      val info = execute(api.topicPostInfo(fid, action = "new"), com.yanga.client.api.TopicPostPreparationParser::parse).getOrThrow()
+      val categories = execute(api.topicCategories(fid), com.yanga.client.api.TopicPostPreparationParser::categories).getOrThrow()
+      info.copy(categories = categories)
+    }
+  }
+
+  override suspend fun submitTopicWithOptions(session: LoginSessionData?, fid: Int, subject: String, content: String, attachments: List<com.yanga.client.api.TopicAttachment>, options: com.yanga.client.api.TopicPostOptions): Result<Unit> = withContext(Dispatchers.IO) {
+    val login = session.requireLogin() ?: return@withContext Result.failure(IllegalStateException("请先登录后再发帖"))
+    if (fid == 0 || subject.isBlank() || content.length < 3) return@withContext Result.failure(IllegalArgumentException("请填写标题和至少三个字符的正文"))
+    execute(api(login).newTopic(fid, subject, content, attachments, options), com.yanga.client.api.NgaReplyParser::requireSuccess)
+  }
+
+  override suspend fun uploadTopicAttachmentWithOptions(session: LoginSessionData?, fid: Int, name: String, mime: String, bytes: ByteArray, options: com.yanga.client.api.TopicUploadOptions): Result<com.yanga.client.api.TopicAttachment> = withContext(Dispatchers.IO) {
+    val login = session.requireLogin() ?: return@withContext Result.failure(IllegalStateException("请先登录后再上传附件"))
+    runCatching {
+      val api = api(login)
+      val auth = execute(api.topicPostInfo(fid, action = "new"), com.yanga.client.api.NgaTopicPosting::auth).getOrThrow()
+      val request = com.yanga.client.api.NgaTopicPosting.uploadRequest(api, fid, auth, name, mime, bytes, options)
+      execute(request) { com.yanga.client.api.NgaTopicPosting.uploaded(it, name, mime.startsWith("image/")) }.getOrThrow()
+    }
+  }
+
   fun setBaseUrl(url: String) {
     baseUrl = url
   }

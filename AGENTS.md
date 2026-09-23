@@ -48,6 +48,13 @@ When invoking build/compile commands, always set:
   - `sandbox_permissions: "require_escalated"`
   - concise `justification`
 
+### Preserve Local App Data (Mandatory)
+
+- Local emulator/device testing must use an in-place APK update (`adb -s <serial> install -r <apk>`), preserving login cookies, preferences, and cached data.
+- Never uninstall the app, run `pm clear`, clear its storage, or use a test runner that automatically uninstalls/resets the target app. Do not fix installation errors by uninstalling.
+- For instrumentation tests, build the app and test APKs outside sandbox, install both with `adb install -r`, and invoke `adb shell am instrument` directly. Do not use `connectedAndroidTest` / `connectedDebugAndroidTest` or managed-device tasks on the user's local emulator unless data-preserving behavior has been explicitly verified; their cleanup may uninstall the app.
+- If a clean installation is necessary, use a separate disposable emulator/application ID. Clearing the user's existing installation requires their explicit approval.
+
 ## Commit Message Convention
 
 - Use Conventional Commits-style messages based on the repository history.

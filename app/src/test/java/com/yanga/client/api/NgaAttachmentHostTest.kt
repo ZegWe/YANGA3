@@ -6,6 +6,21 @@ import org.junit.Test
 
 class NgaAttachmentHostTest {
   @Test
+  fun inlineAttachmentUsesServerHost() {
+    val raw = """{"data":{
+      "__GLOBAL":{"_ATTACH_BASE_VIEW":"img.nga.cn/attachments"},
+      "__T":{"tid":1},
+      "__R":{"0":{"pid":1,"lou":0,"content":"[attach]./mon_a.zip[/attach]"}}
+    }}"""
+    val content = NgaThreadParser.parseRead(raw).posts.single().content
+    assertEquals("[attach]https://img.nga.cn/attachments/mon_a.zip[/attach]", content)
+    assertEquals(
+      com.yanga.client.ui.content.PostContentPart.Attachment("https://img.nga.cn/attachments/mon_a.zip", "mon_a.zip"),
+      com.yanga.client.ui.content.PostContentParser.parse(content).single(),
+    )
+  }
+
+  @Test
   fun noimgPreservesOriginalText() {
     val raw = """{"data":{
       "__GLOBAL":{"_ATTACH_BASE_VIEW":"img.nga.cn/attachments"},

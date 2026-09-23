@@ -33,6 +33,20 @@ internal fun StructuredPostContent(
 ) {
   ProvideTextStyle(MaterialTheme.typography.bodyLarge) {
     when (part) {
+      is PostContentPart.Attachment -> {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val attachment = PostAttachmentPreview(name = part.name, url = part.url)
+        var showDownload by remember(part) { mutableStateOf(false) }
+        AttachmentRow(attachment, onClick = { showDownload = true })
+        if (showDownload) AttachmentDownloadDialog(
+          attachment = attachment,
+          onDismiss = { showDownload = false },
+          onConfirm = {
+            showDownload = false
+            com.yanga.client.ui.navigation.downloadAttachment(context, attachment)
+          },
+        )
+      }
       is PostContentPart.ListBlock -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         part.items.forEachIndexed { index, item ->
           Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

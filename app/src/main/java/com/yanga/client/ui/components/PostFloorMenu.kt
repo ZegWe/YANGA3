@@ -59,6 +59,7 @@ internal fun postCopyText(parts: List<PostContentPart>): String = parts.joinToSt
     is PostContentPart.Text -> part.text
     is PostContentPart.Emoticon -> part.alt
     is PostContentPart.Image -> "\n${part.url}\n"
+    is PostContentPart.Attachment -> "\n${part.name} ${part.url}\n"
     is PostContentPart.Audio -> "\n${part.label} ${part.url}\n"
     is PostContentPart.Video -> "\n${part.label} ${part.url}\n"
     is PostContentPart.Heading -> "\n${postCopyText(part.parts)}\n"

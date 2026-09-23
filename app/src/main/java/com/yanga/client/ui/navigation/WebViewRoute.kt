@@ -9,6 +9,11 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.saveable.rememberSaveable
+import android.app.Activity
+import android.net.Uri
+import android.webkit.ValueCallback
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.ViewGroup
@@ -84,6 +89,22 @@ fun WebViewRoute(
   val loginCallback by rememberUpdatedState(onLoginCookies)
   val snackbar = remember { SnackbarHostState() }
   val scope = rememberCoroutineScope()
+  var fileCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
+  val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    val callback = fileCallback
+    fileCallback = null
+    callback?.onReceiveValue(
+      if (result.resultCode == Activity.RESULT_OK) {
+        WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+      } else null,
+    )
+  }
+  DisposableEffect(Unit) {
+    onDispose {
+      fileCallback?.onReceiveValue(null)
+      fileCallback = null
+    }
+  }
   var loginCompleted by remember { mutableStateOf(false) }
   val initialSession = remember {
     runCatching { NgaLoginCookies.parse(CookieManager.getInstance().getCookie(cookieBaseUrl).orEmpty()) }.getOrNull()
@@ -273,16 +294,39 @@ fun WebViewRoute(
                 }
               view.webChromeClient =
                 object : WebChromeClient() {
+                  override fun onShowFileChooser(
+                    view: WebView?,
+                    callback: ValueCallback<Array<Uri>>?,
+                    params: FileChooserParams?,
+                  ): Boolean {
+                    if (authorizationOnly || callback == null || params == null) return false
+                    // Complete an earlier request before handing ownership to the next picker.
+                    fileCallback?.onReceiveValue(null)
+                    fileCallback = callback
+                    try {
+                      filePicker.launch(params.createIntent().apply {
+                        addCategory(android.content.Intent.CATEGORY_OPENABLE)
+                      })
+                    } catch (_: android.content.ActivityNotFoundException) {
+                      fileCallback = null
+                      callback.onReceiveValue(null)
+                      scope.launch { snackbar.showSnackbar("未找到文件选择器，请安装系统文件管理器后重试") }
+                    }
+                    return true
+                  }
+
                   override fun onReceivedTitle(view: WebView?, title: String?) {
                     if (!title.isNullOrBlank() && !authorizationOnly) {
                       onTitleChange(title)
                     }
                   }
                 }
-              if (authorizationOnly) {
+              if (authorizationOnly || cookieHeader.isNotBlank()) {
                 NgaWebViewCookies.syncAuthorizationSession(CookieManager.getInstance(), cookieHeader, cookieBaseUrl) { success ->
                   if (webView === view) {
-                    if (success) view.loadUrl(pageUrl)
+                    if (success) {
+                      if (view.restoreState(savedWebState) == null) view.loadUrl(pageUrl)
+                    }
                     else onLoadStateChange(WebViewLoadState.Error("同步登录状态失败，请返回后重新登录"))
                   }
                 }
@@ -291,6 +335,8 @@ fun WebViewRoute(
             }
           },
           onRelease = { view ->
+            fileCallback?.onReceiveValue(null)
+            fileCallback = null
             view.saveState(savedWebState)
             webView = null
             view.destroySafely()
