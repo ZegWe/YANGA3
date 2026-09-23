@@ -50,7 +50,7 @@ class NgaReadOnlyRepositoryTest {
   }
 
   @Test
-  fun loadBoardsFetchesRemoteCategoriesAndSubscribedBoardsForSession() = runTest {
+  fun loadBoardsWithSessionUsesOnlyLocalFavorites() = runTest {
     val transport = FakeTransport(
       responses = mapOf(
         RequestKey("nuke.php", mapOf("__lib" to "user_option", "__act" to "get", "type" to "1")) to
@@ -60,19 +60,18 @@ class NgaReadOnlyRepositoryTest {
         "app_api.php" to fixture("remote_board_categories.json"),
       ),
     )
-    val repository = DefaultNgaReadOnlyRepository(transport)
+    val store = FakeFavoriteStore(mutableListOf(LocalFavoriteBoard(boardId = "123", name = "Local favorite", iconUrl = null, category = "")))
+    val repository = DefaultNgaReadOnlyRepository(transport, favoriteBoardsStore = store)
 
     val result = repository.loadBoards(session())
 
     val data = result.getOrThrow()
     assertEquals(1, data.subscribedBoards.size)
-    assertEquals("310", data.subscribedBoards[0].boardId)
-    assertEquals("真实关注板块", data.subscribedBoards[0].name)
+    assertEquals("123", data.subscribedBoards[0].boardId)
+    assertEquals("Local favorite", data.subscribedBoards[0].name)
     assertEquals(2, data.remoteSections.size)
     assertEquals("综合", data.remoteSections[0].name)
-    assertEquals(listOf("nuke.php", "app_api.php", "nuke.php"), transport.requests.map { it.pathName() })
-    assertEquals("user_option", transport.requests[2].query["__lib"])
-    assertEquals("1", transport.requests[2].query["type"])
+    assertEquals(listOf("nuke.php", "app_api.php"), transport.requests.map { it.pathName() })
   }
 
   @Test
@@ -198,7 +197,7 @@ class NgaReadOnlyRepositoryTest {
     val result = repository.loadBoards(session())
 
     val data = result.getOrThrow()
-    assertEquals(listOf("310"), data.subscribedBoards.map { it.boardId })
+    assertTrue(data.subscribedBoards.isEmpty())
     assertTrue(data.remoteSections.none { it.id == "0" || it.id == "-1" })
     assertEquals(2, data.remoteSections.size)
   }

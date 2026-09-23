@@ -3,6 +3,7 @@ package com.yanga.client.data.boards
 import android.content.Context
 import com.yanga.client.data.LoginSessionData
 import com.yanga.client.data.LocalFavoriteBoard
+import com.yanga.client.data.FavoriteBoardsStore
 import com.yanga.client.data.NgaReadOnlyRepository
 import com.yanga.client.data.image.ImageCacheManager
 import com.yanga.client.ui.BoardPreview
@@ -11,7 +12,6 @@ import com.yanga.client.ui.LoadableUiState
 import com.yanga.client.ui.collectBoardIconUrls
 import com.yanga.client.ui.markFavoriteBoards
 import com.yanga.client.ui.toBoardPreview
-import com.yanga.client.ui.toBoardsUiState
 import com.yanga.client.ui.toLoadableError
 import com.yanga.client.ui.toPreview
 import com.yanga.client.ui.withFavoriteSections
@@ -26,6 +26,7 @@ import kotlinx.coroutines.sync.withLock
 
 class BoardsCatalog(
   private val repository: NgaReadOnlyRepository,
+  private val favoriteBoardsStore: FavoriteBoardsStore,
   private val imageCacheManager: ImageCacheManager,
   private val appContext: Context,
   private val boardSectionDirectory: BoardSectionDirectory?,
@@ -39,7 +40,7 @@ class BoardsCatalog(
   private var iconsWarmedForSessionKey: String? = null
 
   fun preloadAtStartup() {
-    localBoardsUiState()?.let { _state.value = it }
+    _state.value = localBoardsUiState()
     scope.launch { reloadInternal(session = null, force = true) }
   }
 
@@ -79,81 +80,26 @@ class BoardsCatalog(
           ),
         )
       }
-      applyLocalFavorites(boardId = board.id, isFavorite = !currentlyFavorite)
+      applyLocalFavorites()
     }
   }
 
-  private suspend fun currentFavoriteIds(): Set<String> {
-    val localFavoriteIds = repository.listLocalFavoriteBoards().getOrDefault(emptyList()).map { it.boardId }.toSet()
-    val currentState = _state.value
-    val subscribedFavorites =
-      (currentState.subscribedBoards as? LoadableUiState.Content)
-        ?.value
-        .orEmpty()
-        .map { it.id }
-        .toSet()
-    return localFavoriteIds + subscribedFavorites
-  }
+  private suspend fun currentFavoriteIds(): Set<String> =
+    repository.listLocalFavoriteBoards().getOrDefault(emptyList()).map { it.boardId }.toSet()
 
-  private suspend fun applyLocalFavorites(boardId: String? = null, isFavorite: Boolean? = null) {
-    val localFavorites = repository.listLocalFavoriteBoards().getOrDefault(emptyList())
-    val localFavoriteIds = localFavorites.map { it.boardId }.toSet()
-    val currentState = _state.value
-    val subscribedFavorites =
-      (currentState.subscribedBoards as? LoadableUiState.Content)
-        ?.value
-        .orEmpty()
-        .filter { it.isFavorite }
-        .map { it.id }
-        .toSet()
-    val sectionFavorites =
-      (currentState.sections as? LoadableUiState.Content)
-        ?.value
-        .orEmpty()
-        .flatMap { section -> section.groups.flatMap { group -> group.boards } }
-        .filter { it.isFavorite }
-        .map { it.id }
-        .toSet()
-
-    val favoriteIds = (localFavoriteIds + subscribedFavorites + sectionFavorites).toMutableSet()
-    if (boardId != null && isFavorite != null) {
-      if (isFavorite) favoriteIds.add(boardId) else favoriteIds.remove(boardId)
-    }
-
-    _state.update { state ->
-      val sectionList = (state.sections as? LoadableUiState.Content)?.value.orEmpty()
-      val existingSubscribed = (state.subscribedBoards as? LoadableUiState.Content)?.value.orEmpty()
-      val existingSubscribedById = existingSubscribed.associateBy { it.id }
-      val sectionBoardById =
-        sectionList
-          .flatMap { section -> section.groups.flatMap { group -> group.boards } }
-          .associateBy { it.id }
-      val localById = localFavorites.associateBy { it.boardId }
-
-      val orderedFavoriteIds =
-        buildList {
-          existingSubscribed.forEach { board -> if (favoriteIds.contains(board.id)) add(board.id) }
-          sectionList
-            .flatMap { section -> section.groups.flatMap { group -> group.boards } }
-            .forEach { board -> if (favoriteIds.contains(board.id) && board.id !in this) add(board.id) }
-          localFavorites.forEach { local ->
-            if (favoriteIds.contains(local.boardId) && local.boardId !in this) add(local.boardId)
-          }
-        }
-
-      val subscribedBoards =
-        orderedFavoriteIds.mapNotNull { id ->
-          existingSubscribedById[id] ?: sectionBoardById[id] ?: localById[id]?.toBoardPreview()
-        }.map { it.copy(isFavorite = true) }
-
-      state.copy(
-        subscribedBoards = LoadableUiState.Content(subscribedBoards),
-        sections = state.sections.withFavoriteSections(favoriteIds),
+  private suspend fun applyLocalFavorites() {
+    val localFavorites = repository.listLocalFavoriteBoards().getOrElse { return }
+    val favoriteIds = localFavorites.map { it.boardId }.toSet()
+    _state.update { current ->
+      current.copy(
+        subscribedBoards = LoadableUiState.Content(localFavorites.map { it.toBoardPreview() }),
+        sections = current.sections.withFavoriteSections(favoriteIds),
       )
     }
   }
 
   private suspend fun reloadInternal(session: LoginSessionData?, force: Boolean) {
+    applyLocalFavorites()
     val sessionKey = sessionKey(session)
     if (!force && sessionKey == loadedSessionKey && _state.value.sections is LoadableUiState.Content) {
       return
@@ -167,12 +113,6 @@ class BoardsCatalog(
       val hasLocalSections = boardSectionDirectory?.loadSections().orEmpty().isNotEmpty()
       _state.update { current ->
         current.copy(
-          subscribedBoards =
-            if (session != null && current.subscribedBoards !is LoadableUiState.Content) {
-              LoadableUiState.Loading
-            } else {
-              current.subscribedBoards
-            },
           sections =
             if (!hasLocalSections && current.sections !is LoadableUiState.Content) {
               LoadableUiState.Loading
@@ -183,18 +123,19 @@ class BoardsCatalog(
       }
 
       val result = repository.loadBoards(session)
-      val uiState =
+      _state.update { current ->
         result.fold(
-          onSuccess = { data -> data.toBoardsUiState() },
+          onSuccess = { data ->
+            // Directory refreshes must never replace locally managed favorites.
+            val favoriteIds = (current.subscribedBoards as? LoadableUiState.Content)
+              ?.value.orEmpty().map { it.id }.toSet()
+            current.copy(
+              sections = LoadableUiState.Content(data.remoteSections.map { it.toPreview() }.markFavoriteBoards(favoriteIds)),
+            )
+          },
           onFailure = { error ->
-            val current = _state.value
             BoardsUiState(
-              subscribedBoards =
-                if (session != null) {
-                  error.toLoadableError()
-                } else {
-                  current.subscribedBoards
-                },
+              subscribedBoards = current.subscribedBoards,
               sections =
                 if (current.sections is LoadableUiState.Content) {
                   current.sections
@@ -204,7 +145,8 @@ class BoardsCatalog(
             )
           },
         )
-      _state.value = uiState
+      }
+      val uiState = _state.value
       loadedSessionKey = sessionKey
       applyLocalFavorites()
 
@@ -222,12 +164,14 @@ class BoardsCatalog(
     iconsWarmedForSessionKey = null
   }
 
-  private fun localBoardsUiState(): BoardsUiState? {
+  private fun localBoardsUiState(): BoardsUiState {
+    val favorites = favoriteBoardsStore.list()
+    val favoriteIds = favorites.map { it.boardId }.toSet()
     val sections = boardSectionDirectory?.loadSections().orEmpty()
-    if (sections.isEmpty()) return null
     return BoardsUiState(
-      subscribedBoards = LoadableUiState.Content(emptyList()),
-      sections = LoadableUiState.Content(sections.map { it.toPreview() }),
+      subscribedBoards = LoadableUiState.Content(favorites.map { it.toBoardPreview() }),
+      sections = if (sections.isEmpty()) LoadableUiState.Loading
+        else LoadableUiState.Content(sections.map { it.toPreview() }.markFavoriteBoards(favoriteIds)),
     )
   }
 

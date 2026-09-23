@@ -283,7 +283,7 @@ private fun buildBoardCategoryItems(
         state = subscribedBoards,
         emptyText = "No favorite boards",
         loadingText = "Loading favorite boards",
-        loginRequiredText = "Sign in to load favorite boards",
+        loginRequiredText = "Favorite boards are stored on this device",
       )
       return@buildList
     }
@@ -347,13 +347,13 @@ private fun LoginPrompt(onLoginClick: () -> Unit, modifier: Modifier = Modifier)
       verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
       Text(
-        text = "Sign in to sync Favorites and History",
+        text = "Sign in to post and check messages",
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.onPrimaryContainer,
         fontWeight = FontWeight.SemiBold,
       )
       Text(
-        text = "Public browsing stays available. Sign in when you want to post, manage favorites, or restore subscribed boards.",
+        text = "Public browsing and board favorites are available on this device. Sign in to post and access your messages.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onPrimaryContainer,
       )

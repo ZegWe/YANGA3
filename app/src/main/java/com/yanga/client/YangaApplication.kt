@@ -39,14 +39,16 @@ class YangaApplication : Application(), ImageLoaderFactory {
     val preferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     subBoardFilterStore = SharedPreferencesSubBoardFilterStore(preferences)
     val boardSectionDirectory = LocalBoardListStore(applicationContext, preferences)
+    val favoriteBoardsStore = SharedPreferencesFavoriteBoardsStore(preferences)
     repository =
       DefaultNgaReadOnlyRepository(
-        favoriteBoardsStore = SharedPreferencesFavoriteBoardsStore(preferences),
+        favoriteBoardsStore = favoriteBoardsStore,
         boardSectionDirectory = boardSectionDirectory,
       )
     boardsCatalog =
       BoardsCatalog(
         repository = repository,
+        favoriteBoardsStore = favoriteBoardsStore,
         imageCacheManager = imageCacheManager,
         appContext = applicationContext,
         boardSectionDirectory = boardSectionDirectory,

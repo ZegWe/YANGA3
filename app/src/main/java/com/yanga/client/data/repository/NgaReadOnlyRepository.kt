@@ -275,13 +275,11 @@ class DefaultNgaReadOnlyRepository(
       )
     }
 
-    val subscribedBoards = loadSubscribedBoards(session, remoteSections)
     val localFavorites = favoriteBoardsStore?.list().orEmpty().map { it.toBoardSummary() }
-    val resolvedSubscribedBoards = (localFavorites + subscribedBoards).distinctBy { it.boardId }
 
     Result.success(
       BoardsReadData(
-        subscribedBoards = resolvedSubscribedBoards,
+        subscribedBoards = localFavorites,
         remoteSections = remoteSections,
       ),
     )
@@ -303,24 +301,6 @@ class DefaultNgaReadOnlyRepository(
     directory.saveSections(merged)
     directory.markIncrementalRequested(System.currentTimeMillis())
     true
-  }
-
-  private suspend fun loadSubscribedBoards(
-    session: LoginSessionData?,
-    remoteSections: List<com.yanga.client.api.NgaBoardSection>,
-  ): List<com.yanga.client.api.NgaBoardSummary> {
-    val api = api(session)
-    val subscribedBoards =
-      if (session.requireLogin() != null) {
-        execute(api.subscribedBoards(), NgaBoardCategoryParser::parseBoards).getOrDefault(emptyList())
-      } else {
-        emptyList()
-      }
-    val legacySubscribedSection =
-      remoteSections.find {
-        it.name.contains("收藏") || it.name.contains("订阅")
-      }
-    return subscribedBoards.ifEmpty { legacySubscribedSection?.groups.orEmpty().flatMap { it.boards } }
   }
 
   private suspend fun fetchRemoteSections(session: LoginSessionData?): Result<List<com.yanga.client.api.NgaBoardSection>> {

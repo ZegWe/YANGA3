@@ -77,7 +77,6 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
 
   fun fullForumDirectory(): NgaRequest = get("nuke.php", linkedMapOf("__lib" to "forum_all", "__act" to "forum_all", "__output" to "8"))
 
-  fun subscribedBoards(): NgaRequest = get("nuke.php", linkedMapOf("__lib" to "user_option", "__act" to "get", "type" to "1", "__output" to "8"))
 
   fun subBoardFilterGet(parentFid: String): NgaRequest =
     get(
