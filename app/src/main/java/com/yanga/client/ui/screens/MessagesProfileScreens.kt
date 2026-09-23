@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.outlined.Add
@@ -152,6 +154,11 @@ internal fun ProfileScreen(
   var showAccountSheet by remember { mutableStateOf(false) }
   var showCheckInDialog by remember(loginSession?.uid) { mutableStateOf(false) }
 
+  LifecycleResumeEffect(loginSession) {
+    onProfileRefresh()
+    onPauseOrDispose { }
+  }
+
   Column(
     modifier = modifier
       .fillMaxSize()
@@ -165,7 +172,7 @@ internal fun ProfileScreen(
     ProfileAccountCard(
       session = state.session,
       onUserClick = onUserClick,
-      checkInRunning = state.checkInRunning,
+      checkInRunning = state.checkInRunning || state.checkInStatusLoading,
       checkedIn = state.checkedIn,
       onCheckIn = { showCheckInDialog = true; onCheckIn() },
       onLoginClick = {
@@ -177,6 +184,11 @@ internal fun ProfileScreen(
       },
       modifier = Modifier.padding(horizontal = ProfileHorizontalPadding),
     )
+    state.checkInStatusError?.let { message ->
+      TextButton(onClick = onProfileRefresh, modifier = Modifier.padding(horizontal = ProfileHorizontalPadding)) {
+        Text(message, color = MaterialTheme.colorScheme.error)
+      }
+    }
     ProfileCounterGrid(
       counters = state.counters,
       onClick = { icon ->
@@ -593,7 +605,7 @@ private fun ProfileAccountCard(
   onUserClick: () -> Unit,
   onCheckIn: () -> Unit,
   checkInRunning: Boolean,
-  checkedIn: Boolean,
+  checkedIn: Boolean?,
   modifier: Modifier = Modifier,
 ) {
   TonalCard(modifier = modifier) {
@@ -660,8 +672,11 @@ private fun ProfileAccountCard(
       when (session) {
         is LoadableUiState.Content -> Row(verticalAlignment = Alignment.CenterVertically) {
           IconButton(onClick = onCheckIn, enabled = !checkInRunning) {
-            if (checkInRunning) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            else Icon(if (checkedIn) Icons.Filled.Star else Icons.Outlined.StarBorder, contentDescription = if (checkedIn) "已签到" else "未签到")
+            if (checkInRunning) CircularProgressIndicator(Modifier.size(20.dp).semantics { contentDescription = "正在查询或更新签到状态" }, strokeWidth = 2.dp)
+            else Icon(
+              when (checkedIn) { true -> Icons.Filled.Star; false -> Icons.Outlined.StarBorder; null -> Icons.AutoMirrored.Outlined.HelpOutline },
+              contentDescription = when (checkedIn) { true -> "已签到"; false -> "未签到"; null -> "签到状态未知" },
+            )
           }
           IconButton(onClick = onLoginClick) {
             Icon(

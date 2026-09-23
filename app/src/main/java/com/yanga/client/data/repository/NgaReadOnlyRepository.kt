@@ -53,6 +53,8 @@ interface NgaReadOnlyRepository {
 
   suspend fun checkIn(session: LoginSessionData?): Result<String> = Result.failure(UnsupportedOperationException())
 
+  suspend fun loadCheckInStatus(session: LoginSessionData?): Result<Boolean> = Result.failure(UnsupportedOperationException())
+
   suspend fun loadHome(): Result<HomeReadData>
 
   suspend fun loadBoards(session: LoginSessionData?): Result<BoardsReadData>
@@ -227,6 +229,11 @@ class DefaultNgaReadOnlyRepository(
   override suspend fun checkIn(session: LoginSessionData?): Result<String> = withContext(Dispatchers.IO) {
     val login = session.requireLogin() ?: return@withContext Result.failure(LoginRequiredException())
     execute(api(login).checkIn(), com.yanga.client.api.NgaCheckInParser::parse)
+  }
+
+  override suspend fun loadCheckInStatus(session: LoginSessionData?): Result<Boolean> = withContext(Dispatchers.IO) {
+    val login = session.requireLogin() ?: return@withContext Result.failure(LoginRequiredException())
+    execute(api(login).checkInStatus(), com.yanga.client.api.NgaCheckInParser::parseStatus)
   }
 
   override suspend fun loadHome(): Result<HomeReadData> = withContext(Dispatchers.IO) {

@@ -4,6 +4,24 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object NgaCheckInParser {
+  fun parseStatus(raw: String): Boolean {
+    val root = ngaJsonRoot(raw)
+    if (root.has("error")) throw NgaApiException(message(root.opt("error")).ifBlank { "签到状态查询失败" })
+    val data = root.opt("data")
+    val stat = when (data) {
+      is JSONObject -> data.optJSONObject("0")
+      is JSONArray -> data.optJSONObject(0)
+      else -> null
+    } ?: throw NgaApiException("无法确认签到状态，请重试")
+    // Both values are server day numbers, so device time and timezone do not affect the result.
+    val lastDay = stat.opt("last_day")?.toString()?.toLongOrNull()
+    val nowDay = stat.opt("now_day")?.toString()?.toLongOrNull()
+    if (lastDay == null || nowDay == null || lastDay < 0 || nowDay <= 0 || lastDay > nowDay) {
+      throw NgaApiException("无法确认签到状态，请重试")
+    }
+    return lastDay == nowDay
+  }
+
   fun parse(raw: String): String {
     val root = ngaJsonRoot(raw)
     val error = message(root.opt("error"))

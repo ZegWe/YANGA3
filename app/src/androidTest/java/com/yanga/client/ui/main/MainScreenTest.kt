@@ -71,6 +71,39 @@ class MainScreenTest {
   }
 
   @Test
+  fun unknownCheckInStateOffersRefreshWithoutClaimingNotCheckedIn() {
+    var refreshes = 0
+    composeTestRule.setContent { ProfileScreen(
+      loginSession = LoginSessionUiState("user", "42", "test"),
+      state = ProfileUiState(
+        session = LoadableUiState.Content(LoginSessionData("user", "42", "test")),
+        checkInStatusError = "签到状态查询失败，请刷新重试",
+      ),
+      onLoginClick = {}, onLogout = {}, onProfileRefresh = { refreshes++ },
+    ) }
+    composeTestRule.onNodeWithContentDescription("签到状态未知").assertExists()
+    composeTestRule.onAllNodesWithContentDescription("未签到").assertCountEquals(0)
+    composeTestRule.onNodeWithText("签到状态查询失败，请刷新重试").performClick()
+    composeTestRule.runOnIdle { assertTrue(refreshes >= 2) } // On entry and explicit retry.
+  }
+
+  @Test
+  fun returningToProfileQueriesCheckInStatusAgain() {
+    var checkedIn = true
+    val repository = object : NgaReadOnlyRepository by fakeRepository() {
+      override suspend fun loadCheckInStatus(session: LoginSessionData?) = Result.success(checkedIn)
+    }
+    composeTestRule.setContent { MainScreen(repository = repository, loginSession = LoginSessionUiState("user", "42", "test")) }
+    composeTestRule.onNodeWithContentDescription("Profile", useUnmergedTree = true).performClick()
+    composeTestRule.waitUntil(5_000) { composeTestRule.onAllNodesWithContentDescription("已签到").fetchSemanticsNodes().isNotEmpty() }
+    composeTestRule.onNodeWithContentDescription("Home", useUnmergedTree = true).performClick()
+    composeTestRule.runOnIdle { checkedIn = false }
+    composeTestRule.onNodeWithContentDescription("Profile", useUnmergedTree = true).performClick()
+    composeTestRule.waitUntil(5_000) { composeTestRule.onAllNodesWithContentDescription("未签到").fetchSemanticsNodes().isNotEmpty() }
+    composeTestRule.onAllNodesWithContentDescription("已签到").assertCountEquals(0)
+  }
+
+  @Test
   fun notificationCardOpensIndependentPage() {
     val repository = object : NgaReadOnlyRepository by fakeRepository() {
       override suspend fun loadNotifications(session: LoginSessionData?) = Result.success(listOf(
@@ -96,7 +129,7 @@ class MainScreenTest {
     composeTestRule.setContent {
       ProfileScreen(
         loginSession = LoginSessionUiState("user", "42", "test"),
-        state = ProfileUiState(session = LoadableUiState.Content(LoginSessionData(username = "user", uid = "42", cookie = "test")), checkInMessage = "今天已经签到"),
+        state = ProfileUiState(session = LoadableUiState.Content(LoginSessionData(username = "user", uid = "42", cookie = "test")), checkedIn = false, checkInMessage = "今天已经签到"),
         onLoginClick = {}, onLogout = {}, onUserClick = { userOpened = true },
         onPersonalTopics = { opened = it }, onCheckIn = { checks++ },
       )

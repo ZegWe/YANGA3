@@ -267,6 +267,8 @@ class NgaApi(private val session: NgaSession = NgaSession()) {
 
   fun checkIn(): NgaRequest = post("nuke.php", linkedMapOf("__lib" to "check_in", "__act" to "check_in", "lite" to "js"))
 
+  fun checkInStatus(): NgaRequest = get("nuke.php", linkedMapOf("__lib" to "check_in", "__act" to "get_stat", "__output" to "8"))
+
   fun profile(params: Map<String, String>): NgaRequest =
     get(
       path = "nuke.php",
