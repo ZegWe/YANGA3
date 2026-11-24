@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yanga.client.R
+import com.yanga.client.diagnostics.DiagnosticsPanel
 import com.yanga.client.update.AboutViewModel
 import com.yanga.client.update.PROJECT_URL
 
@@ -99,6 +100,7 @@ internal fun AboutScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            DiagnosticsPanel()
             state.release?.notes?.takeIf { it.isNotBlank() }?.let { notes ->
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("更新内容", style = MaterialTheme.typography.titleMedium)

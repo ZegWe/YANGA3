@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import com.yanga.client.diagnostics.Diagnostics
 import com.yanga.client.data.DefaultNgaReadOnlyRepository
 import com.yanga.client.data.SharedPreferencesFavoriteBoardsStore
 import com.yanga.client.data.SharedPreferencesSubBoardFilterStore
@@ -32,6 +33,7 @@ class YangaApplication : Application(), ImageLoaderFactory {
 
   override fun onCreate() {
     super.onCreate()
+    runCatching { Diagnostics.install(this) }
     imageCacheManager = ImageCacheManager(this) {
       if (::repository.isInitialized) repository.currentBaseUrl()
       else com.yanga.client.api.NgaDomains.BBS_NGA_CN

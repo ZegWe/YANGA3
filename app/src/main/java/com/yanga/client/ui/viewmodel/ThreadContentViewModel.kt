@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yanga.client.data.LoginSessionData
 import com.yanga.client.data.NgaReadOnlyRepository
+import com.yanga.client.diagnostics.Diagnostics
+import com.yanga.client.diagnostics.codeName
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -94,6 +96,7 @@ class ThreadContentViewModel(
     val threadId = destination.id
     val page = destination.page
     val fallbackTitle = destination.title
+    Diagnostics.event { "thread_open tid=${Diagnostics.fingerprint(threadId)} page=$page refresh=$forceRefresh follow_latest=$followLatest" }
     val scrollRequestId =
       if (destination.hasScrollTarget()) {
         ++targetScrollRequestId
@@ -113,6 +116,7 @@ class ThreadContentViewModel(
         cached.page.toIntOrNull() == page &&
         cached.posts is LoadableUiState.Content
     ) {
+      Diagnostics.event { "thread_cache source=current tid=${Diagnostics.fingerprint(threadId)} page=$page" }
       loadingThreadId = threadId
       loadingPage = page
       _state.value =
@@ -124,6 +128,7 @@ class ThreadContentViewModel(
       return
     }
     pageCache[page]?.takeUnless { forceRefresh }?.let { cachedPage ->
+      Diagnostics.event { "thread_cache source=page tid=${Diagnostics.fingerprint(threadId)} page=$page" }
       loadingThreadId = null
       loadingPage = null
       activeThreadId = threadId
@@ -166,6 +171,14 @@ class ThreadContentViewModel(
     viewModelScope.launch {
       val result = if (authorFilter == null) repository.loadThread(session, threadId, page)
         else repository.loadThreadByAuthor(session, threadId, page, authorFilter)
+      Diagnostics.event {
+        val disposition = if (generation == requestGeneration && loadingThreadId == threadId && loadingPage == page) "current" else "stale"
+        val outcome = result.fold(
+          onSuccess = { "ok posts=${it.posts.size} actual_page=${it.page}" },
+          onFailure = { "error type=${codeName(it.javaClass.name)}" },
+        )
+        "thread_load tid=${Diagnostics.fingerprint(threadId)} page=$page generation=$generation refresh=$forceRefresh disposition=$disposition result=$outcome"
+      }
       _state.update { current ->
         if (generation == requestGeneration && loadingThreadId == threadId && loadingPage == page && current != null) {
           result.fold(

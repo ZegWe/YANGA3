@@ -76,7 +76,10 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -126,6 +129,7 @@ import com.yanga.client.ui.components.SubBoardDirectorySheet
 import com.yanga.client.ui.components.TopicListItem
 import com.yanga.client.ui.components.UserAvatar
 import com.yanga.client.ui.content.PostContentPart
+import com.yanga.client.diagnostics.Diagnostics
 import com.yanga.client.ui.content.PostContentParser
 import com.yanga.client.ui.content.PostDiceContext
 import com.yanga.client.ui.content.PostTextStyleRange
@@ -411,6 +415,7 @@ internal fun ThreadReadingScreen(
 ) {
   val refreshState = rememberPullToRefreshState()
   val snackbar = remember { SnackbarHostState() }
+  val diagnosticScope = rememberCoroutineScope()
   LaunchedEffect(state.refreshError) { state.refreshError?.let { snackbar.showSnackbar(it) } }
   var menuExpanded by remember { mutableStateOf(false) }
   var isFavorited by remember { mutableStateOf(false) }
@@ -491,6 +496,17 @@ internal fun ThreadReadingScreen(
                 onOpenInBrowser = {
                   menuExpanded = false
                   onOpenInBrowser()
+                },
+                onMarkRenderIssue = {
+                  menuExpanded = false
+                  Diagnostics.event {
+                    val visible = state.cachedPostsByPage[currentPage]
+                      ?: (state.posts as? LoadableUiState.Content)?.value.orEmpty()
+                    val tid = visible.firstOrNull()?.tid?.let(Diagnostics::fingerprint) ?: "none"
+                    val sample = visible.take(20).joinToString(",") { Diagnostics.fingerprint(it.content) }
+                    "render_issue_mark tid=$tid page=$currentPage posts=${visible.size} refresh=${state.isRefreshing} body_tags=$sample"
+                  }
+                  diagnosticScope.launch { snackbar.showSnackbar("已标记当前页面，可刷新后到「关于 → 诊断日志」导出") }
                 },
               )
             }
@@ -773,6 +789,14 @@ private fun PostItem(
     post.attachments.filterNot { it.url in inlineUrls }
   }
   val contentBlocks = remember(contentParts) { groupPostContentParts(contentParts) }
+  LaunchedEffect(post.tid, post.pid, post.content, contentBlocks) {
+    Diagnostics.event {
+      val plain = postCopyText(contentParts)
+      "render_post tid=${Diagnostics.fingerprint(post.tid)} pid=${Diagnostics.fingerprint(post.pid)} render_tag=${Diagnostics.fingerprint(post.tid + ":" + post.pid)} floor=${post.floorNumber} " +
+        "body_tag=${Diagnostics.fingerprint(post.content)} parsed_tag=${Diagnostics.fingerprint(plain)} " +
+        "parts=${contentParts.size} blocks=${contentBlocks.size} input[${Diagnostics.textStats(post.content)}] parsed[${Diagnostics.textStats(plain)}]"
+    }
+  }
   val imageUrls = remember(post) { postPreviewImageUrls(post) }
 
   var showPostMenu by remember(post.pid) { mutableStateOf(false) }
@@ -841,37 +865,42 @@ private fun PostItem(
         )
       }
 
-      for (block in contentBlocks) {
-        when (block) {
-          is PostContentBlock.Inline -> {
-            PostInlineRichText(items = block.items, color = post.bodyColor?.toComposeColor() ?: MaterialTheme.colorScheme.onSurface, onLinkClick = onLinkClick)
-          }
-          is PostContentBlock.Quote -> {
-            PostQuoteBlock(
-              parts = block.part.parts,
-              imageUrls = imageUrls,
-              onLinkClick = onLinkClick,
-              onImageClick = onImageClick,
-            )
-          }
-          is PostContentBlock.Image -> {
-            CachedPostImage(
-              url = block.part.url,
-              onClick = { onImageClick(imageUrls, imageUrls.indexOf(block.part.url).takeIf { it >= 0 } ?: 0) },
-            )
-          }
-          is PostContentBlock.Structured -> {
+      val diagnosticPostTag = remember(post.tid, post.pid) {
+        runCatching { Diagnostics.fingerprint(post.tid + ":" + post.pid) }.getOrDefault("none")
+      }
+      CompositionLocalProvider(LocalDiagnosticPostTag provides diagnosticPostTag) {
+        for (block in contentBlocks) {
+          when (block) {
+            is PostContentBlock.Inline -> {
+              PostInlineRichText(items = block.items, color = post.bodyColor?.toComposeColor() ?: MaterialTheme.colorScheme.onSurface, onLinkClick = onLinkClick)
+            }
+            is PostContentBlock.Quote -> {
+              PostQuoteBlock(
+                parts = block.part.parts,
+                imageUrls = imageUrls,
+                onLinkClick = onLinkClick,
+                onImageClick = onImageClick,
+              )
+            }
+            is PostContentBlock.Image -> {
+              CachedPostImage(
+                url = block.part.url,
+                onClick = { onImageClick(imageUrls, imageUrls.indexOf(block.part.url).takeIf { it >= 0 } ?: 0) },
+              )
+            }
+            is PostContentBlock.Structured -> {
               StructuredPostContent(block.part) { children ->
                 PostNestedParts(children, imageUrls, onLinkClick, onImageClick)
               }
             }
             is PostContentBlock.Video -> PostVideoPlayer(block.part, onLinkClick)
             is PostContentBlock.Audio -> {
-            PostAudioPlayer(
-              url = block.part.url,
-              label = block.part.label,
-              onOpenLink = onLinkClick,
-            )
+              PostAudioPlayer(
+                url = block.part.url,
+                label = block.part.label,
+                onOpenLink = onLinkClick,
+              )
+            }
           }
         }
       }
@@ -1570,6 +1599,27 @@ private fun List<PostInlineItem>.withEmbeddedReplyOriginalPostLink(url: String):
 private fun postContentImageUrls(content: String): List<String> =
   PostContentParser.collectImageUrls(PostContentParser.parse(content)).distinct()
 
+private val LocalDiagnosticPostTag = compositionLocalOf { "none" }
+
+@Composable
+private fun rememberLayoutDiagnostic(text: String, kind: String): (TextLayoutResult) -> Unit {
+  val postTag = LocalDiagnosticPostTag.current
+  return remember(text, postTag, kind) {
+    var reported = false
+    val callback: (TextLayoutResult) -> Unit = { result ->
+      if (!reported && postTag != "none") {
+        reported = true
+        Diagnostics.event {
+          "text_layout post=$postTag kind=$kind text_tag=${Diagnostics.fingerprint(text)} chars=${text.length} " +
+            "lines=${result.lineCount} width=${result.size.width} height=${result.size.height} " +
+            "overflow=${result.hasVisualOverflow}"
+        }
+      }
+    }
+    callback
+  }
+}
+
 @Composable
 private fun PostInlineRichText(
   items: List<PostInlineItem>,
@@ -1664,6 +1714,7 @@ private fun PostInlineRichText(
       Modifier
     }
 
+  val logLayout = rememberLayoutDiagnostic(text.text, "inline")
   Text(
     text = text,
     inlineContent = inlineContent,
@@ -1682,7 +1733,7 @@ private fun PostInlineRichText(
     style = style,
     color = color,
     lineHeight = style.lineHeight * 1.35f,
-    onTextLayout = { textLayoutResult = it },
+    onTextLayout = { textLayoutResult = it; logLayout(it) },
   )
 }
 
@@ -1740,13 +1791,14 @@ private fun PostRichText(
       Modifier
     }
 
+  val logLayout = rememberLayoutDiagnostic(annotatedText.text, "rich")
   Text(
     text = annotatedText,
     modifier = modifier.then(linkModifier),
     style = style,
     color = color,
     lineHeight = style.lineHeight * 1.3f,
-    onTextLayout = { textLayoutResult = it },
+    onTextLayout = { textLayoutResult = it; logLayout(it) },
   )
 }
 
@@ -1811,6 +1863,7 @@ private fun ThreadOverflowMenu(
   onDismiss: () -> Unit,
   onToggleFavorite: () -> Unit,
   onOpenInBrowser: () -> Unit,
+  onMarkRenderIssue: () -> Unit,
 ) {
   DropdownMenu(
     expanded = expanded,
@@ -1836,6 +1889,7 @@ private fun ThreadOverflowMenu(
         )
       },
     )
+    DropdownMenuItem(text = { Text("标记当前页乱码") }, onClick = onMarkRenderIssue)
   }
 }
 
